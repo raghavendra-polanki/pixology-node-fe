@@ -52,6 +52,11 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Login route - serve SPA for client-side routing
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // API routes (if you add them in the future)
 // app.use('/api', apiRouter);
 
