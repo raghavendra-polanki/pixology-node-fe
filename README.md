@@ -153,12 +153,14 @@ Create a `.env` file:
 
 ```bash
 PORT=3000
-NODE_ENV=production
 VITE_APP_NAME=Pixology.ai
 VITE_API_URL=https://api.pixology.ai
 ```
 
-**Note:** All Vite variables must be prefixed with `VITE_`
+**Important:**
+- ❌ Do **NOT** set `NODE_ENV` in `.env` (Vite will error)
+- ✅ All Vite variables must be prefixed with `VITE_`
+- ✅ Vite automatically sets `NODE_ENV=production` during build
 
 ---
 

@@ -156,14 +156,19 @@ pm2 list
 Create a `.env` file in your application directory:
 
 ```bash
-# Server configuration
+# Server configuration (for Node.js server only)
 PORT=3000
-NODE_ENV=production
 
-# Application variables (optional)
+# Application variables (must be prefixed with VITE_)
 VITE_APP_NAME=Pixology.ai
 VITE_API_URL=https://api.pixology.ai
 ```
+
+**Important Notes:**
+- ❌ **Do NOT** set `NODE_ENV` in the `.env` file - Vite will show an error
+- ✅ Vite automatically sets `NODE_ENV=production` during `npm run build`
+- ✅ Only use `PORT` to configure the server port
+- ✅ All application variables must be prefixed with `VITE_`
 
 Then restart the application:
 ```bash

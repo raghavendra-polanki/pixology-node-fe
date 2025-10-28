@@ -27,7 +27,7 @@ module.exports = {
       // Environment-specific configs
       env_production: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 8080
       },
       env_staging: {
         NODE_ENV: 'staging',
