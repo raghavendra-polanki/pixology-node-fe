@@ -1,11 +1,27 @@
 import { GoogleLogin } from "@react-oauth/google";
 import { Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/shared/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/shared/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export const LoginForm = () => {
-  const handleGoogleSuccess = (credentialResponse: any) => {
-    console.log("Login successful:", credentialResponse);
-    // You can send the token to your backend here
-    // Example: fetch('/api/auth/google', { method: 'POST', body: JSON.stringify(credentialResponse) })
+  const navigate = useNavigate();
+  const { loginWithGoogle, error, clearError } = useAuth();
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    clearError();
+    const { credential } = credentialResponse;
+
+    try {
+      const success = await loginWithGoogle(credential);
+      if (success) {
+        // Redirect to home page after successful login
+        navigate("/home");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+    }
   };
 
   const handleGoogleError = () => {
@@ -42,13 +58,21 @@ export const LoginForm = () => {
                 </p>
               </div>
 
+              {/* Error Alert */}
+              {error && (
+                <Alert variant="destructive" className="animate-fade-in">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               {/* Google Login Button */}
               <div className="space-y-4 animate-fade-in">
                 <div className="flex justify-center">
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={handleGoogleError}
-                    theme="dark"
+                    theme="outline"
                     size="large"
                     text="signin_with"
                   />

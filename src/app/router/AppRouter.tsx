@@ -1,7 +1,10 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LandingPage } from "@/features/landing";
 import { LoginPage } from "@/features/login";
+import { StorylinePage } from "@/features/storyline";
+import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
 
 export const AppRouter = () => {
   return (
@@ -9,8 +12,30 @@ export const AppRouter = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Storyline Dashboard - Protected */}
+        <Route
+          path="/storyline"
+          element={
+            <ProtectedRoute>
+              <StorylinePage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-        <Route path="*" element={<NotFoundPage />} />
+        <Route path="/404" element={<NotFoundPage />} />
+        <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>
     </BrowserRouter>
   );

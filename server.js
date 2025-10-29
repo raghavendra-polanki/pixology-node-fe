@@ -3,12 +3,44 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import compression from 'compression';
 import helmet from 'helmet';
+import authRouter from './api/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Body parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// CORS middleware - Allow frontend dev server and production domains
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'http://localhost:3000',  // Production build
+    'http://localhost:5173',  // Vite dev server
+    'http://localhost:8080',  // Alternative dev server / other services
+    'https://pixology.ai',
+    'https://www.pixology.ai',
+  ];
+
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '3600');
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // Security middleware
 app.use(helmet({
@@ -18,7 +50,14 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       scriptSrc: ["'self'", "https://accounts.google.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://accounts.google.com", "https://*.google.com"],
+      connectSrc: [
+        "'self'",
+        "http://localhost:3000",      // Backend
+        "http://localhost:5173",      // Vite dev server
+        "http://localhost:8080",      // Alternative dev server
+        "https://accounts.google.com",
+        "https://*.google.com",
+      ],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -52,13 +91,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Authentication API routes
+app.use('/api/auth', authRouter);
+
 // Login route - serve SPA for client-side routing
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
-
-// API routes (if you add them in the future)
-// app.use('/api', apiRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {
