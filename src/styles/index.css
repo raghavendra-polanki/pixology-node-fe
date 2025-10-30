@@ -84,13 +84,3 @@ All colors MUST be HSL.
     mask-composite: exclude;
   }
 }
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-  }
-}

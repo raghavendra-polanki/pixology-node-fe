@@ -1,5 +1,6 @@
 import express from 'express';
 import { OAuth2Client } from 'google-auth-library';
+import { saveUser, getUser, isUserAllowed } from './utils/firestoreUtils.js';
 
 const router = express.Router();
 
@@ -54,14 +55,24 @@ router.post('/google', async (req, res) => {
     const name = payload.name;
     const picture = payload.picture;
 
-    // TODO: Save user to database if doesn't exist
-    // Example:
-    // const user = await User.findOrCreate({
-    //   email,
-    //   userId,
-    //   name,
-    //   picture,
-    // });
+    // Check if user is in the allowlist
+    const allowed = await isUserAllowed(email);
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Your email is not authorized to access Pixology. Please contact support.',
+        email: email,
+      });
+    }
+
+    // Save or update user in Firestore
+    await saveUser(userId, {
+      id: userId,
+      email,
+      name,
+      picture,
+      lastLogin: new Date(),
+    });
 
     // Create a session token (you can use JWT here)
     // For now, we'll return the Google token itself

@@ -1,12 +1,27 @@
-import express from 'express';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import compression from 'compression';
-import helmet from 'helmet';
-import authRouter from './api/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Start of Firestore Credentials Fix ---
+// Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to the service account key.
+// This ensures the Firebase Admin SDK can authenticate correctly.
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(__dirname, 'serviceAccountKey.json');
+}
+// --- End of Firestore Credentials Fix ---
+
+// Load environment variables from .env.local or .env
+dotenv.config({ path: path.join(__dirname, '.env.local') });
+dotenv.config(); // Fallback to .env
+
+import express from 'express';
+import compression from 'compression';
+import helmet from 'helmet';
+import authRouter from './api/auth.js';
+import allowlistRouter from './api/allowlist.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,8 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   const allowedOrigins = [
     'http://localhost:3000',  // Production build
-    'http://localhost:5173',  // Vite dev server
-    'http://localhost:8080',  // Alternative dev server / other services
+    'http://localhost:8080',  // Vite dev server
     'https://pixology.ai',
     'https://www.pixology.ai',
   ];
@@ -56,8 +70,7 @@ app.use(helmet({
       connectSrc: [
         "'self'",
         "http://localhost:3000",      // Backend
-        "http://localhost:5173",      // Vite dev server
-        "http://localhost:8080",      // Alternative dev server
+        "http://localhost:8080",      // Vite dev server
         "https://accounts.google.com/gsi/", // GSI connect endpoint
         "https://www.googleapis.com", // For token verification
       ],
@@ -109,10 +122,8 @@ app.get('/health', (req, res) => {
 // Authentication API routes
 app.use('/api/auth', authRouter);
 
-// Login route - serve SPA for client-side routing
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+// Allowlist management routes
+app.use('/api/allowlist', allowlistRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {

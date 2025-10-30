@@ -20,12 +20,12 @@ export const LoginForm = () => {
         navigate("/home");
       }
     } catch (err) {
-      console.error("Login error:", err);
+      // Error is handled by auth context
     }
   };
 
   const handleGoogleError = () => {
-    console.error("Login failed");
+    // Error is handled by auth context
   };
 
   return (
