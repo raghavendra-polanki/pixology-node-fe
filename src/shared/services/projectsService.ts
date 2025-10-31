@@ -17,23 +17,34 @@ export interface Project extends ProjectFormData {
 
 class ProjectsService {
   private apiBaseUrl: string;
+  private isProduction: boolean;
 
   constructor(apiBaseUrl?: string) {
     this.apiBaseUrl = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    this.isProduction = import.meta.env.MODE === 'production';
   }
 
   /**
    * Get the authorization header with the stored token
+   *
+   * Development: Token from sessionStorage
+   * Production: Token in httpOnly cookie (not accessible, browser sends automatically)
    */
   private getAuthHeader(): Record<string, string> {
-    const token = sessionStorage.getItem('authToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    return {
-      Authorization: `Bearer ${token}`,
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+
+    // In development, get token from sessionStorage
+    if (!this.isProduction) {
+      const token = sessionStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
   }
 
   /**
@@ -43,6 +54,7 @@ class ProjectsService {
     const response = await fetch(`${this.apiBaseUrl}/api/projects`, {
       method: 'GET',
       headers: this.getAuthHeader(),
+      credentials: 'include', // Include cookies (for production httpOnly cookie)
     });
 
     if (!response.ok) {
@@ -61,6 +73,7 @@ class ProjectsService {
     const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}`, {
       method: 'GET',
       headers: this.getAuthHeader(),
+      credentials: 'include', // Include cookies (for production httpOnly cookie)
     });
 
     if (!response.ok) {
@@ -79,6 +92,7 @@ class ProjectsService {
     const response = await fetch(`${this.apiBaseUrl}/api/projects`, {
       method: 'POST',
       headers: this.getAuthHeader(),
+      credentials: 'include', // Include cookies (for production httpOnly cookie)
       body: JSON.stringify(projectData),
     });
 
@@ -98,6 +112,7 @@ class ProjectsService {
     const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}`, {
       method: 'PUT',
       headers: this.getAuthHeader(),
+      credentials: 'include', // Include cookies (for production httpOnly cookie)
       body: JSON.stringify(projectData),
     });
 
@@ -117,6 +132,7 @@ class ProjectsService {
     const response = await fetch(`${this.apiBaseUrl}/api/projects/${projectId}`, {
       method: 'DELETE',
       headers: this.getAuthHeader(),
+      credentials: 'include', // Include cookies (for production httpOnly cookie)
     });
 
     if (!response.ok) {
