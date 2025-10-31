@@ -17,34 +17,26 @@ export interface Project extends ProjectFormData {
 
 class ProjectsService {
   private apiBaseUrl: string;
-  private isProduction: boolean;
 
   constructor(apiBaseUrl?: string) {
     this.apiBaseUrl = apiBaseUrl || import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    this.isProduction = import.meta.env.MODE === 'production';
   }
 
   /**
    * Get the authorization header with the stored token
    *
-   * Development: Token from sessionStorage
-   * Production: Token in httpOnly cookie (not accessible, browser sends automatically)
+   * Token stored in sessionStorage for both development and production
+   * httpOnly cookie also sent automatically via credentials: 'include'
    */
   private getAuthHeader(): Record<string, string> {
-    const headers: Record<string, string> = {
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    return {
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
-
-    // In development, get token from sessionStorage
-    if (!this.isProduction) {
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    return headers;
   }
 
   /**

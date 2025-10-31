@@ -78,38 +78,34 @@ class AuthService {
   /**
    * Store auth data
    * - Development: Token + user data in sessionStorage
-   * - Production: User data in sessionStorage, token in httpOnly cookie
+   * - Production: Token + user data in sessionStorage, plus httpOnly cookie (set by backend)
    */
   private storeAuthData(user: AuthUser, token: string, expiresIn: number): void {
     const expiresAt = Date.now() + expiresIn * 1000;
 
-    if (this.isProduction) {
-      // Production (Hybrid): Token in httpOnly cookie (set by backend)
-      // Store user data for quick access
-      sessionStorage.setItem('authUser', JSON.stringify(user));
-      sessionStorage.setItem('authExpiry', expiresAt.toString());
-    } else {
-      // Development: Both token and user in sessionStorage
+    // Store token in sessionStorage for Authorization header (both dev and prod)
+    sessionStorage.setItem('authToken', token);
+
+    // Store user and expiry
+    sessionStorage.setItem('authUser', JSON.stringify(user));
+    sessionStorage.setItem('authExpiry', expiresAt.toString());
+
+    if (!this.isProduction) {
+      // Development: Also store in authData for backward compatibility
       const authData: StoredAuthData = {
         user,
         expiresAt,
       };
-      sessionStorage.setItem('authToken', token);
       sessionStorage.setItem('authData', JSON.stringify(authData));
     }
   }
 
   /**
    * Get auth token
-   * - Development: From sessionStorage
-   * - Production: From httpOnly cookie (not accessible, but browser sends automatically)
+   * - Development & Production: From sessionStorage
+   * - Browser also automatically sends httpOnly cookie (for extra security)
    */
   getToken(): string | null {
-    if (this.isProduction) {
-      // In production, token is in httpOnly cookie (inaccessible but browser sends it)
-      return null;
-    }
-    // Development: Get from sessionStorage
     return sessionStorage.getItem('authToken');
   }
 
@@ -117,13 +113,8 @@ class AuthService {
    * Get user data
    */
   getUser(): AuthUser | null {
-    if (this.isProduction) {
-      const userJson = sessionStorage.getItem('authUser');
-      return userJson ? JSON.parse(userJson) : null;
-    } else {
-      const dataJson = sessionStorage.getItem('authData');
-      return dataJson ? JSON.parse(dataJson).user : null;
-    }
+    const userJson = sessionStorage.getItem('authUser');
+    return userJson ? JSON.parse(userJson) : null;
   }
 
   /**
@@ -139,13 +130,8 @@ class AuthService {
    * Get token expiry time
    */
   private getTokenExpiry(): number | null {
-    if (this.isProduction) {
-      const expiry = sessionStorage.getItem('authExpiry');
-      return expiry ? parseInt(expiry, 10) : null;
-    } else {
-      const dataJson = sessionStorage.getItem('authData');
-      return dataJson ? JSON.parse(dataJson).expiresAt : null;
-    }
+    const expiry = sessionStorage.getItem('authExpiry');
+    return expiry ? parseInt(expiry, 10) : null;
   }
 
   /**
@@ -156,16 +142,15 @@ class AuthService {
       const token = this.getToken();
       const headers: HeadersInit = {};
 
-      // In development, add token to header
-      // In production, httpOnly cookie is sent automatically
-      if (!this.isProduction && token) {
+      // Add token to Authorization header (both dev and prod)
+      if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
       const response = await fetch(`${this.apiBaseUrl}/api/auth/verify`, {
         method: 'GET',
         headers,
-        credentials: 'include', // Include cookies for production
+        credentials: 'include', // Include cookies for httpOnly cookie
       });
 
       const data = await response.json();
@@ -196,13 +181,10 @@ class AuthService {
    * Clear all stored auth data
    */
   private clearAuthData(): void {
-    if (this.isProduction) {
-      sessionStorage.removeItem('authUser');
-      sessionStorage.removeItem('authExpiry');
-    } else {
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('authData');
-    }
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('authUser');
+    sessionStorage.removeItem('authExpiry');
+    sessionStorage.removeItem('authData'); // For backward compatibility
   }
 
   /**
