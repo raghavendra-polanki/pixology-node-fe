@@ -80,28 +80,40 @@ export const deleteUser = async (userId) => {
 };
 
 /**
- * Save a storyline/project for a user
- * @param {string} userId - User ID (owner)
- * @param {string} projectId - Project ID
- * @param {object} projectData - Project data
- * @returns {Promise<void>}
+ * Save a project to the centralized projects collection
+ * Supports creating new projects or updating existing ones
+ * @param {object} projectData - Project data (title, description, thumbnail, status, etc.)
+ * @param {string} userId - User ID (owner of new projects)
+ * @param {string} [projectId] - Optional Project ID. If not provided, auto-generates one (for updates)
+ * @returns {Promise<string>} Project ID
  */
-export const saveProject = async (userId, projectId, projectData) => {
+export const saveProject = async (projectData, userId, projectId) => {
   try {
-    await db
-      .collection('users')
-      .doc(userId)
-      .collection('projects')
-      .doc(projectId)
-      .set(
-        {
-          ...projectData,
-          createdAt: projectData.createdAt || new Date(),
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
-    console.log(`Project ${projectId} for user ${userId} saved successfully`);
+    // Generate a new project ID if not provided
+    const finalProjectId = projectId || db.collection('projects').doc().id;
+
+    // Prepare the project document
+    const projectDoc = {
+      ...projectData,
+      ownerId: projectId ? undefined : userId, // Only set owner on creation
+      ownerEmail: projectId ? undefined : undefined, // Will be populated by API if needed
+      createdAt: projectData.createdAt || new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Remove undefined fields
+    Object.keys(projectDoc).forEach((key) => projectDoc[key] === undefined && delete projectDoc[key]);
+
+    // Save to the centralized projects collection
+    await db.collection('projects').doc(finalProjectId).set(projectDoc, { merge: true });
+
+    // Add the owner to the members list with 'owner' role if this is a new project
+    if (!projectId) {
+      await addProjectMember(finalProjectId, userId, 'owner');
+    }
+
+    console.log(`Project ${finalProjectId} saved successfully`);
+    return finalProjectId;
   } catch (error) {
     console.error(`Error saving project:`, error);
     throw error;
@@ -109,23 +121,32 @@ export const saveProject = async (userId, projectId, projectData) => {
 };
 
 /**
- * Get all projects for a user
+ * Get all projects accessible to a user (owned or member of)
+ * Note: Uses client-side filtering due to Firestore limitations with nested field queries
+ * In production, consider using a separate members collection or array structure
  * @param {string} userId - User ID
- * @returns {Promise<array>} Array of projects
+ * @returns {Promise<array>} Array of projects where user is a member
  */
 export const getUserProjects = async (userId) => {
   try {
+    // Get all projects (in production, consider pagination or separate members collection)
     const snapshot = await db
-      .collection('users')
-      .doc(userId)
       .collection('projects')
       .orderBy('updatedAt', 'desc')
       .get();
 
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    // Filter to only projects where user is a member
+    const userProjects = snapshot.docs
+      .filter((doc) => {
+        const members = doc.data().members || {};
+        return userId in members;
+      })
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+    return userProjects;
   } catch (error) {
     console.error(`Error fetching projects for user ${userId}:`, error);
     throw error;
@@ -134,18 +155,12 @@ export const getUserProjects = async (userId) => {
 
 /**
  * Get a single project
- * @param {string} userId - User ID (owner)
  * @param {string} projectId - Project ID
  * @returns {Promise<object|null>} Project data or null if not found
  */
-export const getProject = async (userId, projectId) => {
+export const getProject = async (projectId) => {
   try {
-    const doc = await db
-      .collection('users')
-      .doc(userId)
-      .collection('projects')
-      .doc(projectId)
-      .get();
+    const doc = await db.collection('projects').doc(projectId).get();
 
     if (doc.exists) {
       return {
@@ -162,22 +177,118 @@ export const getProject = async (userId, projectId) => {
 };
 
 /**
- * Delete a project
- * @param {string} userId - User ID (owner)
+ * Delete a project (only owner can delete)
  * @param {string} projectId - Project ID
  * @returns {Promise<void>}
  */
-export const deleteProject = async (userId, projectId) => {
+export const deleteProject = async (projectId) => {
   try {
-    await db
-      .collection('users')
-      .doc(userId)
-      .collection('projects')
-      .doc(projectId)
-      .delete();
+    await db.collection('projects').doc(projectId).delete();
     console.log(`Project ${projectId} deleted successfully`);
   } catch (error) {
     console.error(`Error deleting project:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Add a member to a project
+ * @param {string} projectId - Project ID
+ * @param {string} userId - User ID to add
+ * @param {string} role - Role: 'owner', 'editor', or 'viewer'
+ * @returns {Promise<void>}
+ */
+export const addProjectMember = async (projectId, userId, role = 'viewer') => {
+  try {
+    const validRoles = ['owner', 'editor', 'viewer'];
+    if (!validRoles.includes(role)) {
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+    }
+
+    await db
+      .collection('projects')
+      .doc(projectId)
+      .update({
+        [`members.${userId}`]: role,
+      });
+
+    console.log(`User ${userId} added to project ${projectId} with role ${role}`);
+  } catch (error) {
+    console.error(`Error adding member to project:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Remove a member from a project
+ * @param {string} projectId - Project ID
+ * @param {string} userId - User ID to remove
+ * @returns {Promise<void>}
+ */
+export const removeProjectMember = async (projectId, userId) => {
+  try {
+    await db
+      .collection('projects')
+      .doc(projectId)
+      .update({
+        [`members.${userId}`]: db.FieldValue.delete(),
+      });
+
+    console.log(`User ${userId} removed from project ${projectId}`);
+  } catch (error) {
+    console.error(`Error removing member from project:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Update a member's role in a project
+ * @param {string} projectId - Project ID
+ * @param {string} userId - User ID
+ * @param {string} newRole - New role: 'owner', 'editor', or 'viewer'
+ * @returns {Promise<void>}
+ */
+export const updateProjectMember = async (projectId, userId, newRole) => {
+  try {
+    const validRoles = ['owner', 'editor', 'viewer'];
+    if (!validRoles.includes(newRole)) {
+      throw new Error(`Invalid role: ${newRole}. Must be one of: ${validRoles.join(', ')}`);
+    }
+
+    await db
+      .collection('projects')
+      .doc(projectId)
+      .update({
+        [`members.${userId}`]: newRole,
+      });
+
+    console.log(`User ${userId} role updated to ${newRole} in project ${projectId}`);
+  } catch (error) {
+    console.error(`Error updating member role:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get all members of a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<array>} Array of members with their roles
+ */
+export const getProjectMembers = async (projectId) => {
+  try {
+    const doc = await db.collection('projects').doc(projectId).get();
+
+    if (!doc.exists) {
+      return [];
+    }
+
+    const members = doc.data().members || {};
+    return Object.entries(members).map(([userId, role]) => ({
+      userId,
+      role,
+    }));
+  } catch (error) {
+    console.error(`Error fetching project members:`, error);
     throw error;
   }
 };

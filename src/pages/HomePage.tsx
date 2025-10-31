@@ -10,11 +10,11 @@ export const HomePage = () => {
   const { user, logout } = useAuth();
   const [redirecting, setRedirecting] = useState(false);
 
-  // Auto-redirect to storyline after 3 seconds
+  // Auto-redirect to storylab after 3 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       setRedirecting(true);
-      navigate('/storyline');
+      navigate('/storylab');
     }, 3000);
 
     return () => clearTimeout(timer);
@@ -22,7 +22,7 @@ export const HomePage = () => {
 
   const handleManualRedirect = () => {
     setRedirecting(true);
-    navigate('/storyline');
+    navigate('/storylab');
   };
 
   const handleLogout = async () => {
@@ -66,10 +66,10 @@ export const HomePage = () => {
             <div className="space-y-3">
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm">
                 <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                  ✨ Redirecting you to Storyline
+                  ✨ Redirecting you to StoryLab
                 </p>
                 <p className="text-blue-800 dark:text-blue-200">
-                  You'll be redirected to your <strong>Storyline dashboard</strong> in {redirecting ? '0' : '3'} seconds.
+                  You'll be redirected to your <strong>StoryLab dashboard</strong> in {redirecting ? '0' : '3'} seconds.
                 </p>
               </div>
 
@@ -80,7 +80,7 @@ export const HomePage = () => {
                 className="w-full"
                 disabled={redirecting}
               >
-                {redirecting ? 'Redirecting...' : 'Go to Storyline Now'}
+                {redirecting ? 'Redirecting...' : 'Go to StoryLab Now'}
               </Button>
             </div>
 

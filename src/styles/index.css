@@ -2,55 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Figma Design System - Integrated */
+@custom-variant dark (&:is(.dark *));
 
-@layer base {
-  :root {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
+:root {
+  /* Font settings */
+  --font-size: 16px;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
 
-    --card: 240 8% 8%;
-    --card-foreground: 0 0% 98%;
+  /* Primary colors - Dark mode */
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
 
-    --popover: 240 8% 8%;
-    --popover-foreground: 0 0% 98%;
+  --card: 240 8% 8%;
+  --card-foreground: 0 0% 98%;
 
-    --primary: 270 80% 65%;
-    --primary-foreground: 0 0% 100%;
+  --popover: 240 8% 8%;
+  --popover-foreground: 0 0% 98%;
 
-    --secondary: 190 80% 60%;
-    --secondary-foreground: 240 10% 4%;
+  --primary: 270 80% 65%;
+  --primary-foreground: 0 0% 100%;
 
-    --muted: 240 6% 15%;
-    --muted-foreground: 240 5% 65%;
+  --secondary: 190 80% 60%;
+  --secondary-foreground: 240 10% 4%;
 
-    --accent: 280 90% 70%;
-    --accent-foreground: 0 0% 100%;
+  --muted: 240 6% 15%;
+  --muted-foreground: 240 5% 65%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+  --accent: 280 90% 70%;
+  --accent-foreground: 0 0% 100%;
 
-    --border: 240 6% 20%;
-    --input: 240 6% 20%;
-    --ring: 270 80% 65%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
 
-    --radius: 0.75rem;
+  --border: 240 6% 20%;
+  --input: 240 6% 20%;
+  --ring: 270 80% 65%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(270 80% 65%), hsl(190 80% 60%));
-    --gradient-secondary: linear-gradient(135deg, hsl(280 90% 70%), hsl(270 80% 65%));
-    --gradient-accent: linear-gradient(90deg, hsl(270 80% 65% / 0.1), hsl(190 80% 60% / 0.1));
-    
-    /* Shadows */
-    --shadow-glow: 0 0 60px hsl(270 80% 65% / 0.3);
-    --shadow-card: 0 10px 40px hsl(240 10% 0% / 0.5);
+  /* Radius */
+  --radius: 0.75rem;
 
-    /* Animations */
-    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, hsl(270 80% 65%), hsl(190 80% 60%));
+  --gradient-secondary: linear-gradient(135deg, hsl(280 90% 70%), hsl(270 80% 65%));
+  --gradient-accent: linear-gradient(90deg, hsl(270 80% 65% / 0.1), hsl(190 80% 60% / 0.1));
+
+  /* Shadows */
+  --shadow-glow: 0 0 60px hsl(270 80% 65% / 0.3);
+  --shadow-card: 0 10px 40px hsl(240 10% 0% / 0.5);
+
+  /* Animations */
+  --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 
 @layer base {
   * {

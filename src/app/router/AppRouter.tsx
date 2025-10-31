@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LandingPage } from "@/features/landing";
 import { LoginPage } from "@/features/login";
-import { StorylinePage } from "@/features/storyline";
+import { StorylabPage } from "@/features/storylab";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
@@ -23,12 +23,12 @@ export const AppRouter = () => {
           }
         />
 
-        {/* Storyline Dashboard - Protected */}
+        {/* Storylab Dashboard and nested routes - Protected */}
         <Route
-          path="/storyline"
+          path="/storylab/*"
           element={
             <ProtectedRoute>
-              <StorylinePage />
+              <StorylabPage />
             </ProtectedRoute>
           }
         />

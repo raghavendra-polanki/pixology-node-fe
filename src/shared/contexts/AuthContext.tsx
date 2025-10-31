@@ -38,6 +38,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (storedUser && isValid) {
           // Verify with backend
           const isTokenValid = await authService.verifyToken();
+
           if (isTokenValid) {
             setUser(storedUser);
             setIsAuthenticated(true);
