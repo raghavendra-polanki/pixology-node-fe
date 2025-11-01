@@ -15,6 +15,12 @@ const envFile = process.env.NODE_ENV === 'production'
 
 dotenv.config({ path: path.join(__dirname, envFile) });
 
+// Debug: Log loaded environment variables
+console.log(`🔧 Environment loaded from: ${envFile}`);
+console.log(`📝 GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.substring(0, 10)}...${process.env.GEMINI_API_KEY.substring(process.env.GEMINI_API_KEY.length - 5)}` : 'NOT SET'}`);
+console.log(`📝 GCP_PROJECT_ID: ${process.env.GCP_PROJECT_ID || 'NOT SET'}`);
+console.log(`📝 GCS_BUCKET_NAME: ${process.env.GCS_BUCKET_NAME || 'NOT SET'}`);
+
 // --- Start of Firestore Credentials Fix ---
 // Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to the service account key.
 // This ensures the Firebase Admin SDK can authenticate correctly.

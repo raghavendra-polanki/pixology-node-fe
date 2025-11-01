@@ -1,6 +1,14 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Debug: Log the API key being loaded (first 10 chars + last 5 chars for security)
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error('❌ GEMINI_API_KEY is not set in environment variables');
+} else {
+  console.log(`✅ GEMINI_API_KEY loaded: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 5)}`);
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
 
 /**
  * Generate persona description using Gemini 2.5 Flash
