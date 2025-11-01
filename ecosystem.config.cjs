@@ -31,8 +31,6 @@ const productionEnv = loadEnvFile('.env.production');
 const stagingEnv = loadEnvFile('.env.staging');
 const developmentEnv = loadEnvFile('.env.local') || loadEnvFile('.env');
 
-console.log('✅ Loaded environment files for PM2 configuration');
-
 module.exports = {
   apps: [
     {
