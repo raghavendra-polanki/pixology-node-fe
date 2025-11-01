@@ -12,6 +12,27 @@
  *   Development: pm2 start ecosystem.config.cjs --env development
  */
 
+const dotenv = require('dotenv');
+const path = require('path');
+const fs = require('fs');
+
+// Load .env files for different environments
+const loadEnvFile = (envFile) => {
+  const envPath = path.join(__dirname, envFile);
+  if (fs.existsSync(envPath)) {
+    const result = dotenv.config({ path: envPath });
+    return result.parsed || {};
+  }
+  return {};
+};
+
+// Load environment-specific files
+const productionEnv = loadEnvFile('.env.production');
+const stagingEnv = loadEnvFile('.env.staging');
+const developmentEnv = loadEnvFile('.env.local') || loadEnvFile('.env');
+
+console.log('✅ Loaded environment files for PM2 configuration');
+
 module.exports = {
   apps: [
     {
@@ -28,7 +49,8 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
         PORT: 3000,
-        VITE_API_URL: 'http://localhost:3000'
+        VITE_API_URL: 'http://localhost:3000',
+        ...developmentEnv
       },
 
       // Logging configuration
@@ -63,20 +85,21 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
-        // VITE_API_URL is read from .env.production during build
-        // VITE_GOOGLE_CLIENT_ID is read from .env.production during build
+        ...productionEnv
       },
 
       env_staging: {
         NODE_ENV: 'staging',
         PORT: 3001,
-        VITE_API_URL: 'https://staging.pixology.ai'
+        VITE_API_URL: 'https://staging.pixology.ai',
+        ...stagingEnv
       },
 
       env_development: {
         NODE_ENV: 'development',
         PORT: 3000,
-        VITE_API_URL: 'http://localhost:3000'
+        VITE_API_URL: 'http://localhost:3000',
+        ...developmentEnv
       }
     }
   ]
