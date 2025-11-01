@@ -1,8 +1,21 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Start of Environment Variable Loading ---
+// Load environment variables from a file based on NODE_ENV.
+// This is the backward-compatible method for older Node.js versions.
+// PM2 sets NODE_ENV from the --env flag (e.g., 'production').
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+const envPath = path.join(__dirname, envFile);
+
+dotenv.config({ path: envPath });
+
+console.log(`✅ Attempting to load environment variables from: ${envPath}`);
+// --- End of Environment Variable Loading ---
 
 // --- Start of Firestore Credentials Fix ---
 // Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to the service account key.

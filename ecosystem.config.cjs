@@ -24,12 +24,6 @@ module.exports = {
       instances: '1',  // Single instance for monolithic app
       exec_mode: 'fork',
 
-      // Instruct PM2 to pass these arguments to the node interpreter.
-      // This is the modern and most reliable way to load .env files.
-      node_args: [
-        '--env-file=.env.production', // Load production secrets
-        '--env-file=.env'             // Fallback for common variables
-      ],
       // Server port configuration
       env: {
         NODE_ENV: 'development',
