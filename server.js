@@ -1,25 +1,8 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables from .env file based on NODE_ENV
-// Priority: .env.{NODE_ENV} > .env.local > .env
-const envFile = process.env.NODE_ENV === 'production'
-  ? '.env.production'
-  : process.env.NODE_ENV === 'staging'
-  ? '.env.staging'
-  : '.env.local';
-
-dotenv.config({ path: path.join(__dirname, envFile) });
-
-// Debug: Log loaded environment variables
-console.log(`🔧 Environment loaded from: ${envFile}`);
-console.log(`📝 GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.substring(0, 10)}...${process.env.GEMINI_API_KEY.substring(process.env.GEMINI_API_KEY.length - 5)}` : 'NOT SET'}`);
-console.log(`📝 GCP_PROJECT_ID: ${process.env.GCP_PROJECT_ID || 'NOT SET'}`);
-console.log(`📝 GCS_BUCKET_NAME: ${process.env.GCS_BUCKET_NAME || 'NOT SET'}`);
 
 // --- Start of Firestore Credentials Fix ---
 // Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to the service account key.
