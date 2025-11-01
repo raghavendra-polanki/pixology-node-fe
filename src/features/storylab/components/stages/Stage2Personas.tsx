@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, Sparkles, RefreshCw, Edit2, User, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -7,8 +7,8 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import type { Project } from '../../types';
 
+// UI representation of persona (different from PersonaData in data model)
 interface Persona {
   id: string;
   name: string;
@@ -21,56 +21,112 @@ interface Persona {
 }
 
 interface Stage2Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  project: any;
+  updateAIPersonas: (personas: any) => Promise<void>;
+  updatePersonaSelection: (selection: any) => Promise<void>;
+  markStageCompleted: (stageName: string, data?: any) => Promise<void>;
+  advanceToNextStage: (projectToAdvance?: any) => Promise<void>;
 }
 
-const mockPersonas: Persona[] = [
-  {
-    id: '1',
-    name: 'Sarah Martinez',
-    age: '32',
-    demographic: 'Young Professional, Urban',
-    motivation: 'Seeking work-life balance and efficiency',
-    bio: 'A busy marketing manager who values products that save time and enhance productivity. Always looking for innovative solutions.',
-    image: 'https://images.unsplash.com/photo-1581065178026-390bc4e78dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB3b21hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2MTgyOTAyNHww&ixlib=rb-4.1.0&q=80&w=1080',
-    selected: true,
-  },
-  {
-    id: '2',
-    name: 'David Chen',
-    age: '28',
-    demographic: 'Tech-Savvy Millennial',
-    motivation: 'Early adopter of new technology',
-    bio: 'Software engineer who appreciates cutting-edge features and seamless user experiences. Values quality over price.',
-    image: 'https://images.unsplash.com/photo-1672685667592-0392f458f46f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBtYW4lMjBwb3J0cmFpdHxlbnwxfHx8fDE3NjE4NjAzNDd8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    selected: true,
-  },
-  {
-    id: '3',
-    name: 'Emily Rodriguez',
-    age: '45',
-    demographic: 'Small Business Owner',
-    motivation: 'Growing business efficiently',
-    bio: 'Runs a local boutique and needs scalable solutions that deliver ROI. Prioritizes reliability and customer support.',
-    image: 'https://images.unsplash.com/photo-1758887261865-a2b89c0f7ac5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMG93bmVyJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzYxODA5NDg0fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    selected: false,
-  },
-];
-
-export function Stage2Personas({ project, onComplete }: Stage2Props) {
-  const [personas, setPersonas] = useState<Persona[]>(
-    project.data.personas || mockPersonas
-  );
+export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, markStageCompleted, advanceToNextStage }: Stage2Props) {
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
-  const handleGenerate = () => {
+  // Sync personas with project data when loaded - only if they've been generated
+  useEffect(() => {
+    if (project?.aiGeneratedPersonas?.personas && project.aiGeneratedPersonas.personas.length > 0) {
+      // Convert PersonaData to UI Persona format
+      const loadedPersonas: Persona[] = project.aiGeneratedPersonas.personas.map(p => ({
+        id: p.id,
+        name: (p.coreIdentity as any)?.name || 'Unknown',
+        age: (p.coreIdentity as any)?.age || '',
+        demographic: (p.coreIdentity as any)?.demographic || '',
+        motivation: (p.coreIdentity as any)?.motivation || '',
+        bio: (p.coreIdentity as any)?.bio || '',
+        image: (p.image as any)?.url || (p.image as any) || '',
+        selected: project.userPersonaSelection?.selectedPersonaIds?.includes(p.id) || false
+      }));
+      setPersonas(loadedPersonas);
+      setHasGenerated(true);
+    }
+  }, [project?.aiGeneratedPersonas, project?.userPersonaSelection]);
+
+  const handleGenerate = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      setPersonas(mockPersonas.map(p => ({ ...p, id: Date.now() + p.id })));
+    try {
+      // Get auth token from sessionStorage
+      const token = sessionStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Call the persona generation API
+      const response = await fetch('/api/personas/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          projectId: project.id,
+          campaignDetails: project.campaignDetails,
+          numberOfPersonas: 3,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate personas');
+      }
+
+      const data = await response.json();
+
+      if (!data.success || !data.personas) {
+        throw new Error('Invalid response from persona generation API');
+      }
+
+      // Convert API response personas to UI format
+      const generatedPersonas: Persona[] = data.personas.map((p: any) => ({
+        id: p.id,
+        name: p.coreIdentity?.name || 'Unknown',
+        age: String(p.coreIdentity?.age || ''),
+        demographic: p.coreIdentity?.demographic || '',
+        motivation: p.coreIdentity?.motivation || '',
+        bio: p.coreIdentity?.bio || '',
+        image: p.image?.url || '',
+        selected: false,
+      }));
+
+      // Log for debugging
+      console.log('Generated personas:', generatedPersonas);
+      generatedPersonas.forEach((p, idx) => {
+        console.log(`Persona ${idx + 1} image URL:`, p.image);
+      });
+
+      setPersonas(generatedPersonas);
+      setHasGenerated(true);
+
+      // Save generated personas to project via updateAIPersonas
+      await updateAIPersonas({
+        personas: data.personas,
+        generatedAt: new Date(),
+        generationRecipeId: 'persona-generation-v1',
+        generationExecutionId: data.project?.aiGeneratedPersonas?.generationExecutionId || `exec-${Date.now()}`,
+        model: 'gemini-2.5-flash',
+        temperature: 0.7,
+        count: generatedPersonas.length,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate personas';
+      console.error('Error generating personas:', errorMessage);
+      // Optionally show error toast to user
+      alert(`Failed to generate personas: ${errorMessage}`);
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   const handleToggleSelect = (id: string) => {
@@ -94,10 +150,25 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const selectedPersonas = personas.filter(p => p.selected);
     if (selectedPersonas.length > 0) {
-      onComplete({ personas: selectedPersonas });
+      try {
+        setIsSaving(true);
+        // Save persona selection
+        await updatePersonaSelection({
+          selectedPersonaIds: selectedPersonas.map(p => p.id),
+          primaryPersonaId: selectedPersonas[0]?.id,
+        });
+        // Mark stage as completed
+        await markStageCompleted('personas');
+        // Advance to next stage
+        await advanceToNextStage(project);
+      } catch (error) {
+        console.error('Failed to save persona selection:', error);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -143,7 +214,19 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
         </Button>
       </div>
 
+      {/* Empty State - No Personas Generated Yet */}
+      {!hasGenerated && personas.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 px-8 border border-dashed border-gray-700 rounded-xl bg-gray-900/30 mb-8">
+          <User className="w-16 h-16 text-gray-500 mb-4" />
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">No Personas Generated Yet</h3>
+          <p className="text-gray-400 text-center max-w-md mb-6">
+            Click the "Generate Personas" button above to create AI-powered personas based on your campaign details.
+          </p>
+        </div>
+      )}
+
       {/* Personas Grid */}
+      {personas.length > 0 && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {personas.map((persona) => (
           <Card
@@ -161,7 +244,7 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
             )}
 
             {/* Persona Image */}
-            <div className="relative h-64 overflow-hidden bg-gray-900">
+            <div className="relative h-96 overflow-hidden bg-gray-900">
               <ImageWithFallback
                 src={persona.image}
                 alt={persona.name}
@@ -180,12 +263,6 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
                   <span>•</span>
                   <span className="text-blue-400">{persona.demographic}</span>
                 </div>
-              </div>
-
-              {/* Motivation */}
-              <div>
-                <Label className="text-gray-500">Motivation</Label>
-                <p className="text-gray-300 mt-1">{persona.motivation}</p>
               </div>
 
               {/* Bio */}
@@ -211,6 +288,7 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Summary & Submit */}
       <div className="flex items-center justify-between">
@@ -219,12 +297,21 @@ export function Stage2Personas({ project, onComplete }: Stage2Props) {
         </p>
         <Button
           onClick={handleSubmit}
-          disabled={!canProceed}
+          disabled={!canProceed || isSaving}
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
           size="lg"
         >
-          Continue with Selected Personas
-          <ArrowRight className="w-5 h-5 ml-2" />
+          {isSaving ? (
+            <>
+              <div className="animate-spin mr-2">⏳</div>
+              Saving...
+            </>
+          ) : (
+            <>
+              Continue with Selected Personas
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </>
+          )}
         </Button>
       </div>
 

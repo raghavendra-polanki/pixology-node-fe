@@ -1,35 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Download, ThumbsUp, ThumbsDown, AlertCircle, Play, Volume2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
-import type { Project } from '../../types';
+import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 
 interface Stage6Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  projectId: string;
 }
 
-export function Stage6GenerateVideo({ project, onComplete }: Stage6Props) {
-  const [status, setStatus] = useState<'idle' | 'generating' | 'complete'>(
-    project.data.video?.status || 'idle'
-  );
+export function Stage6GenerateVideo({ projectId }: Stage6Props) {
+  // Load project using new hook
+  const { project, isSaving, updateVideoProduction, markStageCompleted } =
+    useStoryLabProject({ autoLoad: true, projectId });
+
+  const [status, setStatus] = useState<'idle' | 'generating' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
   const [feedback, setFeedback] = useState<'good' | 'needs-edit' | null>(null);
 
-  const handleGenerate = () => {
+  // Sync video status with project data when loaded
+  useEffect(() => {
+    if (project?.videoProduction?.status) {
+      setStatus(project.videoProduction.status as any);
+      setProgress(100);
+    }
+  }, [project?.videoProduction]);
+
+  const handleGenerate = async () => {
     setStatus('generating');
     setProgress(0);
 
     // Simulate progress
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
           setStatus('complete');
-          onComplete({ video: { status: 'complete', url: 'mock-video-url' } });
+          // Save video to project
+          updateVideoProduction({
+            videoUrl: 'mock-video-url',
+            status: 'complete',
+            title: project?.name || 'Generated Video',
+          });
           return 100;
         }
         return prev + 5;
@@ -44,6 +58,15 @@ export function Stage6GenerateVideo({ project, onComplete }: Stage6Props) {
   const handleDownload = () => {
     // Simulate download
     console.log('Downloading video...');
+  };
+
+  const handleComplete = async () => {
+    try {
+      // Mark stage as completed
+      await markStageCompleted('video');
+    } catch (error) {
+      console.error('Failed to mark video stage complete:', error);
+    }
   };
 
   return (
@@ -203,8 +226,8 @@ export function Stage6GenerateVideo({ project, onComplete }: Stage6Props) {
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-white mb-1">{project.data.campaignDetails?.campaignName}</h3>
-                  <p className="text-gray-400">Duration: {project.data.campaignDetails?.videoLength || '30s'}</p>
+                  <h3 className="text-white mb-1">{project?.campaignDetails?.campaignName}</h3>
+                  <p className="text-gray-400">Duration: {project?.campaignDetails?.videoLength || '30s'}</p>
                 </div>
                 <Button
                   onClick={handleDownload}
@@ -252,6 +275,30 @@ export function Stage6GenerateVideo({ project, onComplete }: Stage6Props) {
               </p>
             )}
           </Card>
+
+          {/* Complete Project */}
+          {status === 'complete' && feedback === 'good' && (
+            <div className="flex justify-end mt-8">
+              <Button
+                onClick={handleComplete}
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8"
+                size="lg"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin mr-2">⏳</div>
+                    Completing...
+                  </>
+                ) : (
+                  <>
+                    Complete Project
+                    <Sparkles className="w-5 h-5 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

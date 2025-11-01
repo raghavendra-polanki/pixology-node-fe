@@ -226,9 +226,8 @@ export const StorylabPage = () => {
         />
       ) : selectedProject ? (
         <WorkflowView
-          project={selectedProject}
+          projectId={selectedProject.id}
           onBack={handleBackToProjects}
-          onUpdateProject={handleUpdateProject}
         />
       ) : null}
     </>

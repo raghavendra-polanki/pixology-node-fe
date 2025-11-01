@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { 
-  ArrowRight, 
-  BookOpen, 
-  Lightbulb, 
+import { useState, useEffect } from 'react';
+import {
+  ArrowRight,
+  BookOpen,
+  Lightbulb,
   Check,
   ChevronDown,
   ChevronUp
@@ -13,7 +13,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import type { Project } from '../../types';
+import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 
 interface Narrative {
   id: string;
@@ -26,8 +26,7 @@ interface Narrative {
 }
 
 interface Stage3Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  projectId: string;
 }
 
 const narrativeOptions: Narrative[] = [
@@ -78,17 +77,26 @@ const narrativeOptions: Narrative[] = [
   },
 ];
 
-export function Stage3Narratives({ project, onComplete }: Stage3Props) {
-  const [selectedNarrative, setSelectedNarrative] = useState<string>(
-    project.data.narrative?.id || ''
-  );
-  const [customNarrative, setCustomNarrative] = useState<string>(
-    project.data.narrative?.custom || ''
-  );
-  const [useCustom, setUseCustom] = useState<boolean>(
-    project.data.narrative?.useCustom || false
-  );
+export function Stage3Narratives({ projectId }: Stage3Props) {
+  // Load project using new hook
+  const { project, isSaving, updateNarrativePreferences, markStageCompleted, advanceToNextStage } =
+    useStoryLabProject({ autoLoad: true, projectId });
+
+  const [selectedNarrative, setSelectedNarrative] = useState<string>('');
+  const [customNarrative, setCustomNarrative] = useState<string>('');
+  const [useCustom, setUseCustom] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Sync form with project data when loaded
+  useEffect(() => {
+    if (project?.narrativePreferences) {
+      setCustomNarrative(project.narrativePreferences.customNarrative || '');
+      setUseCustom(project.narrativePreferences.useCustomStructure || false);
+      setSelectedNarrative(
+        narrativeOptions.find(n => n.id === project.narrativePreferences?.narrativeStyle)?.id || ''
+      );
+    }
+  }, [project?.narrativePreferences]);
 
   const handleSelectNarrative = (id: string) => {
     setSelectedNarrative(id);
@@ -96,23 +104,31 @@ export function Stage3Narratives({ project, onComplete }: Stage3Props) {
     setCustomNarrative('');
   };
 
-  const handleSubmit = () => {
-    if (useCustom && customNarrative) {
-      onComplete({
-        narrative: {
-          useCustom: true,
-          custom: customNarrative,
-        },
-      });
-    } else if (selectedNarrative) {
-      const selected = narrativeOptions.find(n => n.id === selectedNarrative);
-      onComplete({
-        narrative: {
-          useCustom: false,
-          id: selectedNarrative,
-          ...selected,
-        },
-      });
+  const handleSubmit = async () => {
+    try {
+      if (useCustom && customNarrative) {
+        // Save custom narrative preferences
+        await updateNarrativePreferences({
+          narrativeStyle: '',
+          useCustomStructure: true,
+          customNarrative: customNarrative,
+          tone: 'custom',
+        });
+      } else if (selectedNarrative) {
+        // Save selected narrative preferences
+        const selected = narrativeOptions.find(n => n.id === selectedNarrative);
+        await updateNarrativePreferences({
+          narrativeStyle: selectedNarrative,
+          useCustomStructure: false,
+          tone: selectedNarrative,
+        });
+      }
+      // Mark stage as completed
+      await markStageCompleted('narrative');
+      // Advance to next stage
+      await advanceToNextStage();
+    } catch (error) {
+      console.error('Failed to save narrative preferences:', error);
     }
   };
 
@@ -280,12 +296,21 @@ export function Stage3Narratives({ project, onComplete }: Stage3Props) {
       <div className="flex justify-end">
         <Button
           onClick={handleSubmit}
-          disabled={!canProceed}
+          disabled={!canProceed || isSaving}
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
           size="lg"
         >
-          Continue with Selected Theme
-          <ArrowRight className="w-5 h-5 ml-2" />
+          {isSaving ? (
+            <>
+              <div className="animate-spin mr-2">⏳</div>
+              Saving...
+            </>
+          ) : (
+            <>
+              Continue with Selected Theme
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </>
+          )}
         </Button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, Target } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,25 +6,89 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card } from '../ui/card';
-import type { Project } from '../../types';
+import { StoryLabProject, CreateProjectInput, UserInputCampaignDetails } from '../../types/project.types';
 
 interface Stage1Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  project: StoryLabProject | null;
+  createProject: (input: CreateProjectInput) => Promise<StoryLabProject>;
+  loadProject: (projectId: string) => Promise<StoryLabProject>;
+  updateCampaignDetails: (details: Partial<UserInputCampaignDetails>) => Promise<void>;
+  markStageCompleted: (stageName: string, data?: any) => Promise<void>;
+  advanceToNextStage: (projectToAdvance?: StoryLabProject) => Promise<void>;
 }
 
-export function Stage1CampaignDetails({ project, onComplete }: Stage1Props) {
+export function Stage1CampaignDetails({
+  project,
+  createProject,
+  loadProject,
+  updateCampaignDetails,
+  markStageCompleted,
+  advanceToNextStage,
+}: Stage1Props) {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Local form state
   const [formData, setFormData] = useState({
-    campaignName: project.data.campaignDetails?.campaignName || '',
-    productDescription: project.data.campaignDetails?.productDescription || '',
-    targetAudience: project.data.campaignDetails?.targetAudience || '',
-    videoLength: project.data.campaignDetails?.videoLength || '30s',
-    callToAction: project.data.campaignDetails?.callToAction || 'Visit Website',
+    campaignName: '',
+    productDescription: '',
+    targetAudience: '',
+    videoLength: '30s',
+    callToAction: 'Visit Website',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Sync form with project data when it loads
+  useEffect(() => {
+    if (project?.campaignDetails) {
+      // Load existing campaign details
+      setFormData({
+        campaignName: project.campaignDetails.campaignName || '',
+        productDescription: project.campaignDetails.productDescription || '',
+        targetAudience: project.campaignDetails.targetAudience || '',
+        videoLength: project.campaignDetails.videoLength || '30s',
+        callToAction: project.campaignDetails.callToAction || 'Visit Website',
+      });
+    } else if (project === null) {
+      // For new/temp projects, initialize with empty form (project will be created later)
+      setFormData({
+        campaignName: '',
+        productDescription: '',
+        targetAudience: '',
+        videoLength: '30s',
+        callToAction: 'Visit Website',
+      });
+    }
+  }, [project]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onComplete({ campaignDetails: formData });
+    try {
+      setIsSaving(true);
+      // For new projects (project is null), create the project first
+      if (!project) {
+        const newProject = await createProject({
+          name: formData.campaignName || 'New Campaign',
+          description: '',
+          campaignDetails: formData,
+        });
+        // After creating, reload the project to get full data with stage executions
+        if (newProject) {
+          const loadedProject = await loadProject(newProject.id);
+          // Advance to next stage - pass the loaded project to avoid timing issues
+          await advanceToNextStage(loadedProject);
+        }
+      } else {
+        // Update campaign details for existing projects
+        await updateCampaignDetails(formData);
+        // Mark stage as completed for existing projects
+        await markStageCompleted('campaign-details');
+        // Advance to next stage
+        await advanceToNextStage(project);
+      }
+    } catch (error) {
+      console.error('Failed to save campaign details:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const isFormValid = formData.campaignName && formData.productDescription && formData.targetAudience;
@@ -145,12 +209,21 @@ export function Stage1CampaignDetails({ project, onComplete }: Stage1Props) {
         <div className="mt-8">
           <Button
             type="submit"
-            disabled={!isFormValid}
+            disabled={!isFormValid || isSaving}
             className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
             size="lg"
           >
-            Save & Proceed
-            <ArrowRight className="w-5 h-5 ml-2" />
+            {isSaving ? (
+              <>
+                <div className="animate-spin mr-2">⏳</div>
+                Saving...
+              </>
+            ) : (
+              <>
+                Save & Proceed
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       </form>

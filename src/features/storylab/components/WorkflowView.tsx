@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Logo } from './Logo';
-import type { Project } from '../types';
+import { useStoryLabProject } from '../hooks/useStoryLabProject';
 import { Stage1CampaignDetails } from './stages/Stage1CampaignDetails';
 import { Stage2Personas } from './stages/Stage2Personas';
 import { Stage3Narratives } from './stages/Stage3Narratives';
@@ -12,10 +12,11 @@ import { Stage5Screenplay } from './stages/Stage5Screenplay';
 import { Stage6GenerateVideo } from './stages/Stage6GenerateVideo';
 
 interface WorkflowViewProps {
-  project: Project;
+  projectId: string;
   onBack: () => void;
-  onUpdateProject: (project: Project) => void;
 }
+
+const STAGE_NAMES = ['campaign-details', 'personas', 'narrative', 'storyboard', 'screenplay', 'video'];
 
 const stages = [
   { id: 1, name: 'Campaign Details', component: Stage1CampaignDetails },
@@ -26,23 +27,42 @@ const stages = [
   { id: 6, name: 'Generate Video', component: Stage6GenerateVideo },
 ];
 
-export function WorkflowView({ project, onBack, onUpdateProject }: WorkflowViewProps) {
-  const [currentStage, setCurrentStage] = useState(project.currentStage);
+export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
+  // Load project using new hook - this is the SINGLE source of truth for project state
+  const {
+    project,
+    isLoading,
+    createProject,
+    loadProject,
+    updateCampaignDetails,
+    updateAIPersonas,
+    updatePersonaSelection,
+    markStageCompleted,
+    advanceToNextStage,
+  } = useStoryLabProject({ autoLoad: true, projectId });
 
-  const handleStageComplete = (stageData: any) => {
-    const updatedProject = {
-      ...project,
-      currentStage: Math.max(currentStage + 1, project.currentStage),
-      data: {
-        ...project.data,
-        ...stageData,
-      },
-    };
-    onUpdateProject(updatedProject);
-    
-    if (currentStage < 6) {
-      setCurrentStage(currentStage + 1);
+  const [currentStage, setCurrentStage] = useState(1);
+
+  // Sync current stage with project data when loaded
+  useEffect(() => {
+    if (project) {
+      setCurrentStage(project.currentStageIndex + 1);
     }
+  }, [project?.currentStageIndex, project]);
+
+  const isStageCompleted = (stageIndex: number) => {
+    const stageName = STAGE_NAMES[stageIndex - 1];
+    return project?.stageExecutions[stageName]?.status === 'completed';
+  };
+
+  const isStageAccessible = (stageIndex: number) => {
+    // Can access current stage and all completed stages before it
+    if (stageIndex <= currentStage) return true;
+    // Check if all previous stages are completed
+    for (let i = 1; i < stageIndex; i++) {
+      if (!isStageCompleted(i)) return false;
+    }
+    return true;
   };
 
   const CurrentStageComponent = stages[currentStage - 1].component;
@@ -62,7 +82,7 @@ export function WorkflowView({ project, onBack, onUpdateProject }: WorkflowViewP
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Projects
           </Button>
-          <h2 className="text-white mb-1">{project.name}</h2>
+          <h2 className="text-white mb-1">{project?.name || 'Project'}</h2>
           <p className="text-gray-500">6-Stage Workflow</p>
         </div>
 
@@ -71,8 +91,8 @@ export function WorkflowView({ project, onBack, onUpdateProject }: WorkflowViewP
           <div className="space-y-2">
             {stages.map((stage) => {
               const isActive = stage.id === currentStage;
-              const isCompleted = stage.id < currentStage;
-              const isAccessible = stage.id <= project.currentStage;
+              const isCompleted = isStageCompleted(stage.id);
+              const isAccessible = isStageAccessible(stage.id);
 
               return (
                 <button
@@ -119,10 +139,24 @@ export function WorkflowView({ project, onBack, onUpdateProject }: WorkflowViewP
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto">
-        <CurrentStageComponent
-          project={project}
-          onComplete={handleStageComplete}
-        />
+        {isLoading && !project ? (
+          // Only show loading if we're actually loading an existing project
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-400">Loading project...</p>
+          </div>
+        ) : (
+          // Render the stage component - pass shared project state and functions
+          <CurrentStageComponent
+            project={project}
+            createProject={createProject}
+            loadProject={loadProject}
+            updateCampaignDetails={updateCampaignDetails}
+            updateAIPersonas={updateAIPersonas}
+            updatePersonaSelection={updatePersonaSelection}
+            markStageCompleted={markStageCompleted}
+            advanceToNextStage={advanceToNextStage}
+          />
+        )}
       </div>
     </div>
   );

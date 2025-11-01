@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, Sparkles, FileText, Edit2, Save } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import type { Project } from '../../types';
+import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 
 interface ScreenplayEntry {
   id: string;
@@ -16,8 +16,7 @@ interface ScreenplayEntry {
 }
 
 interface Stage5Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  projectId: string;
 }
 
 const mockScreenplay: ScreenplayEntry[] = [
@@ -72,27 +71,58 @@ const mockScreenplay: ScreenplayEntry[] = [
   },
 ];
 
-export function Stage5Screenplay({ project, onComplete }: Stage5Props) {
-  const [screenplay, setScreenplay] = useState<ScreenplayEntry[]>(
-    project.data.screenplay || []
-  );
+export function Stage5Screenplay({ projectId }: Stage5Props) {
+  // Load project using new hook
+  const { project, isSaving, updateAIScreenplay, updateScreenplayCustomizations, markStageCompleted, advanceToNextStage } =
+    useStoryLabProject({ autoLoad: true, projectId });
+
+  const [screenplay, setScreenplay] = useState<ScreenplayEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const handleGenerate = () => {
+  // Sync screenplay with project data when loaded
+  useEffect(() => {
+    if (project?.aiGeneratedScreenplay?.sections) {
+      const entries: ScreenplayEntry[] = project.aiGeneratedScreenplay.sections.map((s, i) => ({
+        id: i.toString(),
+        timeStart: (s.timecode?.start as any) || '',
+        timeEnd: (s.timecode?.end as any) || '',
+        visual: s.visual || '',
+        audio: s.audio || '',
+      }));
+      setScreenplay(entries);
+    } else {
+      setScreenplay([]);
+    }
+  }, [project?.aiGeneratedScreenplay]);
+
+  const handleGenerate = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      setScreenplay(mockScreenplay);
-      setIsGenerating(false);
-    }, 2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setScreenplay(mockScreenplay);
+    setIsGenerating(false);
   };
 
   const handleEdit = (id: string, field: keyof ScreenplayEntry, value: string) => {
     setScreenplay(screenplay.map(s => s.id === id ? { ...s, [field]: value } : s));
   };
 
-  const handleSubmit = () => {
-    onComplete({ screenplay });
+  const handleSubmit = async () => {
+    try {
+      // Save screenplay customizations
+      if (screenplay.length > 0) {
+        await updateScreenplayCustomizations({
+          editedText: screenplay,
+          lastEditedAt: new Date(),
+        });
+      }
+      // Mark stage as completed
+      await markStageCompleted('screenplay');
+      // Advance to next stage
+      await advanceToNextStage();
+    } catch (error) {
+      console.error('Failed to save screenplay:', error);
+    }
   };
 
   return (
@@ -237,11 +267,21 @@ export function Stage5Screenplay({ project, onComplete }: Stage5Props) {
             </Button>
             <Button
               onClick={handleSubmit}
+              disabled={screenplay.length === 0 || isSaving}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
               size="lg"
             >
-              Finalize Screenplay
-              <ArrowRight className="w-5 h-5 ml-2" />
+              {isSaving ? (
+                <>
+                  <div className="animate-spin mr-2">⏳</div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Finalize Screenplay
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </>

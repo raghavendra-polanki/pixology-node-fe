@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { 
-  ArrowRight, 
-  Sparkles, 
-  Edit2, 
-  Film, 
-  Plus, 
-  Trash2, 
+import { useState, useEffect } from 'react';
+import {
+  ArrowRight,
+  Sparkles,
+  Edit2,
+  Film,
+  Plus,
+  Trash2,
   Grid3x3,
   LayoutList,
   Image as ImageIcon
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import type { Project } from '../../types';
+import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 
 interface Scene {
   id: string;
@@ -30,8 +30,7 @@ interface Scene {
 }
 
 interface Stage4Props {
-  project: Project;
-  onComplete: (data: any) => void;
+  projectId: string;
 }
 
 const mockScenes: Scene[] = [
@@ -87,11 +86,32 @@ const mockScenes: Scene[] = [
 
 type ViewMode = 'horizontal' | 'grid';
 
-export function Stage4Storyboard({ project, onComplete }: Stage4Props) {
-  const [scenes, setScenes] = useState<Scene[]>(project.data.storyboard || []);
+export function Stage4Storyboard({ projectId }: Stage4Props) {
+  // Load project using new hook
+  const { project, isSaving, updateAIStoryboard, updateStoryboardCustomizations, markStageCompleted, advanceToNextStage } =
+    useStoryLabProject({ autoLoad: true, projectId });
+
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('horizontal');
+
+  // Sync scenes with project data when loaded
+  useEffect(() => {
+    if (project?.aiGeneratedStoryboard?.scenes) {
+      const loadedScenes: Scene[] = project.aiGeneratedStoryboard.scenes.map((s, i) => ({
+        id: s.sceneNumber?.toString() || i.toString(),
+        number: s.sceneNumber || i + 1,
+        title: s.title || '',
+        description: s.description || '',
+        visualNote: s.cameraInstructions || '',
+        image: (s.referenceImage as any)?.url || (s.referenceImage as any) || '',
+      }));
+      setScenes(loadedScenes);
+    } else {
+      setScenes([]);
+    }
+  }, [project?.aiGeneratedStoryboard]);
 
   const handleGenerate = () => {
     setIsGenerating(true);
@@ -136,8 +156,22 @@ export function Stage4Storyboard({ project, onComplete }: Stage4Props) {
     setEditingScene(newScene);
   };
 
-  const handleSubmit = () => {
-    onComplete({ storyboard: scenes });
+  const handleSubmit = async () => {
+    try {
+      // Save storyboard customizations
+      if (scenes.length > 0) {
+        await updateStoryboardCustomizations({
+          editedScenes: scenes,
+          lastEditedAt: new Date(),
+        });
+      }
+      // Mark stage as completed
+      await markStageCompleted('storyboard');
+      // Advance to next stage
+      await advanceToNextStage();
+    } catch (error) {
+      console.error('Failed to save storyboard:', error);
+    }
   };
 
   return (
@@ -295,12 +329,21 @@ export function Stage4Storyboard({ project, onComplete }: Stage4Props) {
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={scenes.length === 0}
+              disabled={scenes.length === 0 || isSaving}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
               size="lg"
             >
-              Continue to Screenplay
-              <ArrowRight className="w-5 h-5 ml-2" />
+              {isSaving ? (
+                <>
+                  <div className="animate-spin mr-2">⏳</div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Continue to Screenplay
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </>
@@ -384,12 +427,21 @@ export function Stage4Storyboard({ project, onComplete }: Stage4Props) {
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={scenes.length === 0}
+              disabled={scenes.length === 0 || isSaving}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
               size="lg"
             >
-              Continue to Screenplay
-              <ArrowRight className="w-5 h-5 ml-2" />
+              {isSaving ? (
+                <>
+                  <div className="animate-spin mr-2">⏳</div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Continue to Screenplay
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </>

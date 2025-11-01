@@ -1,4 +1,3 @@
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,16 +12,13 @@ if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
 }
 // --- End of Firestore Credentials Fix ---
 
-// Load environment variables from .env.local or .env
-dotenv.config({ path: path.join(__dirname, '.env.local') });
-dotenv.config(); // Fallback to .env
-
 import express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
 import authRouter from './api/auth.js';
 import allowlistRouter from './api/allowlist.js';
 import projectsRouter from './api/projects.js';
+import personasRouter from './api/personas.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,7 +63,7 @@ app.use(helmet({
         "'self'",
         "https://accounts.google.com/gsi/client", // Specific GSI client script
       ],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "https://storage.googleapis.com"],
       connectSrc: [
         "'self'",
         "http://localhost:3000",      // Backend
@@ -128,6 +124,9 @@ app.use('/api/allowlist', allowlistRouter);
 
 // Projects API routes
 app.use('/api/projects', projectsRouter);
+
+// Personas generation API routes
+app.use('/api/personas', personasRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {

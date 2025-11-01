@@ -420,3 +420,133 @@ export const bulkAddToAllowlist = async (emails) => {
     throw error;
   }
 };
+
+/**
+ * Update a project with generated personas
+ * Merges the generated personas with the project's aiGeneratedPersonas field
+ * @param {string} projectId - Project ID
+ * @param {array} personas - Array of generated persona objects
+ * @param {string} userId - User ID (for validation)
+ * @returns {Promise<object>} Updated project data
+ */
+export const updateProjectWithPersonas = async (projectId, personas, userId) => {
+  try {
+    // Validate inputs
+    if (!projectId || !personas || !Array.isArray(personas)) {
+      throw new Error('Missing required parameters: projectId, personas array');
+    }
+
+    if (personas.length === 0) {
+      throw new Error('At least one persona must be provided');
+    }
+
+    // Get current project to verify ownership and merge data
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    const projectData = projectDoc.data();
+
+    // Verify user has access (is owner or editor)
+    const members = projectData.members || {};
+    const userRole = members[userId];
+
+    if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+      throw new Error(`User does not have permission to update project ${projectId}`);
+    }
+
+    // Create aiGeneratedPersonas structure
+    const aiGeneratedPersonas = {
+      personas: personas,
+      generatedAt: new Date(),
+      generationRecipeId: 'persona-generation-v1',
+      generationExecutionId: `exec-${projectId}-${Date.now()}`,
+      model: 'gemini-2.5-flash',
+      temperature: 0.7,
+      count: personas.length,
+    };
+
+    // Update project with new personas
+    await db.collection('projects').doc(projectId).update({
+      aiGeneratedPersonas: aiGeneratedPersonas,
+      updatedAt: new Date(),
+    });
+
+    // Fetch and return updated project
+    const updatedDoc = await db.collection('projects').doc(projectId).get();
+
+    if (!updatedDoc.exists) {
+      throw new Error('Failed to retrieve updated project');
+    }
+
+    const updatedProjectData = {
+      id: projectId,
+      ...updatedDoc.data(),
+    };
+
+    console.log(`Project ${projectId} updated with ${personas.length} personas`);
+
+    return updatedProjectData;
+  } catch (error) {
+    console.error(`Error updating project with personas:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get personas for a project
+ * @param {string} projectId - Project ID
+ * @returns {Promise<array|null>} Array of personas or null if not found
+ */
+export const getProjectPersonas = async (projectId) => {
+  try {
+    const doc = await db.collection('projects').doc(projectId).get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const projectData = doc.data();
+    return projectData.aiGeneratedPersonas?.personas || null;
+  } catch (error) {
+    console.error(`Error fetching personas for project ${projectId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Delete personas from a project
+ * @param {string} projectId - Project ID
+ * @param {string} userId - User ID (for validation)
+ * @returns {Promise<void>}
+ */
+export const deleteProjectPersonas = async (projectId, userId) => {
+  try {
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+
+    if (!projectDoc.exists) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    const projectData = projectDoc.data();
+    const members = projectData.members || {};
+    const userRole = members[userId];
+
+    if (!userRole || (userRole !== 'owner' && userRole !== 'editor')) {
+      throw new Error(`User does not have permission to delete personas from project ${projectId}`);
+    }
+
+    // Delete aiGeneratedPersonas field
+    await db.collection('projects').doc(projectId).update({
+      aiGeneratedPersonas: db.FieldValue.delete(),
+      updatedAt: new Date(),
+    });
+
+    console.log(`Personas deleted from project ${projectId}`);
+  } catch (error) {
+    console.error(`Error deleting personas from project:`, error);
+    throw error;
+  }
+};
