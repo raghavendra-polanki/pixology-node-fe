@@ -53,9 +53,9 @@ const narrativeOptions: Narrative[] = [
     title: 'Before/After Transformation',
     description: 'Show dramatic contrast emphasizing the transformation your product enables.',
     structure: 'Before: Struggle → Discovery: Product → Transition → After: Transformation',
-    gradient: 'from-purple-600 via-purple-500 to-pink-500',
+    gradient: 'from-cyan-600 via-blue-500 to-indigo-600',
     patternColor: 'rgba(255, 255, 255, 0.1)',
-    ringColor: 'ring-purple-500',
+    ringColor: 'ring-cyan-500',
   },
   {
     id: 'testimonial',

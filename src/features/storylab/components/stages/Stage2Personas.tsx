@@ -7,6 +7,7 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
 // UI representation of persona (different from PersonaData in data model)
 interface Persona {
@@ -34,6 +35,9 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const [isSaving, setIsSaving] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
 
   // Sync personas with project data when loaded - only if they've been generated
   useEffect(() => {
@@ -54,6 +58,58 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     }
   }, [project?.aiGeneratedPersonas, project?.userPersonaSelection]);
 
+  const handleEditRecipe = async () => {
+    try {
+      setIsLoadingRecipe(true);
+      const response = await fetch('/api/recipes?stageType=stage_2_personas');
+      const data = await response.json();
+
+      if (data.recipes && data.recipes.length > 0) {
+        setCurrentRecipe(data.recipes[0]);
+        setShowRecipeEditor(true);
+      } else {
+        alert('No recipe found for persona generation. Please seed recipes first.');
+      }
+    } catch (error) {
+      console.error('Error fetching recipe:', error);
+      alert('Failed to load recipe');
+    } finally {
+      setIsLoadingRecipe(false);
+    }
+  };
+
+  const handleRecipeSaved = async (recipe: any) => {
+    try {
+      const token = sessionStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(`/api/recipes/${recipe.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(recipe),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save recipe');
+      }
+
+      console.log('Recipe saved successfully');
+      setShowRecipeEditor(false);
+      setCurrentRecipe(null);
+      alert('Recipe saved successfully!');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save recipe';
+      console.error('Error saving recipe:', errorMessage);
+      throw error;
+    }
+  };
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
@@ -63,33 +119,86 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         throw new Error('Authentication token not found');
       }
 
-      // Call the persona generation API
-      const response = await fetch('/api/personas/generate', {
+      // Step 1: Get the recipe
+      console.log('Fetching persona generation recipe...');
+      const recipeResponse = await fetch('/api/recipes?stageType=stage_2_personas');
+      const recipeData = await recipeResponse.json();
+
+      if (!recipeData.recipes || recipeData.recipes.length === 0) {
+        throw new Error('No recipe found for persona generation. Please seed recipes first.');
+      }
+
+      const recipeId = recipeData.recipes[0].id;
+      console.log('Using recipe:', recipeId);
+
+      // Step 2: Execute the recipe
+      console.log('Executing recipe...');
+      const executionResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          input: {
+            productDescription: project.campaignDetails.productDescription,
+            targetAudience: project.campaignDetails.targetAudience,
+            numberOfPersonas: 3,
+          },
           projectId: project.id,
-          campaignDetails: project.campaignDetails,
-          numberOfPersonas: 3,
+          stageId: 'stage_2',
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate personas');
+      if (!executionResponse.ok) {
+        const errorData = await executionResponse.json();
+        throw new Error(errorData.error || 'Failed to execute recipe');
       }
 
-      const data = await response.json();
+      const executionData = await executionResponse.json();
+      const executionId = executionData.executionId;
+      console.log('Recipe execution started:', executionId);
 
-      if (!data.success || !data.personas) {
-        throw new Error('Invalid response from persona generation API');
+      // Step 3: Poll for execution results
+      console.log('Polling for execution results...');
+      let execution: any = null;
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes with 5-second polling
+
+      while (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
+        execution = await statusResponse.json();
+
+        console.log(`Execution status (attempt ${attempts + 1}):`, execution.execution?.status);
+
+        if (execution.execution.status === 'completed') {
+          console.log('Recipe execution completed');
+          break;
+        }
+
+        if (execution.execution.status === 'failed') {
+          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
+        }
+
+        attempts++;
       }
 
-      // Convert API response personas to UI format
-      const generatedPersonas: Persona[] = data.personas.map((p: any) => ({
+      if (!execution || execution.execution.status !== 'completed') {
+        throw new Error('Recipe execution timed out after 5 minutes');
+      }
+
+      // Step 4: Process results
+      console.log('Processing execution results...');
+      const finalPersonas = execution.execution.finalOutput || [];
+
+      if (!Array.isArray(finalPersonas) || finalPersonas.length === 0) {
+        throw new Error('No personas returned from recipe execution');
+      }
+
+      // Convert final personas to UI format
+      const generatedPersonas: Persona[] = finalPersonas.map((p: any) => ({
         id: p.id,
         name: p.coreIdentity?.name || 'Unknown',
         age: String(p.coreIdentity?.age || ''),
@@ -100,29 +209,30 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         selected: false,
       }));
 
-      // Log for debugging
-      console.log('Generated personas:', generatedPersonas);
+      console.log(`Generated ${generatedPersonas.length} personas`);
       generatedPersonas.forEach((p, idx) => {
-        console.log(`Persona ${idx + 1} image URL:`, p.image);
+        console.log(`Persona ${idx + 1}: ${p.name} - Image: ${p.image ? '✓' : '✗'}`);
       });
 
       setPersonas(generatedPersonas);
       setHasGenerated(true);
 
-      // Save generated personas to project via updateAIPersonas
+      // Step 5: Save generated personas to project
+      console.log('Saving personas to project...');
       await updateAIPersonas({
-        personas: data.personas,
+        personas: finalPersonas,
         generatedAt: new Date(),
-        generationRecipeId: 'persona-generation-v1',
-        generationExecutionId: data.project?.aiGeneratedPersonas?.generationExecutionId || `exec-${Date.now()}`,
-        model: 'gemini-2.5-flash',
+        generationRecipeId: recipeId,
+        generationExecutionId: executionId,
+        model: 'multi-modal-pipeline',
         temperature: 0.7,
         count: generatedPersonas.length,
       });
+
+      console.log('Personas generated and saved successfully!');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate personas';
       console.error('Error generating personas:', errorMessage);
-      // Optionally show error toast to user
       alert(`Failed to generate personas: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
@@ -175,6 +285,18 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const selectedCount = personas.filter(p => p.selected).length;
   const canProceed = selectedCount > 0;
 
+  // Show full-screen recipe editor if editing
+  if (showRecipeEditor && currentRecipe) {
+    return (
+      <RecipeEditorPage
+        recipe={currentRecipe}
+        onSave={handleRecipeSaved}
+        onBack={() => setShowRecipeEditor(false)}
+        title="Edit Persona Generation Recipe"
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
@@ -192,8 +314,8 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         </div>
       </div>
 
-      {/* Generate Button */}
-      <div className="mb-8">
+      {/* Generate & Edit Buttons */}
+      <div className="mb-8 flex gap-4">
         <Button
           onClick={handleGenerate}
           disabled={isGenerating}
@@ -209,6 +331,26 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
             <>
               <Sparkles className="w-5 h-5 mr-2" />
               Generate Personas
+            </>
+          )}
+        </Button>
+
+        <Button
+          onClick={handleEditRecipe}
+          disabled={isLoadingRecipe}
+          variant="outline"
+          className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+          size="lg"
+        >
+          {isLoadingRecipe ? (
+            <>
+              <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+              Loading Recipe...
+            </>
+          ) : (
+            <>
+              <Edit2 className="w-5 h-5 mr-2" />
+              Edit Recipe
             </>
           )}
         </Button>
@@ -315,7 +457,7 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         </Button>
       </div>
 
-      {/* Edit Dialog */}
+      {/* Edit Persona Dialog */}
       <Dialog open={!!editingPersona} onOpenChange={() => setEditingPersona(null)}>
         <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-2xl">
           <DialogHeader>

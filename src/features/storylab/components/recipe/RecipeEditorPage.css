@@ -1,0 +1,247 @@
+/* Full-Screen Recipe Editor Page */
+
+.recipe-editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background: #0a0a0a;
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Header */
+.recipe-editor-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 1px solid #2d3561;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.recipe-editor-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 2rem;
+  max-width: none;
+  gap: 2rem;
+}
+
+/* Back Button */
+.recipe-editor-back-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recipe-editor-back-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateX(-2px);
+}
+
+.recipe-editor-back-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recipe-editor-back-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Title Section */
+.recipe-editor-title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.recipe-editor-page-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.recipe-editor-page-subtitle {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.95rem;
+  color: #b0bcc4;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.recipe-editor-recipe-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  color: #7dd3fc;
+  background: rgba(125, 211, 252, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+}
+
+/* Status Section */
+.recipe-editor-status-section {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  min-width: max-content;
+}
+
+.recipe-editor-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.5rem;
+  color: #fca5a5;
+  font-size: 0.9rem;
+  animation: slideInDown 0.2s ease;
+}
+
+.recipe-editor-success {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 0.5rem;
+  color: #86efac;
+  font-size: 0.9rem;
+  animation: slideInDown 0.2s ease;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Editor Container */
+.recipe-editor-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.recipe-editor-container .reactflow-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.recipe-editor-container .react-flow {
+  background: #0a0a0a;
+}
+
+.recipe-editor-container .react-flow__background {
+  background-color: #0a0a0a;
+}
+
+.recipe-editor-container .react-flow__background-pattern {
+  fill: #1a1a1a;
+}
+
+/* Footer Help */
+.recipe-editor-footer-help {
+  background: #1a1a2e;
+  border-top: 1px solid #2d3561;
+  padding: 0.75rem 2rem;
+  font-size: 0.85rem;
+  color: #7dd3fc;
+  flex-shrink: 0;
+}
+
+.recipe-editor-footer-help p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .recipe-editor-header-content {
+    padding: 1rem 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .recipe-editor-page-title {
+    font-size: 1.5rem;
+  }
+
+  .recipe-editor-status-section {
+    width: 100%;
+    order: 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .recipe-editor-page-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .recipe-editor-back-button {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .recipe-editor-header-content {
+    padding: 0.75rem 1rem;
+  }
+
+  .recipe-editor-footer-help {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* React Flow overrides for consistency */
+.recipe-editor-container .react-flow__node {
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.recipe-editor-container .react-flow__node.selected {
+  box-shadow: 0 0 0 2px #3b82f6, 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.recipe-editor-container .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+  border: 2px solid #0a0a0a;
+}
+
+.recipe-editor-container .react-flow__edge-path {
+  stroke: #3b82f6;
+  stroke-width: 2;
+}
+
+.recipe-editor-container .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #60a5fa;
+  stroke-width: 2.5;
+}
