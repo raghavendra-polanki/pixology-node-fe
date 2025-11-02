@@ -1,4 +1,5 @@
-import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Trash2, Maximize2, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -10,6 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '../ui/dialog';
 import { Slider } from '../ui/slider';
 import { Node } from 'reactflow';
 
@@ -21,6 +29,8 @@ interface RecipeNodePanelProps {
 
 export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelProps) {
   const nodeData = (node.data as any)?.node || {};
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [promptValue, setPromptValue] = useState(nodeData.prompt || '');
 
   const handleFieldChange = (field: string, value: any) => {
     onUpdate({ [field]: value });
@@ -30,6 +40,16 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
     onUpdate({
       aiModel: { ...nodeData.aiModel, [field]: value },
     });
+  };
+
+  const handleOpenPromptModal = () => {
+    setPromptValue(nodeData.prompt || '');
+    setIsPromptModalOpen(true);
+  };
+
+  const handleSavePrompt = () => {
+    handleFieldChange('prompt', promptValue);
+    setIsPromptModalOpen(false);
   };
 
   return (
@@ -104,9 +124,12 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
 
             {/* Temperature */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-300">
-                Temperature: {(nodeData.aiModel?.temperature || 0.7).toFixed(1)}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-gray-300">Temperature</Label>
+                <span className="text-xs font-semibold text-blue-400 bg-blue-600/10 px-2 py-1 rounded">
+                  {(nodeData.aiModel?.temperature || 0.7).toFixed(2)}
+                </span>
+              </div>
               <Slider
                 value={[nodeData.aiModel?.temperature || 0.7]}
                 onValueChange={(value) => handleAIModelChange('temperature', value[0])}
@@ -115,13 +138,26 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
                 step={0.1}
                 className="w-full"
               />
+              <div className="text-xs text-gray-500 mt-1">Lower = More focused | Higher = More creative</div>
             </div>
           </>
         )}
 
         {/* Prompt */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-gray-300">Prompt Template</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-gray-300">Prompt Template</Label>
+            <Button
+              onClick={handleOpenPromptModal}
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-gray-400 hover:text-white hover:bg-gray-800/50"
+              title="Expand to larger editor"
+            >
+              <Maximize2 className="w-3 h-3 mr-1" />
+              <span className="text-xs">Expand</span>
+            </Button>
+          </div>
           <Textarea
             value={nodeData.prompt || ''}
             onChange={(e) => handleFieldChange('prompt', e.target.value)}
@@ -186,6 +222,73 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
           Delete Node
         </Button>
       </div>
+
+      {/* Prompt Editor Modal */}
+      <Dialog open={isPromptModalOpen} onOpenChange={setIsPromptModalOpen}>
+        <DialogContent className="!w-[90vw] !h-[90vh] !max-w-none !max-h-none bg-[#0a0a0a] border-gray-800 flex flex-col p-0 rounded-lg">
+          {/* Modal Header */}
+          <div className="border-b border-gray-800 px-8 py-6 flex items-center justify-between bg-[#151515] rounded-t-lg">
+            <div className="flex-1">
+              <DialogTitle className="text-2xl font-semibold text-white">Edit Prompt Template</DialogTitle>
+              <p className="text-gray-400 text-sm mt-1">Character count: {promptValue.length}</p>
+            </div>
+          </div>
+
+          {/* Modal Content - Full Editor */}
+          <div className="flex-1 overflow-hidden flex flex-col px-8 py-6 gap-4">
+            {/* Editor Info */}
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              <div className="flex items-center gap-1">
+                <span>💡</span>
+                <span>Use {'{placeholders}'} for variables like {'{productDescription}'}, {'{targetAudience}'}, etc.</span>
+              </div>
+            </div>
+
+            {/* Large Textarea */}
+            <textarea
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              className="flex-1 bg-[#0a0a0a] border border-gray-700 text-white text-base p-6 rounded-lg resize-none focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-mono leading-relaxed placeholder-gray-600"
+              placeholder="Enter your prompt template here...
+
+Use {curly_braces} for variable placeholders that will be replaced at runtime.
+
+Example:
+Create {numberOfPersonas} detailed personas for {productDescription} targeting {targetAudience}..."
+              style={{ fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace', lineHeight: '1.6' }}
+            />
+
+            {/* Helper Tips */}
+            <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg px-4 py-3 text-xs text-blue-200">
+              <p className="font-semibold mb-1">💡 Prompt Tips:</p>
+              <ul className="space-y-1 text-blue-100/80">
+                <li>• Be specific and detailed for better AI responses</li>
+                <li>• Use placeholders in {'{curly_braces}'} for dynamic values</li>
+                <li>• Include examples or expected output format</li>
+                <li>• Test your prompt with sample inputs before saving</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="border-t border-gray-800 bg-[#151515] px-8 py-6 flex gap-3 justify-end">
+            <DialogClose asChild>
+              <Button
+                variant="outline"
+                className="text-gray-300 border-gray-700 hover:bg-gray-800/50 hover:text-white px-6"
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              onClick={handleSavePrompt}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 font-medium"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
