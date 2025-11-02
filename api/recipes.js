@@ -261,6 +261,48 @@ router.post('/:recipeId/execute', verifyToken, async (req, res) => {
 });
 
 /**
+ * POST /api/recipes/:recipeId/test-node
+ * Test a single node (for recipe development)
+ * Requires authentication
+ */
+router.post('/:recipeId/test-node', verifyToken, async (req, res) => {
+  try {
+    const { recipeId } = req.params;
+    const { nodeId, externalInput, executeDependencies = true, mockOutputs = {} } = req.body;
+
+    if (!nodeId) {
+      return res.status(400).json({ error: 'nodeId is required' });
+    }
+
+    if (!externalInput) {
+      return res.status(400).json({ error: 'externalInput data is required' });
+    }
+
+    console.log(`Testing node ${nodeId} in recipe ${recipeId}`);
+
+    // Test the single node
+    const result = await AgentService.testSingleNode(
+      recipeId,
+      nodeId,
+      externalInput,
+      executeDependencies,
+      mockOutputs
+    );
+
+    return res.status(200).json({
+      success: result.success,
+      message: result.success ? 'Node test completed' : 'Node test failed',
+      result,
+    });
+  } catch (error) {
+    console.error('Error testing node:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to test node',
+    });
+  }
+});
+
+/**
  * GET /api/recipes/executions/:executionId
  * Get execution status and results
  */

@@ -320,6 +320,119 @@ export class RecipeOrchestrator {
       throw error;
     }
   }
+
+  /**
+   * Test a single node in isolation (for recipe development)
+   * @param {string} recipeId - Recipe ID
+   * @param {string} nodeId - Node ID to test
+   * @param {object} externalInput - External input data
+   * @param {boolean} executeDependencies - Whether to run dependency nodes first
+   * @param {object} mockOutputs - Mock outputs to use instead of running dependencies
+   * @returns {Promise<object>} Node execution result
+   */
+  static async testSingleNode(recipeId, nodeId, externalInput, executeDependencies = true, mockOutputs = {}) {
+    try {
+      // Load recipe
+      const recipe = await RecipeManager.getRecipe(recipeId);
+      if (!recipe) {
+        throw new Error(`Recipe ${recipeId} not found`);
+      }
+
+      // Find the target node
+      const targetNode = recipe.nodes.find((n) => n.id === nodeId);
+      if (!targetNode) {
+        throw new Error(`Node ${nodeId} not found in recipe`);
+      }
+
+      console.log(`Testing node: ${nodeId}`);
+
+      // Get execution order (for dependency calculation)
+      const executionOrder = DAGValidator.topologicalSort(recipe.nodes, recipe.edges);
+      const nodeIndex = executionOrder.indexOf(nodeId);
+
+      if (nodeIndex === -1) {
+        throw new Error(`Node ${nodeId} not in valid execution order`);
+      }
+
+      // Collect outputs from dependency nodes
+      const nodeOutputs = { ...mockOutputs };
+
+      // If executeDependencies is true, run all nodes before this one
+      if (executeDependencies && nodeIndex > 0) {
+        console.log(`Executing ${nodeIndex} dependency node(s)...`);
+
+        const dependencyNodeIds = executionOrder.slice(0, nodeIndex);
+
+        for (const depNodeId of dependencyNodeIds) {
+          const depNode = recipe.nodes.find((n) => n.id === depNodeId);
+
+          try {
+            // Resolve inputs for dependency node
+            const depNodeInput = this.resolveInputs(depNode.inputMapping, nodeOutputs, externalInput);
+
+            console.log(`Executing dependency node: ${depNodeId}`);
+
+            // Execute dependency node
+            const depResult = await ActionExecutor.executeAction(depNode, depNodeInput);
+
+            // Store output for next nodes
+            nodeOutputs[depNode.outputKey] = depResult.output;
+
+            console.log(`Dependency node ${depNodeId} completed`);
+          } catch (depError) {
+            console.error(`Dependency node ${depNodeId} failed:`, depError.message);
+            throw new Error(`Dependency node ${depNodeId} failed: ${depError.message}`);
+          }
+        }
+      }
+
+      // Now execute the target node
+      const startTime = Date.now();
+      console.log(`Executing target node: ${nodeId}`);
+
+      // Resolve inputs for target node
+      const nodeInput = this.resolveInputs(targetNode.inputMapping, nodeOutputs, externalInput);
+
+      console.log(`Resolved input for node ${nodeId}:`, Object.keys(nodeInput));
+
+      // Execute the node
+      const result = await ActionExecutor.executeAction(targetNode, nodeInput);
+
+      const duration = Date.now() - startTime;
+
+      // Return execution result
+      const executionResult = {
+        success: true,
+        nodeId,
+        nodeType: targetNode.type,
+        nodeName: targetNode.name,
+        input: nodeInput,
+        output: result.output,
+        duration,
+        startedAt: new Date(Date.now() - duration),
+        completedAt: new Date(),
+        error: null,
+      };
+
+      console.log(`Node ${nodeId} test completed successfully in ${duration}ms`);
+
+      return executionResult;
+    } catch (error) {
+      console.error(`Error testing node ${nodeId}:`, error.message);
+
+      return {
+        success: false,
+        nodeId,
+        input: null,
+        output: null,
+        duration: 0,
+        error: {
+          message: error.message,
+          code: error.code || 'UNKNOWN_ERROR',
+        },
+      };
+    }
+  }
 }
 
 export default RecipeOrchestrator;

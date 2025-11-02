@@ -170,6 +170,19 @@ export class AgentService {
     return RecipeOrchestrator.retryExecution(executionId);
   }
 
+  /**
+   * Test a single node in isolation (for recipe development)
+   * @param {string} recipeId - Recipe ID
+   * @param {string} nodeId - Node ID to test
+   * @param {object} externalInput - External input data
+   * @param {boolean} executeDependencies - Whether to run dependency nodes first
+   * @param {object} mockOutputs - Mock outputs to use instead of running dependencies
+   * @returns {Promise<object>} Node execution result
+   */
+  static async testSingleNode(recipeId, nodeId, externalInput, executeDependencies = true, mockOutputs = {}) {
+    return RecipeOrchestrator.testSingleNode(recipeId, nodeId, externalInput, executeDependencies, mockOutputs);
+  }
+
   // ============================================
   // EXECUTION TRACKING & RESULTS
   // ============================================
