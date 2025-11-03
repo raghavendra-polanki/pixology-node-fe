@@ -1,6 +1,6 @@
 import { generateTextFromGemini } from './geminiService.js';
 import { uploadVideoToGCS } from './gcsService.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 /**
  * Video Generation Service
@@ -8,7 +8,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
  */
 
 const USE_MOCK_VIDEOS = process.env.USE_MOCK_VIDEOS !== 'false'; // Set to false to use real Veo API, true for mock videos in testing
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 /**
  * Generate a video for a scene
@@ -178,47 +180,81 @@ async function generateMockVideo(_description, sceneIndex) {
 }
 
 /**
- * Call real Veo 3.1 API using Gemini API
- * Uses Google's generative AI models for video generation
+ * Call real Veo 3.1 API using Google GenAI
+ * Generates video using Veo 3.1 model with image input
  * @private
  */
-async function callVeoAPIRealImplementation(_imageBase64, description) {
+async function callVeoAPIRealImplementation(imageBase64, description) {
   try {
-    console.log('Calling Veo 3.1 API via Gemini generative model...');
+    console.log('Calling Veo 3.1 API via GoogleGenAI...');
 
-    // Use the Gemini 2.0 Flash model which supports video generation
-    // Note: Veo 3.1 specific support may be added as new models become available
-    // TODO: Implement actual video generation with Gemini model when API is available
-    // const model = genAI.getGenerativeModel({
-    //   model: 'gemini-2.0-flash-exp'
-    // });
+    // Step 1: Generate an image with Gemini 2.5 Flash if we don't have one
+    let imageForVeo;
 
-    // Create video generation request
-    // TODO: Generate actual video using Gemini API
-    // const videoPrompt = `Generate a professional marketing video based on this description:
-    // ${description}
-    // Requirements:
-    // - Professional cinematography quality
-    // - Natural, relatable UGC-style video
-    // - 8 seconds duration
-    // - 1280x720 resolution
-    // - 24 fps`;
+    if (imageBase64) {
+      // Use provided storyboard image
+      console.log('Using provided storyboard image for Veo 3.1');
+      imageForVeo = {
+        imageBytes: Buffer.from(imageBase64, 'base64'),
+        mimeType: 'image/png',
+      };
+    } else {
+      // Generate image with Gemini if no storyboard provided
+      console.log('Generating image with Gemini 2.5 Flash...');
+      const imageResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        prompt: description,
+      });
 
-    console.log('Sending video generation request to Gemini API...');
+      imageForVeo = {
+        imageBytes: imageResponse.generatedImages[0].image.imageBytes,
+        mimeType: 'image/png',
+      };
+      console.log('Image generated successfully');
+    }
 
-    // Note: Gemini API video generation is still being rolled out
-    // For now, we'll use the text enhancement and fall back to mock video
-    // When full video generation API is available, update this implementation
+    // Step 2: Generate video with Veo 3.1 using the image
+    console.log('Starting Veo 3.1 video generation...');
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-generate-preview',
+      prompt: description,
+      image: imageForVeo,
+    });
 
-    const enhancedPrompt = await generateTextFromGemini(
-      `Create a detailed video production specification for: ${description}`,
-      { temperature: 0.7, maxTokens: 500 }
-    );
+    console.log('Video generation operation started, polling for completion...');
 
-    console.log('Received video specification from Gemini');
+    // Step 3: Poll the operation status until the video is ready
+    let pollAttempts = 0;
+    const maxPolls = 120; // Max 2 hours with 60 second intervals
+    const pollInterval = 60000; // 60 seconds
 
-    // Return mock video for now, will be replaced with actual video bytes from API
-    return generateMockVideo(enhancedPrompt, 0);
+    while (!operation.done && pollAttempts < maxPolls) {
+      pollAttempts++;
+      console.log(`Waiting for video generation to complete... (attempt ${pollAttempts}/${maxPolls})`);
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+      operation = await ai.operations.getVideosOperation({
+        operation: operation,
+      });
+    }
+
+    if (!operation.done) {
+      throw new Error(`Video generation timed out after ${maxPolls} attempts`);
+    }
+
+    console.log('Video generation completed successfully');
+
+    // Step 4: Get the generated video and convert to buffer
+    const generatedVideo = operation.response.generatedVideos[0].video;
+
+    // Download the video file and convert to buffer
+    const videoBuffer = await ai.files.download({
+      file: generatedVideo,
+    });
+
+    console.log(`Received video buffer from Veo 3.1 API (${videoBuffer.length} bytes)`);
+    return videoBuffer;
+
   } catch (error) {
     console.error('Error calling Veo 3.1 API:', error.message);
     console.log('Falling back to mock video generation');
