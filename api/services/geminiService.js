@@ -3,6 +3,34 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
+ * Generic text generation using Gemini API
+ * @param {string} prompt - The prompt to send to Gemini
+ * @param {object} options - Configuration options (temperature, maxTokens, etc.)
+ * @returns {Promise<string>} The generated text response
+ */
+export async function generateTextFromGemini(prompt, options = {}) {
+  try {
+    const { temperature = 0.7, maxTokens = 2000 } = options;
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature,
+        maxOutputTokens: maxTokens,
+      },
+    });
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+
+    return responseText;
+  } catch (error) {
+    console.error('Error generating text from Gemini:', error);
+    throw new Error(`Failed to generate text: ${error.message}`);
+  }
+}
+
+/**
  * Generate persona description using Gemini 2.5 Flash
  * Creates a detailed persona based on product and target audience
  * @param {string} productDescription - Description of the product
