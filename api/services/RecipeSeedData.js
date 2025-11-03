@@ -743,11 +743,139 @@ Transform each scene into a detailed screenplay with exact timings. Each scene m
   },
 };
 
+export const VIDEO_GENERATION_RECIPE = {
+  id: 'recipe_video_generation_v1',
+  name: 'Video Generation Pipeline with Veo 3.1',
+  description: 'Generate videos from storyboard images and screenplay data using Google Veo 3.1 for Stage 6',
+  stageType: 'stage_6_video',
+  version: 1,
+
+  nodes: [
+    {
+      id: 'generate_scene_1_video',
+      name: 'Generate Scene 1 Video',
+      type: 'video_generation',
+      order: 1,
+
+      inputMapping: {
+        sceneImage: 'external_input.sceneImage',
+        sceneData: 'external_input.sceneData',
+        screenplayEntry: 'external_input.screenplayEntry',
+        projectId: 'external_input.projectId',
+      },
+      outputKey: 'generatedVideos',
+
+      aiModel: {
+        provider: 'google-vertex-ai',
+        modelName: 'veo-3.1',
+        temperature: 0.7,
+        videoDuration: '8s',
+        resolution: '1280x720',
+        fps: 24,
+      },
+
+      prompt: `
+Generate a professional UGC-style marketing video based on the provided image and screenplay data.
+
+**Visual Reference:** Use the provided storyboard image as the base for the video
+**Scene Information:** {screenplayEntry}
+**Camera Direction:** {screenplayEntry.cameraFlow}
+**Script/Narration:** {screenplayEntry.script}
+**Background Music:** {screenplayEntry.backgroundMusic}
+
+Requirements:
+- 8 seconds duration
+- 1280x720 resolution at 24fps
+- Professional UGC marketing video quality
+- Natural, authentic appearance
+- Smooth camera movements as specified
+- High-quality cinematography
+- Should feel like real user-generated content
+      `.trim(),
+
+      parameters: {
+        videoDuration: '8s',
+        resolution: '1280x720',
+        fps: 24,
+        format: 'mp4',
+        sceneIndex: 0,
+      },
+
+      dependencies: [],
+      errorHandling: {
+        onError: 'fail',
+        retryCount: 1,
+        timeout: 600000,
+      },
+
+      metadata: {
+        createdAt: new Date(),
+        description: 'Generates video for scene 1 using Google Veo 3.1 API',
+      },
+    },
+
+    {
+      id: 'upload_scene_videos',
+      name: 'Upload Videos to GCS',
+      type: 'data_processing',
+      order: 2,
+
+      inputMapping: {
+        videoData: 'generatedVideos',
+        projectId: 'external_input.projectId',
+      },
+      outputKey: 'uploadedVideos',
+
+      parameters: {
+        uploadService: 'gcs',
+        bucketName: 'pixology-videos',
+        databaseOperation: 'save_video_metadata',
+      },
+
+      dependencies: ['generate_scene_1_video'],
+      errorHandling: {
+        onError: 'fail',
+        timeout: 120000,
+      },
+
+      metadata: {
+        createdAt: new Date(),
+        description: 'Uploads generated videos to GCS and saves metadata',
+      },
+    },
+  ],
+
+  edges: [
+    {
+      from: 'generate_scene_1_video',
+      to: 'upload_scene_videos',
+    },
+  ],
+
+  executionConfig: {
+    timeout: 600000,
+    retryPolicy: {
+      maxRetries: 1,
+      backoffMs: 5000,
+    },
+    parallelExecution: false,
+    continueOnError: false,
+  },
+
+  metadata: {
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: 'system',
+    isActive: true,
+    tags: ['video', 'generation', 'stage6', 'veo-3.1'],
+  },
+};
+
 /**
  * Get all seed recipes
  */
 export function getAllSeedRecipes() {
-  return [PERSONA_GENERATION_RECIPE, NARRATIVE_GENERATION_RECIPE, STORYBOARD_GENERATION_RECIPE, SCREENPLAY_GENERATION_RECIPE];
+  return [PERSONA_GENERATION_RECIPE, NARRATIVE_GENERATION_RECIPE, STORYBOARD_GENERATION_RECIPE, SCREENPLAY_GENERATION_RECIPE, VIDEO_GENERATION_RECIPE];
 }
 
 /**
