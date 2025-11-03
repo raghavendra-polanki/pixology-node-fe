@@ -188,16 +188,19 @@ async function callVeoAPIRealImplementation(imageBase64, description) {
   try {
     console.log('Calling Veo 3.1 API via GoogleGenAI...');
 
-    // Step 1: Generate an image with Gemini 2.5 Flash if we don't have one
+    // Step 1: Prepare image for Veo 3.1 (API expects base64 string, not Buffer)
     let imageForVeo;
 
     if (imageBase64) {
       // Use provided storyboard image
       console.log('Using provided storyboard image for Veo 3.1');
+      // Ensure imageBase64 is a string (the API expects base64 string, not Buffer)
+      const imageBase64String = typeof imageBase64 === 'string' ? imageBase64 : imageBase64.toString('base64');
       imageForVeo = {
-        imageBytes: Buffer.from(imageBase64, 'base64'),
+        imageBytes: imageBase64String,
         mimeType: 'image/png',
       };
+      console.log('Image prepared for Veo 3.1 API');
     } else {
       // Generate image with Gemini if no storyboard provided
       console.log('Generating image with Gemini 2.5 Flash...');
@@ -256,10 +259,16 @@ async function callVeoAPIRealImplementation(imageBase64, description) {
     return videoBuffer;
 
   } catch (error) {
-    console.error('Error calling Veo 3.1 API:', error.message);
-    console.log('Falling back to mock video generation');
-    // Fallback to mock on error
-    return generateMockVideo(description, 0);
+    console.error('Error calling Veo 3.1 API:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      details: error.details,
+      stack: error.stack,
+    });
+    // Throw error instead of falling back - we need to see what's wrong with Veo 3.1
+    throw new Error(`Veo 3.1 API Error: ${error.message}`);
   }
 }
 
