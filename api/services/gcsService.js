@@ -196,14 +196,15 @@ export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
     return publicUrl;
   } catch (error) {
     // In development, if bucket doesn't exist, return a mock URL
-    if (error.code === 404 && error.message?.includes('bucket does not exist')) {
+    if ((error.status === 404 || error.code === 404) &&
+        (error.message?.includes('bucket does not exist') || error.message?.includes('The specified bucket'))) {
       console.warn(`GCS bucket not found (${videoBucketName}). Using mock URL for development.`);
       const mockUrl = `https://mock-gcs.local/videos/${projectId}/${sceneName}-${Date.now()}.mp4`;
       console.log(`Mock video URL: ${mockUrl}`);
       return mockUrl;
     }
 
-    console.error('Error uploading video to GCS:', error);
+    console.error('Error uploading video to GCS:', error.message || error);
     throw new Error(`Failed to upload video to GCS: ${error.message}`);
   }
 }

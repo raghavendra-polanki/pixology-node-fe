@@ -355,18 +355,23 @@ export class ActionExecutor {
       }
 
       // Return combined video data with upload URL
+      // Return as array to match expected format [uploadedVideos: [{ video }, ...]]
       return {
-        sceneNumber: sceneIndex + 1,
-        sceneTitle: combinedSceneData.title,
-        videoBuffer: videoData.videoBuffer,
-        videoUrl: videoUrl,
-        videoFormat: videoData.videoFormat || 'mp4',
-        duration: combinedSceneData.timeEnd,
-        generatedAt: videoData.generatedAt,
-        metadata: {
-          ...videoData.metadata,
-          uploadedToGCS: !!videoUrl,
-        },
+        output: [
+          {
+            sceneNumber: sceneIndex + 1,
+            sceneTitle: combinedSceneData.title,
+            videoBuffer: videoData.videoBuffer,
+            videoUrl: videoUrl,
+            videoFormat: videoData.videoFormat || 'mp4',
+            duration: combinedSceneData.timeEnd,
+            generatedAt: videoData.generatedAt,
+            metadata: {
+              ...videoData.metadata,
+              uploadedToGCS: !!videoUrl,
+            },
+          }
+        ]
       };
     } catch (error) {
       console.error('Error in video generation:', error);
