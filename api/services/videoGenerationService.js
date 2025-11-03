@@ -1,15 +1,13 @@
 import { generateTextFromGemini } from './geminiService.js';
 import { uploadVideoToGCS } from './gcsService.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import fs from 'fs';
-import path from 'path';
 
 /**
  * Video Generation Service
  * Handles video generation using Gemini API with Veo 3.1 model
  */
 
-const USE_MOCK_VIDEOS = process.env.USE_MOCK_VIDEOS === 'true'; // Set to true only for testing without API
+const USE_MOCK_VIDEOS = process.env.USE_MOCK_VIDEOS !== 'false'; // Set to false to use real Veo API, true for mock videos in testing
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
@@ -110,7 +108,7 @@ Return ONLY a JSON object with these fields:
  * Creates a minimal valid MP4 file structure for testing without real video generation
  * @private
  */
-async function generateMockVideo(description, sceneIndex) {
+async function generateMockVideo(_description, sceneIndex) {
   try {
     // Create a minimal but valid MP4 file structure
     // This includes: ftyp (file type), mdat (media data), and moov (movie metadata)
@@ -184,18 +182,20 @@ async function generateMockVideo(description, sceneIndex) {
  * Uses Google's generative AI models for video generation
  * @private
  */
-async function callVeoAPIRealImplementation(imageBase64, description) {
+async function callVeoAPIRealImplementation(_imageBase64, description) {
   try {
     console.log('Calling Veo 3.1 API via Gemini generative model...');
 
     // Use the Gemini 2.0 Flash model which supports video generation
     // Note: Veo 3.1 specific support may be added as new models become available
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp'
-    });
+    // TODO: Implement actual video generation with Gemini model when API is available
+    // const model = genAI.getGenerativeModel({
+    //   model: 'gemini-2.0-flash-exp'
+    // });
 
     // Create video generation request
-    const videoPrompt = `Generate a professional marketing video based on this description:
+    // TODO: Generate actual video using Gemini API
+    // const videoPrompt = `Generate a professional marketing video based on this description:
 
 ${description}
 
