@@ -218,9 +218,25 @@ async function callVeoAPIRealImplementation(imageBase64, description) {
 
     // Step 2: Generate video with Veo 3.1 using the image
     console.log('Starting Veo 3.1 video generation...');
+
+    // Convert description to string (it may be an object from Gemini enhancement)
+    let promptString;
+    if (typeof description === 'string') {
+      promptString = description;
+    } else if (typeof description === 'object' && description !== null) {
+      // If it's an object, create a text representation
+      promptString = typeof description.description === 'string'
+        ? description.description
+        : JSON.stringify(description);
+    } else {
+      promptString = String(description);
+    }
+
+    console.log('Prompt for Veo 3.1:', promptString.substring(0, 200) + '...');
+
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-generate-preview',
-      prompt: description,
+      prompt: promptString,
       image: imageForVeo,
     });
 
