@@ -189,7 +189,11 @@ export function Stage4Storyboard({
       }
 
       // Step 7: Process results and map to Scene interface
-      const finalStoryboard = execution.execution.finalOutput || [];
+      console.log('Processing execution results...');
+      console.log('Execution result structure:', execution.execution.result);
+
+      // Get storyboard from result.finalStoryboard (output key from recipe)
+      const finalStoryboard = execution.execution.result?.finalStoryboard || [];
 
       if (!Array.isArray(finalStoryboard) || finalStoryboard.length === 0) {
         throw new Error('No storyboard returned from recipe execution');

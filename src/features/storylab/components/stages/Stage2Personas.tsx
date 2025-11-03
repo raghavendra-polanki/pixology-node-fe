@@ -191,7 +191,10 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
 
       // Step 4: Process results
       console.log('Processing execution results...');
-      const finalPersonas = execution.execution.finalOutput || [];
+      console.log('Execution result structure:', execution.execution.result);
+
+      // Get personas from result.personaDetails (output key from recipe)
+      const finalPersonas = execution.execution.result?.personaDetails || [];
 
       if (!Array.isArray(finalPersonas) || finalPersonas.length === 0) {
         throw new Error('No personas returned from recipe execution');

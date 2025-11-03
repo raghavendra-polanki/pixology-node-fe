@@ -340,7 +340,11 @@ export function Stage3Narratives({
       }
 
       // Step 5: Process results
-      const finalNarratives = execution.execution.finalOutput || [];
+      console.log('Processing execution results...');
+      console.log('Execution result structure:', execution.execution.result);
+
+      // Get narratives from result.narrativeThemes (output key from recipe)
+      const finalNarratives = execution.execution.result?.narrativeThemes || [];
 
       if (!Array.isArray(finalNarratives) || finalNarratives.length === 0) {
         throw new Error('No narratives returned from recipe execution');
