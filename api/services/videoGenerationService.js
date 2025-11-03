@@ -196,15 +196,13 @@ async function callVeoAPIRealImplementation(_imageBase64, description) {
     // Create video generation request
     // TODO: Generate actual video using Gemini API
     // const videoPrompt = `Generate a professional marketing video based on this description:
-
-${description}
-
-Requirements:
-- Professional cinematography quality
-- Natural, relatable UGC-style video
-- 8 seconds duration
-- 1280x720 resolution
-- 24 fps`;
+    // ${description}
+    // Requirements:
+    // - Professional cinematography quality
+    // - Natural, relatable UGC-style video
+    // - 8 seconds duration
+    // - 1280x720 resolution
+    // - 24 fps`;
 
     console.log('Sending video generation request to Gemini API...');
 
