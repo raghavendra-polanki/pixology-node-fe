@@ -6,6 +6,7 @@ import {
 } from './geminiService.js';
 import { generatePersonaImage, generateMultipleSceneImages } from './imageGenerationService.js';
 import { uploadImageToGCS } from './gcsService.js';
+import { generateVideoWithVeo, uploadVideoToGCSStorage } from './videoGenerationService.js';
 
 /**
  * ActionExecutor - Executes individual recipe actions (nodes)
@@ -294,10 +295,83 @@ export class ActionExecutor {
   }
 
   /**
-   * Execute video generation action (placeholder for future implementation)
+   * Execute video generation action
+   * Generates videos from storyboard images and screenplay data using Veo 3.1
    */
   static async executeVideoGeneration(node, input) {
-    throw new Error('Video generation not yet implemented');
+    try {
+      const { sceneImage, sceneData, screenplayEntry, projectId, sceneIndex = 0 } = input;
+
+      // Validate required inputs
+      if (!sceneImage) {
+        throw new Error('Missing required input: sceneImage (base64 encoded image from storyboard)');
+      }
+
+      if (!sceneData) {
+        throw new Error('Missing required input: sceneData (scene information from storyboard)');
+      }
+
+      if (!screenplayEntry) {
+        throw new Error('Missing required input: screenplayEntry (scene details from screenplay)');
+      }
+
+      if (!projectId) {
+        throw new Error('Missing required input: projectId');
+      }
+
+      console.log(`Generating video for scene ${sceneIndex + 1}...`);
+
+      // Combine scene and screenplay data for video generation
+      const combinedSceneData = {
+        title: sceneData.title || screenplayEntry.title || `Scene ${sceneIndex + 1}`,
+        visual: sceneData.description || screenplayEntry.description || 'Professional video scene',
+        cameraFlow: screenplayEntry.cameraFlow || screenplayEntry.cameraWork || 'Smooth camera movement',
+        script: screenplayEntry.script || screenplayEntry.dialogue || 'Scene dialogue or narration',
+        backgroundMusic: screenplayEntry.backgroundMusic || 'Background music playing',
+        description: screenplayEntry.description || sceneData.description || 'Scene description',
+        timeEnd: screenplayEntry.duration || sceneData.duration || '8s',
+      };
+
+      // Generate video using Veo 3.1 via Gemini API
+      const videoData = await generateVideoWithVeo(sceneImage, combinedSceneData, sceneIndex);
+
+      console.log(`Video generated for scene ${sceneIndex + 1}`);
+
+      // Upload video to GCS
+      let videoUrl = null;
+      try {
+        if (videoData.videoBuffer && videoData.videoBuffer.length > 0) {
+          videoUrl = await uploadVideoToGCSStorage(
+            videoData.videoBuffer,
+            projectId,
+            sceneIndex + 1
+          );
+
+          console.log(`Video uploaded to GCS: ${videoUrl}`);
+        }
+      } catch (uploadError) {
+        console.warn(`Failed to upload video to GCS: ${uploadError.message}`);
+        // Continue without upload if it fails - video generation was still successful
+      }
+
+      // Return combined video data with upload URL
+      return {
+        sceneNumber: sceneIndex + 1,
+        sceneTitle: combinedSceneData.title,
+        videoBuffer: videoData.videoBuffer,
+        videoUrl: videoUrl,
+        videoFormat: videoData.videoFormat || 'mp4',
+        duration: combinedSceneData.timeEnd,
+        generatedAt: videoData.generatedAt,
+        metadata: {
+          ...videoData.metadata,
+          uploadedToGCS: !!videoUrl,
+        },
+      };
+    } catch (error) {
+      console.error('Error in video generation:', error);
+      throw error;
+    }
   }
 
   /**
