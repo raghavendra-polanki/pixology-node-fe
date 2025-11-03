@@ -243,10 +243,7 @@ export async function uploadVideoToGCSStorage(videoBuffer, projectId, sceneNumbe
       throw new Error('Video buffer is empty');
     }
 
-    const bucketName = process.env.GCS_VIDEO_BUCKET || 'pixology-videos';
-    const fileName = `projects/${projectId}/videos/scene_${sceneNumber}_${Date.now()}.mp4`;
-
-    console.log(`Uploading video to GCS: ${fileName}`);
+    console.log(`Uploading video to GCS for scene ${sceneNumber}...`);
 
     const url = await uploadVideoToGCS(videoBuffer, projectId, `scene_${sceneNumber}`);
 

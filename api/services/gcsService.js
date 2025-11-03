@@ -160,8 +160,8 @@ export async function imageExistsInGCS(imageUrl) {
  * Returns the public URL of the uploaded video
  */
 export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
-  // Declare bucket name outside try block for use in error handler
-  const videoBucketName = process.env.GCS_VIDEO_BUCKET || 'pixology-videos';
+  // Use same bucket as images (GCS_BUCKET_NAME)
+  const videoBucketName = bucketName;
 
   try {
     // Validate inputs
