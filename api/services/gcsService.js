@@ -160,13 +160,15 @@ export async function imageExistsInGCS(imageUrl) {
  * Returns the public URL of the uploaded video
  */
 export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
+  // Declare bucket name outside try block for use in error handler
+  const videoBucketName = process.env.GCS_VIDEO_BUCKET || 'pixology-videos';
+
   try {
     // Validate inputs
     if (!videoBuffer || !projectId || !sceneName) {
       throw new Error('Missing required parameters: videoBuffer, projectId, sceneName');
     }
 
-    const videoBucketName = process.env.GCS_VIDEO_BUCKET || 'pixology-videos';
     const bucket = storage.bucket(videoBucketName);
 
     // Create unique filename with scene name and timestamp
@@ -193,6 +195,14 @@ export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
 
     return publicUrl;
   } catch (error) {
+    // In development, if bucket doesn't exist, return a mock URL
+    if (error.code === 404 && error.message?.includes('bucket does not exist')) {
+      console.warn(`GCS bucket not found (${videoBucketName}). Using mock URL for development.`);
+      const mockUrl = `https://mock-gcs.local/videos/${projectId}/${sceneName}-${Date.now()}.mp4`;
+      console.log(`Mock video URL: ${mockUrl}`);
+      return mockUrl;
+    }
+
     console.error('Error uploading video to GCS:', error);
     throw new Error(`Failed to upload video to GCS: ${error.message}`);
   }

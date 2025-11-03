@@ -763,7 +763,7 @@ export const VIDEO_GENERATION_RECIPE = {
         screenplayEntry: 'external_input.screenplayEntry',
         projectId: 'external_input.projectId',
       },
-      outputKey: 'generatedVideos',
+      outputKey: 'uploadedVideos',
 
       aiModel: {
         provider: 'google-vertex-ai',
@@ -810,47 +810,12 @@ Requirements:
 
       metadata: {
         createdAt: new Date(),
-        description: 'Generates video for scene 1 using Google Veo 3.1 API',
-      },
-    },
-
-    {
-      id: 'upload_scene_videos',
-      name: 'Upload Videos to GCS',
-      type: 'data_processing',
-      order: 2,
-
-      inputMapping: {
-        videoData: 'generatedVideos',
-        projectId: 'external_input.projectId',
-      },
-      outputKey: 'uploadedVideos',
-
-      parameters: {
-        uploadService: 'gcs',
-        bucketName: 'pixology-videos',
-        databaseOperation: 'save_video_metadata',
-      },
-
-      dependencies: ['generate_scene_1_video'],
-      errorHandling: {
-        onError: 'fail',
-        timeout: 120000,
-      },
-
-      metadata: {
-        createdAt: new Date(),
-        description: 'Uploads generated videos to GCS and saves metadata',
+        description: 'Generates video for scene 1 using Google Veo 3.1 API. Includes upload to GCS.',
       },
     },
   ],
 
-  edges: [
-    {
-      from: 'generate_scene_1_video',
-      to: 'upload_scene_videos',
-    },
-  ],
+  edges: [],
 
   executionConfig: {
     timeout: 600000,
