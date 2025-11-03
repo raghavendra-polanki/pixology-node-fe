@@ -82,6 +82,14 @@ export class RecipeOrchestrator {
           // Store output for next nodes
           nodeOutputs[node.outputKey] = actionResult.output;
 
+          console.log(`[RecipeOrchestrator] Node ${node.id} output stored:`, {
+            outputKey: node.outputKey,
+            outputType: typeof actionResult.output,
+            isArray: Array.isArray(actionResult.output),
+            outputLength: Array.isArray(actionResult.output) ? actionResult.output.length : 'N/A',
+            firstItemKeys: Array.isArray(actionResult.output)?.[0] ? Object.keys(actionResult.output[0]) : [],
+          });
+
           // Log result to Firestore
           await ActionResultTracker.logActionResult(executionId, actionResult);
 
@@ -116,6 +124,15 @@ export class RecipeOrchestrator {
       const result = {
         [lastNode.outputKey]: finalOutput,
       };
+
+      console.log(`[RecipeOrchestrator] Final result being stored:`, {
+        resultKeys: Object.keys(result),
+        lastNodeOutputKey: lastNode.outputKey,
+        outputKeyValue: result[lastNode.outputKey],
+        isArray: Array.isArray(result[lastNode.outputKey]),
+        length: Array.isArray(result[lastNode.outputKey]) ? result[lastNode.outputKey].length : 'N/A',
+        firstItem: Array.isArray(result[lastNode.outputKey]) ? result[lastNode.outputKey][0] : 'N/A',
+      });
 
       // Mark execution as completed
       await db.collection('recipe_executions').doc(executionId).update({

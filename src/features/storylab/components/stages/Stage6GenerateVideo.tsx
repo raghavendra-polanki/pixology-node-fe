@@ -156,12 +156,19 @@ export function Stage6GenerateVideo({
         const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
         execution = await statusResponse.json();
 
-        if (execution.execution.status === 'completed') {
+        console.log(`Execution status check (attempt ${attempts + 1}):`, {
+          hasExecution: !!execution,
+          hasExecutionNested: !!execution.execution,
+          status: execution?.execution?.status,
+          result: execution?.execution?.result,
+        });
+
+        if (execution.execution?.status === 'completed') {
           break;
         }
 
-        if (execution.execution.status === 'failed') {
-          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
+        if (execution.execution?.status === 'failed') {
+          throw new Error(`Recipe execution failed: ${execution.execution?.executionContext?.error}`);
         }
 
         // Update progress based on attempts (30% -> 90%)
@@ -170,22 +177,30 @@ export function Stage6GenerateVideo({
         attempts++;
       }
 
-      if (!execution || execution.execution.status !== 'completed') {
+      if (!execution || execution.execution?.status !== 'completed') {
         throw new Error('Recipe execution timed out after 10 minutes');
       }
 
       console.log('Video generation completed');
+      console.log('Full execution object:', JSON.stringify(execution, null, 2));
       setProgress(95);
 
       // Step 4: Extract video data from result
       // The final node's output key is 'uploadedVideos', but for single scene it returns an array
-      const uploadedVideos = execution.execution.result?.uploadedVideos || [];
+      const uploadedVideos = execution.execution?.result?.uploadedVideos || [];
+      console.log('Extracted uploadedVideos:', uploadedVideos);
 
       if (uploadedVideos.length === 0) {
-        throw new Error('No video data in result');
+        throw new Error('No video data in result. Uploaded videos array is empty.');
       }
 
       const generatedVideo = uploadedVideos[0];
+
+      if (!generatedVideo) {
+        throw new Error('Generated video object is undefined. uploadedVideos structure may be incorrect.');
+      }
+
+      console.log('Generated video object:', generatedVideo);
 
       // Step 5: Update video state
       setVideoData({
