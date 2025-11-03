@@ -14,6 +14,7 @@ import {
   NARRATIVE_GENERATION_RECIPE,
   STORYBOARD_GENERATION_RECIPE,
   SCREENPLAY_GENERATION_RECIPE,
+  VIDEO_GENERATION_RECIPE,
 } from '../api/services/RecipeSeedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +43,7 @@ const RECIPES = [
   NARRATIVE_GENERATION_RECIPE,
   STORYBOARD_GENERATION_RECIPE,
   SCREENPLAY_GENERATION_RECIPE,
+  VIDEO_GENERATION_RECIPE,
 ];
 
 async function seedRecipes() {
