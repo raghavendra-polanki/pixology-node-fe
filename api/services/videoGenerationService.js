@@ -14,15 +14,14 @@ const ai = new GoogleGenAI({
 
 /**
  * Generate a video for a scene
- * Uses Gemini to enhance descriptions, with mock video support for development
- * Ready for real Veo 3.1 integration when available
+ * Uses Gemini to enhance descriptions and generate images, with Veo 3.1 for video generation
+ * Generates image with Gemini 2.5 Flash, then passes to Veo 3.1 for video generation
  *
- * @param {string} imageBase64 - Base64 encoded image (storyboard image)
  * @param {object} sceneData - Scene data from screenplay
  * @param {string} sceneIndex - Index of the scene (0-based)
  * @returns {Promise<object>} Generated video info with URL and metadata
  */
-export async function generateVideoWithVeo(imageBase64, sceneData, sceneIndex = 0) {
+export async function generateVideoWithVeo(sceneData, sceneIndex = 0) {
   try {
     console.log(`Generating video for scene ${sceneIndex + 1}...`);
 
@@ -42,7 +41,7 @@ export async function generateVideoWithVeo(imageBase64, sceneData, sceneIndex = 
       videoBuffer = await generateMockVideo(enhancedDescription, sceneIndex);
       console.log(`Generated mock video for scene ${sceneIndex + 1}`);
     } else {
-      videoBuffer = await callVeoAPIRealImplementation(imageBase64, enhancedDescription);
+      videoBuffer = await callVeoAPIRealImplementation(enhancedDescription);
       console.log(`Generated real video with Veo 3.1 for scene ${sceneIndex + 1}`);
     }
 
@@ -184,37 +183,27 @@ async function generateMockVideo(_description, sceneIndex) {
  * Generates video using Veo 3.1 model with image input
  * @private
  */
-async function callVeoAPIRealImplementation(imageBase64, description) {
+async function callVeoAPIRealImplementation(description) {
   try {
     console.log('Calling Veo 3.1 API via GoogleGenAI...');
 
-    // Step 1: Prepare image for Veo 3.1 (API expects base64 string, not Buffer)
-    let imageForVeo;
+    // Step 1: Generate image with Gemini 2.5 Flash
+    // Note: Using Gemini-generated images instead of storyboard for consistency with Veo 3.1 API
+    console.log('Generating image with Gemini 2.5 Flash...');
+    const imageResponse = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      prompt: promptString || description,
+    });
 
-    if (imageBase64) {
-      // Use provided storyboard image
-      console.log('Using provided storyboard image for Veo 3.1');
-      // Ensure imageBase64 is a string (the API expects base64 string, not Buffer)
-      const imageBase64String = typeof imageBase64 === 'string' ? imageBase64 : imageBase64.toString('base64');
-      imageForVeo = {
-        imageBytes: imageBase64String,
-        mimeType: 'image/png',
-      };
-      console.log('Image prepared for Veo 3.1 API');
-    } else {
-      // Generate image with Gemini if no storyboard provided
-      console.log('Generating image with Gemini 2.5 Flash...');
-      const imageResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        prompt: description,
-      });
-
-      imageForVeo = {
-        imageBytes: imageResponse.generatedImages[0].image.imageBytes,
-        mimeType: 'image/png',
-      };
-      console.log('Image generated successfully');
+    if (!imageResponse.generatedImages || !imageResponse.generatedImages[0]) {
+      throw new Error('Failed to generate image with Gemini 2.5 Flash');
     }
+
+    const imageForVeo = {
+      imageBytes: imageResponse.generatedImages[0].image.imageBytes,
+      mimeType: 'image/png',
+    };
+    console.log('Image generated successfully with Gemini 2.5 Flash');
 
     // Step 2: Generate video with Veo 3.1 using the image
     console.log('Starting Veo 3.1 video generation...');
