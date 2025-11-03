@@ -112,10 +112,15 @@ export class RecipeOrchestrator {
       const lastNode = recipe.nodes[recipe.nodes.length - 1];
       const finalOutput = nodeOutputs[lastNode.outputKey] || {};
 
+      // Store result using the output key as field name (e.g., result.screenplayEntries)
+      const result = {
+        [lastNode.outputKey]: finalOutput,
+      };
+
       // Mark execution as completed
       await db.collection('recipe_executions').doc(executionId).update({
         status: 'completed',
-        finalOutput,
+        result,
         'executionContext.completedAt': new Date(),
       });
 
@@ -322,6 +327,33 @@ export class RecipeOrchestrator {
   }
 
   /**
+   * Deserialize buffers from their JSON representation
+   * When buffers are JSON.stringify'd, they become {type: 'Buffer', data: [...]}
+   * This function converts them back to actual Buffer objects
+   */
+  static deserializeBuffers(obj) {
+    if (!obj) return obj;
+
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return Buffer.from(obj.data);
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.deserializeBuffers(item));
+    }
+
+    if (typeof obj === 'object') {
+      const result = {};
+      for (const key in obj) {
+        result[key] = this.deserializeBuffers(obj[key]);
+      }
+      return result;
+    }
+
+    return obj;
+  }
+
+  /**
    * Test a single node in isolation (for recipe development)
    * @param {string} recipeId - Recipe ID
    * @param {string} nodeId - Node ID to test
@@ -331,6 +363,10 @@ export class RecipeOrchestrator {
    * @returns {Promise<object>} Node execution result
    */
   static async testSingleNode(recipeId, nodeId, externalInput, executeDependencies = true, mockOutputs = {}) {
+    // Initialize dependencyResults at the start so it's always defined
+    let dependencyResults = [];
+    let targetNode = null;
+
     try {
       // Load recipe
       const recipe = await RecipeManager.getRecipe(recipeId);
@@ -339,7 +375,7 @@ export class RecipeOrchestrator {
       }
 
       // Find the target node
-      const targetNode = recipe.nodes.find((n) => n.id === nodeId);
+      targetNode = recipe.nodes.find((n) => n.id === nodeId);
       if (!targetNode) {
         throw new Error(`Node ${nodeId} not found in recipe`);
       }
@@ -355,7 +391,9 @@ export class RecipeOrchestrator {
       }
 
       // Collect outputs from dependency nodes
-      const nodeOutputs = { ...mockOutputs };
+      // Deserialize any buffers from JSON representation (they come from API calls)
+      const deserializedMockOutputs = this.deserializeBuffers(mockOutputs);
+      const nodeOutputs = { ...deserializedMockOutputs };
 
       // If executeDependencies is true, run all nodes before this one
       if (executeDependencies && nodeIndex > 0) {
@@ -372,8 +410,24 @@ export class RecipeOrchestrator {
 
             console.log(`Executing dependency node: ${depNodeId}`);
 
+            const depStartTime = Date.now();
             // Execute dependency node
             const depResult = await ActionExecutor.executeAction(depNode, depNodeInput);
+            const depDuration = Date.now() - depStartTime;
+
+            // Track execution result for this dependency node
+            dependencyResults.push({
+              success: true,
+              nodeId: depNodeId,
+              nodeType: depNode.type,
+              nodeName: depNode.name,
+              input: depNodeInput,
+              output: depResult.output,
+              duration: depDuration,
+              startedAt: new Date(Date.now() - depDuration),
+              completedAt: new Date(),
+              error: null,
+            });
 
             // Store output for next nodes
             nodeOutputs[depNode.outputKey] = depResult.output;
@@ -381,6 +435,22 @@ export class RecipeOrchestrator {
             console.log(`Dependency node ${depNodeId} completed`);
           } catch (depError) {
             console.error(`Dependency node ${depNodeId} failed:`, depError.message);
+            // Track the failed dependency node too
+            dependencyResults.push({
+              success: false,
+              nodeId: depNodeId,
+              nodeType: depNode.type,
+              nodeName: depNode.name,
+              input: nodeOutputs,
+              output: null,
+              duration: 0,
+              startedAt: new Date(),
+              completedAt: new Date(),
+              error: {
+                message: depError.message,
+                code: 'DEPENDENCY_NODE_ERROR',
+              },
+            });
             throw new Error(`Dependency node ${depNodeId} failed: ${depError.message}`);
           }
         }
@@ -416,20 +486,31 @@ export class RecipeOrchestrator {
 
       console.log(`Node ${nodeId} test completed successfully in ${duration}ms`);
 
-      return executionResult;
+      // Return both dependency results and target node result
+      return {
+        result: executionResult,
+        dependencyResults: dependencyResults,
+      };
     } catch (error) {
       console.error(`Error testing node ${nodeId}:`, error.message);
 
       return {
-        success: false,
-        nodeId,
-        input: null,
-        output: null,
-        duration: 0,
-        error: {
-          message: error.message,
-          code: error.code || 'UNKNOWN_ERROR',
+        result: {
+          success: false,
+          nodeId,
+          nodeType: targetNode?.type,
+          nodeName: targetNode?.name,
+          input: null,
+          output: null,
+          duration: 0,
+          startedAt: new Date(),
+          completedAt: new Date(),
+          error: {
+            message: error.message,
+            code: error.code || 'UNKNOWN_ERROR',
+          },
         },
+        dependencyResults: dependencyResults,
       };
     }
   }

@@ -1,5 +1,5 @@
 import { Handle, Position } from 'reactflow';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Play, Eye } from 'lucide-react';
 
 interface ActionNodeProps {
   data: {
@@ -9,6 +9,9 @@ interface ActionNodeProps {
       name: string;
       type: string;
     };
+    onTest?: () => void;
+    onViewResult?: () => void;
+    hasResult?: boolean;
   };
   isConnecting?: boolean;
   selected?: boolean;
@@ -30,13 +33,17 @@ export function ActionNode({ data, selected, id, onDelete }: ActionNodeProps) {
     <div
       className={`
         px-4 py-3 rounded-lg border-2 min-w-max shadow-lg
-        transition-all duration-200
+        transition-all duration-200 relative
         ${selected
           ? `border-blue-400 shadow-lg shadow-blue-500/30 bg-gradient-to-r ${colorClass}`
           : `border-gray-700 hover:border-gray-600 bg-gradient-to-r ${colorClass}`
         }
       `}
     >
+      {/* Result Indicator Badge */}
+      {data.hasResult && (
+        <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full border border-green-300 shadow-lg shadow-green-500/50"></div>
+      )}
       <Handle type="target" position={Position.Top} />
 
       <div className="text-center">
@@ -50,15 +57,37 @@ export function ActionNode({ data, selected, id, onDelete }: ActionNodeProps) {
 
       <Handle type="source" position={Position.Bottom} />
 
-      {/* Delete button appears on selection */}
-      {selected && onDelete && (
-        <button
-          className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white shadow-lg hover:shadow-red-600/50 transition-all"
-          onClick={() => onDelete(id)}
-          title="Delete node"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+      {/* Buttons appear on selection */}
+      {selected && (
+        <>
+          {data.hasResult && data.onViewResult && (
+            <button
+              className="absolute -top-3 -left-10 w-6 h-6 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center text-white shadow-lg hover:shadow-green-600/50 transition-all"
+              onClick={data.onViewResult}
+              title="View execution result"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {data.onTest && (
+            <button
+              className="absolute -top-3 -left-3 w-6 h-6 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg hover:shadow-blue-600/50 transition-all"
+              onClick={data.onTest}
+              title="Test this node"
+            >
+              <Play className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white shadow-lg hover:shadow-red-600/50 transition-all"
+              onClick={() => onDelete(id)}
+              title="Delete node"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </>
       )}
     </div>
   );

@@ -12,6 +12,7 @@ import {
   UserInputCampaignDetails,
   AIGeneratedPersonas,
   AIGeneratedNarrative,
+  AIGeneratedNarratives,
   AIGeneratedStoryboard,
   AIGeneratedScreenplay,
   VideoProductionData,
@@ -476,6 +477,12 @@ class StoryLabProjectService {
         ? {
             ...data.aiGeneratedNarrative,
             generatedAt: new Date(data.aiGeneratedNarrative.generatedAt),
+          }
+        : undefined,
+      aiGeneratedNarratives: data.aiGeneratedNarratives
+        ? {
+            ...data.aiGeneratedNarratives,
+            generatedAt: new Date(data.aiGeneratedNarratives.generatedAt),
           }
         : undefined,
       aiGeneratedStoryboard: data.aiGeneratedStoryboard

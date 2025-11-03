@@ -12,6 +12,7 @@ interface RecipeEditorPageProps {
     nodes: any[];
     edges: any[];
   };
+  previousStageOutput?: any;
   onSave: (recipe: any) => Promise<void>;
   onBack: () => void;
   title?: string;
@@ -19,6 +20,7 @@ interface RecipeEditorPageProps {
 
 export function RecipeEditorPage({
   recipe,
+  previousStageOutput,
   onSave,
   onBack,
   title = 'Recipe Editor',
@@ -98,6 +100,7 @@ export function RecipeEditorPage({
         <ReactFlowProvider>
           <RecipeEditor
             recipe={recipe}
+            previousStageOutput={previousStageOutput}
             onSave={handleSave}
             onClose={onBack}
           />

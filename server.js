@@ -37,9 +37,9 @@ import recipesRouter from './api/recipes.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Body parser middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parser middleware - Increase limit to handle large persona image data
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // CORS middleware - Allow frontend dev server and production domains
 app.use((req, res, next) => {

@@ -17,7 +17,8 @@ export class RecipeManager {
       // Validate DAG structure
       DAGValidator.validateDAG(recipeData.nodes, recipeData.edges);
 
-      const recipeId = `recipe_${uuidv4()}`;
+      // Use provided ID if available (for seed recipes), otherwise generate new one
+      const recipeId = recipeData.id || `recipe_${uuidv4()}`;
       const now = new Date();
 
       const recipe = {
@@ -93,9 +94,15 @@ export class RecipeManager {
         DAGValidator.validateDAG(nodesToValidate, edgesToValidate);
       }
 
+      // Separate metadata from other updates to avoid Firestore duplicate field error
+      const { metadata, ...otherUpdates } = updates;
+
       const updateData = {
-        ...updates,
-        'metadata.updatedAt': new Date(),
+        ...otherUpdates,
+        metadata: {
+          ...(metadata || {}),
+          updatedAt: new Date(),
+        },
       };
 
       await db.collection('recipes').doc(recipeId).update(updateData);

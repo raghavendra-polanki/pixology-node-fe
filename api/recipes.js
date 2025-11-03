@@ -281,7 +281,7 @@ router.post('/:recipeId/test-node', verifyToken, async (req, res) => {
     console.log(`Testing node ${nodeId} in recipe ${recipeId}`);
 
     // Test the single node
-    const result = await AgentService.testSingleNode(
+    const orchestratorResult = await AgentService.testSingleNode(
       recipeId,
       nodeId,
       externalInput,
@@ -289,10 +289,12 @@ router.post('/:recipeId/test-node', verifyToken, async (req, res) => {
       mockOutputs
     );
 
+    // AgentService.testSingleNode now returns {result, dependencyResults}
     return res.status(200).json({
-      success: result.success,
-      message: result.success ? 'Node test completed' : 'Node test failed',
-      result,
+      success: orchestratorResult.result.success,
+      message: orchestratorResult.result.success ? 'Node test completed' : 'Node test failed',
+      result: orchestratorResult.result,
+      dependencyResults: orchestratorResult.dependencyResults || [],
     });
   } catch (error) {
     console.error('Error testing node:', error);
@@ -462,7 +464,7 @@ router.post('/executions/:executionId/retry', verifyToken, async (req, res) => {
 
 /**
  * POST /api/recipes/seed/initial
- * Seed initial recipes (admin only)
+ * Seed initial recipes
  * Requires authentication
  */
 router.post('/seed/initial', verifyToken, async (req, res) => {
@@ -478,6 +480,55 @@ router.post('/seed/initial', verifyToken, async (req, res) => {
     console.error('Error seeding recipes:', error);
     return res.status(500).json({
       error: error.message || 'Failed to seed recipes',
+    });
+  }
+});
+
+/**
+ * POST /api/recipes/seed/storyboard
+ * Seed storyboard recipe only (development endpoint)
+ */
+router.post('/seed/storyboard', async (req, res) => {
+  try {
+    const { STORYBOARD_GENERATION_RECIPE } = await import('./services/RecipeSeedData.js');
+    const { forceReseed = false } = req.body;
+
+    // Check if storyboard recipe already exists
+    const existingRecipes = await AgentService.listRecipes({
+      stageType: 'stage_4_storyboard',
+    });
+
+    if (existingRecipes.length > 0 && !forceReseed) {
+      return res.status(200).json({
+        success: true,
+        message: 'Storyboard recipe already exists',
+        recipes: existingRecipes,
+      });
+    }
+
+    // If forceReseed, delete existing recipes
+    if (existingRecipes.length > 0 && forceReseed) {
+      console.log('Force reseeding: deleting existing storyboard recipes');
+      for (const recipe of existingRecipes) {
+        await AgentService.deleteRecipe(recipe.id);
+      }
+    }
+
+    // Create storyboard recipe
+    const recipe = await AgentService.createRecipe(
+      STORYBOARD_GENERATION_RECIPE,
+      'system'
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: forceReseed ? 'Storyboard recipe reseeded successfully' : 'Storyboard recipe seeded successfully',
+      recipes: [recipe],
+    });
+  } catch (error) {
+    console.error('Error seeding storyboard recipe:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to seed storyboard recipe',
     });
   }
 });

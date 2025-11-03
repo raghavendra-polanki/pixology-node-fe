@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight,
   Sparkles,
@@ -6,9 +6,8 @@ import {
   Film,
   Plus,
   Trash2,
-  Grid3x3,
-  LayoutList,
-  Image as ImageIcon
+  Image as ImageIcon,
+  SettingsIcon
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -19,6 +18,7 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
+import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
 interface Scene {
   id: string;
@@ -30,71 +30,45 @@ interface Scene {
 }
 
 interface Stage4Props {
-  projectId: string;
+  project?: any;
+  projectId?: string;
+  updateAIStoryboard?: (storyboard: any, projectId: string) => Promise<void>;
+  updateStoryboardCustomizations?: (customizations: any, projectId: string) => Promise<void>;
+  markStageCompleted?: (stage: string) => Promise<void>;
+  advanceToNextStage?: () => Promise<void>;
 }
 
-const mockScenes: Scene[] = [
-  {
-    id: '1',
-    number: 1,
-    title: 'The Problem',
-    description: 'Sarah struggles with overwhelming workload and cluttered workspace',
-    visualNote: 'Medium shot, natural lighting, emphasize chaos and stress',
-    image: 'https://images.unsplash.com/photo-1752650735615-9829d8008a01?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMHBlcnNvbiUyMHdvcmtpbmclMjBzdHJlc3N8ZW58MXx8fHwxNzYxODgyMDA2fDA&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-  {
-    id: '2',
-    number: 2,
-    title: 'The Discovery',
-    description: 'A moment of realization - finding the perfect solution',
-    visualNote: 'Close-up, capture emotion, lightbulb moment',
-    image: 'https://images.unsplash.com/photo-1758600588207-31e547985863?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxkaXNjb3ZlcnklMjBsaWdodGJ1bGIlMjBtb21lbnR8ZW58MXx8fHwxNzYxODgyMDA2fDA&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-  {
-    id: '3',
-    number: 3,
-    title: 'The Experience',
-    description: 'Sarah effortlessly navigates the product, finding instant value',
-    visualNote: 'Over-shoulder shot, screen visible, smooth interaction',
-    image: 'https://images.unsplash.com/photo-1758611970342-675fed2dea68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjB1c2luZyUyMGFwcCUyMGhhcHB5fGVufDF8fHx8MTc2MTg4MjAwN3ww&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-  {
-    id: '4',
-    number: 4,
-    title: 'The Transformation',
-    description: 'Life is better - organized, efficient, and stress-free',
-    visualNote: 'Wide shot, warm lighting, convey success and satisfaction',
-    image: 'https://images.unsplash.com/photo-1758518731027-78a22c8852ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdWNjZXNzJTIwY2VsZWJyYXRpb24lMjBhY2hpZXZlbWVudHxlbnwxfHx8fDE3NjE4NDM4NjV8MA&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-  {
-    id: '5',
-    number: 5,
-    title: 'Team Collaboration',
-    description: 'Sharing success with colleagues, demonstrating the impact',
-    visualNote: 'Group shot, collaborative atmosphere, energetic vibe',
-    image: 'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0ZWFtJTIwY29sbGFib3JhdGlvbiUyMG1lZXRpbmd8ZW58MXx8fHwxNzYxNzgyNDA5fDA&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-  {
-    id: '6',
-    number: 6,
-    title: 'Product Showcase',
-    description: 'Highlighting key features and unique value propositions',
-    visualNote: 'Product close-ups, clean aesthetics, feature highlights',
-    image: 'https://images.unsplash.com/photo-1759491627968-3ca2247a31e2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9kdWN0JTIwZGVtb25zdHJhdGlvbnxlbnwxfHx8fDE3NjE4ODIwMDh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-  },
-];
+type ViewMode = 'grid';
 
-type ViewMode = 'horizontal' | 'grid';
+export function Stage4Storyboard({
+  project: propProject,
+  projectId: propProjectId,
+  updateAIStoryboard: propUpdateAIStoryboard,
+  updateStoryboardCustomizations: propUpdateStoryboardCustomizations,
+  markStageCompleted: propMarkStageCompleted,
+  advanceToNextStage: propAdvanceToNextStage,
+}: Stage4Props) {
+  // Load project using hook, but prefer passed props from WorkflowView
+  const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
 
-export function Stage4Storyboard({ projectId }: Stage4Props) {
-  // Load project using new hook
-  const { project, isSaving, updateAIStoryboard, updateStoryboardCustomizations, markStageCompleted, advanceToNextStage } =
-    useStoryLabProject({ autoLoad: true, projectId });
+  // Use passed props from WorkflowView (preferred) or fall back to hook results
+  const project = propProject || hookResult.project;
+  const isSaving = hookResult.isSaving;
+  const updateAIStoryboard = propUpdateAIStoryboard || hookResult.updateAIStoryboard;
+  const updateStoryboardCustomizations = propUpdateStoryboardCustomizations || hookResult.updateStoryboardCustomizations;
+  const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
+  const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
+  const loadProject = hookResult.loadProject;
+
+  const generatedScenesRef = useRef<HTMLDivElement>(null);
 
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('horizontal');
+  const [viewMode] = useState<ViewMode>('grid');
+  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
 
   // Sync scenes with project data when loaded
   useEffect(() => {
@@ -105,7 +79,7 @@ export function Stage4Storyboard({ projectId }: Stage4Props) {
         title: s.title || '',
         description: s.description || '',
         visualNote: s.cameraInstructions || '',
-        image: (s.referenceImage as any)?.url || (s.referenceImage as any) || '',
+        image: (s.image as any)?.url || (s.referenceImage as any)?.url || (s.referenceImage as any) || '',
       }));
       setScenes(loadedScenes);
     } else {
@@ -113,12 +87,251 @@ export function Stage4Storyboard({ projectId }: Stage4Props) {
     }
   }, [project?.aiGeneratedStoryboard]);
 
-  const handleGenerate = () => {
+  const handleGenerateStoryboard = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      setScenes(mockScenes);
+    try {
+      if (!project) throw new Error('No project loaded. Please go back and reload the project.');
+
+      const token = sessionStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token not found');
+
+      // Step 1: Fetch the recipe
+      const recipeResponse = await fetch('/api/recipes?stageType=stage_4_storyboard');
+      const recipeData = await recipeResponse.json();
+
+      if (!recipeData.recipes || recipeData.recipes.length === 0) {
+        throw new Error('No recipe found for storyboard generation. Please seed recipes first.');
+      }
+
+      const recipe = recipeData.recipes[0];
+      const recipeId = recipe.id;
+
+      // Extract numberOfScenes from recipe configuration (allows customization via recipe editor)
+      const numberOfScenes = recipe.nodes?.[0]?.parameters?.numberOfScenes || 6;
+
+      // Step 2: Get selected narrative
+      const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find(
+        (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
+      );
+
+      if (!selectedNarrative) {
+        throw new Error('No narrative selected. Please select a narrative theme first.');
+      }
+
+      // Step 3: Get selected persona
+      const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
+        (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
+      );
+
+      if (!selectedPersona) {
+        throw new Error('No persona selected. Please select a persona first.');
+      }
+
+      // Step 4: Prepare input data with persona image for consistency
+      const executionInput = {
+        productDescription: project?.campaignDetails?.productDescription || '',
+        targetAudience: project?.campaignDetails?.targetAudience || '',
+        selectedPersonaName: selectedPersona.coreIdentity?.name || 'Unknown',
+        selectedPersonaDescription: selectedPersona.coreIdentity?.bio || '',
+        selectedPersonaImage: selectedPersona.image?.url || '', // Include persona image for consistency
+        narrativeTheme: selectedNarrative.title || '',
+        narrativeStructure: selectedNarrative.structure || '',
+        numberOfScenes: numberOfScenes, // Use recipe configuration value
+        videoDuration: project?.campaignDetails?.videoDuration || '30s',
+      };
+
+      // Step 5: Execute the recipe
+      const executionResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          input: executionInput,
+          projectId: project?.id,
+          stageId: 'stage_4',
+        }),
+      });
+
+      if (!executionResponse.ok) {
+        const errorData = await executionResponse.json();
+        throw new Error(errorData.error || 'Failed to execute recipe');
+      }
+
+      const executionData = await executionResponse.json();
+      const executionId = executionData.executionId;
+
+      // Step 6: Poll for execution results
+      let execution: any = null;
+      let attempts = 0;
+      const maxAttempts = 120; // 10 minutes with 5-second polling
+
+      while (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
+        execution = await statusResponse.json();
+
+        if (execution.execution.status === 'completed') {
+          break;
+        }
+
+        if (execution.execution.status === 'failed') {
+          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
+        }
+
+        attempts++;
+      }
+
+      if (!execution || execution.execution.status !== 'completed') {
+        throw new Error('Recipe execution timed out after 10 minutes');
+      }
+
+      // Step 7: Process results and map to Scene interface
+      const finalStoryboard = execution.execution.finalOutput || [];
+
+      if (!Array.isArray(finalStoryboard) || finalStoryboard.length === 0) {
+        throw new Error('No storyboard returned from recipe execution');
+      }
+
+      // Map API response to Scene interface
+      const generatedScenes: Scene[] = finalStoryboard.map((scene: any, index: number) => ({
+        id: scene.sceneNumber?.toString() || `scene_${index}`,
+        number: scene.sceneNumber || index + 1,
+        title: scene.title || `Scene ${index + 1}`,
+        description: scene.description || '',
+        visualNote: scene.cameraWork || scene.keyFrameDescription || '',
+        image: scene.image?.url || '',
+      }));
+
+      console.log('Setting generated scenes:', generatedScenes);
+      setScenes(generatedScenes);
+
+      // Step 8: Save generated storyboard to project
+      const storyboardPayload = {
+        scenes: finalStoryboard,
+        generatedAt: new Date(),
+        generationRecipeId: recipeId,
+        generationExecutionId: executionId,
+        model: 'storyboard-generation-pipeline',
+        count: finalStoryboard.length,
+      };
+
+      console.log('Saving storyboard to project...', {
+        projectId: project.id,
+        sceneCount: finalStoryboard.length,
+      });
+
+      const savedProject = await updateAIStoryboard(storyboardPayload, project.id);
+      console.log('After updateAIStoryboard - returned project:', savedProject?.aiGeneratedStoryboard);
+
+      // Step 9: Reload project to ensure we have latest data
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await loadProject(project.id);
+
+      alert(`Successfully generated ${finalStoryboard.length} storyboard scenes!`);
+
+      // Scroll to the generated scenes section
+      setTimeout(() => {
+        if (generatedScenesRef.current) {
+          generatedScenesRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 500);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate storyboard';
+      console.error('Error generating storyboard:', errorMessage);
+      alert(`Failed to generate storyboard: ${errorMessage}`);
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
+  };
+
+  const loadRecipe = async () => {
+    try {
+      setIsLoadingRecipe(true);
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      // Fetch storyboard generation recipe with cache-busting
+      const response = await fetch(`/api/recipes?stageType=stage_4_storyboard&t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
+      const data = await response.json();
+
+      if (data.recipes && data.recipes.length > 0) {
+        console.log('Loaded recipe from database:', {
+          id: data.recipes[0].id,
+          numberOfScenes: data.recipes[0].nodes?.[0]?.parameters?.numberOfScenes,
+        });
+        setCurrentRecipe(data.recipes[0]);
+        setShowRecipeEditor(true);
+      } else {
+        alert('No storyboard recipe found. Please seed recipes first.');
+      }
+    } catch (error) {
+      console.error('Error loading recipe:', error);
+      alert('Failed to load storyboard recipe');
+    } finally {
+      setIsLoadingRecipe(false);
+    }
+  };
+
+  const handleSaveRecipe = async (recipe: any) => {
+    try {
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      console.log('Saving recipe with numberOfScenes:', recipe.nodes?.[0]?.parameters?.numberOfScenes);
+
+      const response = await fetch(`/api/recipes/${recipe.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(recipe),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save recipe');
+      }
+
+      const savedData = await response.json();
+      console.log('Recipe saved response:', {
+        numberOfScenes: savedData.recipe?.nodes?.[0]?.parameters?.numberOfScenes,
+      });
+
+      // Reload recipe from database to verify the changes were saved
+      const verifyResponse = await fetch(`/api/recipes?stageType=stage_4_storyboard&t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
+      const verifyData = await verifyResponse.json();
+
+      if (verifyData.recipes && verifyData.recipes.length > 0) {
+        const savedRecipe = verifyData.recipes[0];
+        console.log('Verified recipe from database:', {
+          numberOfScenes: savedRecipe.nodes?.[0]?.parameters?.numberOfScenes,
+        });
+        setCurrentRecipe(savedRecipe);
+      }
+
+      setShowRecipeEditor(false);
+      alert('Storyboard recipe saved successfully!');
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      alert(`Failed to save recipe: ${error}`);
+    }
   };
 
   const handleEditOpen = (scene: Scene) => {
@@ -174,6 +387,42 @@ export function Stage4Storyboard({ projectId }: Stage4Props) {
     }
   };
 
+  // Show recipe editor if requested
+  if (showRecipeEditor && currentRecipe) {
+    // Prepare external input with all required data from previous stages
+    const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find(
+      (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
+    );
+    const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
+      (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
+    );
+
+    // Extract numberOfScenes from current recipe (updates when recipe is modified)
+    const recipeNumberOfScenes = currentRecipe.nodes?.[0]?.parameters?.numberOfScenes || 6;
+
+    const externalInput = {
+      productDescription: project?.campaignDetails?.productDescription || '',
+      targetAudience: project?.campaignDetails?.targetAudience || '',
+      selectedPersonaName: selectedPersona?.coreIdentity?.name || 'Unknown',
+      selectedPersonaDescription: selectedPersona?.coreIdentity?.bio || '',
+      selectedPersonaImage: selectedPersona?.image?.url || '', // Include persona image for consistency
+      narrativeTheme: selectedNarrative?.title || '',
+      narrativeStructure: selectedNarrative?.structure || '',
+      numberOfScenes: recipeNumberOfScenes,
+      videoDuration: project?.campaignDetails?.videoDuration || '30s',
+    };
+
+    return (
+      <RecipeEditorPage
+        recipe={currentRecipe}
+        previousStageOutput={externalInput}
+        onSave={handleSaveRecipe}
+        onBack={() => setShowRecipeEditor(false)}
+        title="Edit Storyboard Generation Recipe"
+      />
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-8 lg:p-12">
       {/* Header */}
@@ -191,166 +440,52 @@ export function Stage4Storyboard({ projectId }: Stage4Props) {
             </div>
           </div>
 
-          {/* View Mode Toggle */}
-          {scenes.length > 0 && (
-            <div className="flex items-center gap-2 bg-[#151515] border border-gray-800 rounded-lg p-1">
-              <Button
-                onClick={() => setViewMode('horizontal')}
-                variant="ghost"
-                size="sm"
-                className={`rounded-md ${
-                  viewMode === 'horizontal'
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
-              >
-                <LayoutList className="w-4 h-4 mr-2" />
-                Horizontal
-              </Button>
-              <Button
-                onClick={() => setViewMode('grid')}
-                variant="ghost"
-                size="sm"
-                className={`rounded-md ${
-                  viewMode === 'grid'
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
-              >
-                <Grid3x3 className="w-4 h-4 mr-2" />
-                Grid
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-3">
+            <Button
+              onClick={loadRecipe}
+              disabled={isLoadingRecipe}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
+            >
+              <SettingsIcon className="w-5 h-5 mr-2" />
+              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Generate Button */}
-      {scenes.length === 0 && (
-        <div className="mb-8">
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-            size="lg"
-          >
-            {isGenerating ? (
-              <>
-                <Sparkles className="w-5 h-5 mr-2 animate-pulse" />
-                Generating Storyboard...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate Storyboard
-              </>
-            )}
-          </Button>
+      {/* Generate Button - Always Visible for Regeneration */}
+      <div className="mb-8">
+        <Button
+          onClick={handleGenerateStoryboard}
+          disabled={isGenerating}
+          className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+          size="lg"
+        >
+          {isGenerating ? (
+            <>
+              <Sparkles className="w-5 h-5 mr-2 animate-pulse" />
+              Generating Storyboard...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-5 h-5 mr-2" />
+              {scenes.length > 0 ? 'Regenerate Storyboard' : 'Generate Storyboard'}
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Generated Scenes Section */}
+      {scenes.length > 0 && (
+        <div ref={generatedScenesRef} className="mb-8">
+          <h3 className="text-white mb-4">Generated Scenes</h3>
         </div>
       )}
 
-      {/* Storyboard Scenes - Horizontal View */}
-      {scenes.length > 0 && viewMode === 'horizontal' && (
-        <>
-          <ScrollArea className="mb-8">
-            <div className="flex gap-6 pb-4">
-              {scenes.map((scene) => (
-                <Card
-                  key={scene.id}
-                  className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden min-w-[340px] flex-shrink-0 group relative hover:border-gray-700 transition-all"
-                >
-                  {/* Scene Image */}
-                  <div className="relative h-56 overflow-hidden bg-gray-900">
-                    {scene.image ? (
-                      <ImageWithFallback
-                        src={scene.image}
-                        alt={scene.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
-                        <ImageIcon className="w-16 h-16 text-gray-700" />
-                      </div>
-                    )}
-                    {/* Scene Number Badge */}
-                    <div className="absolute top-3 left-3 bg-blue-600 text-white px-3 py-1 rounded-full">
-                      Scene {scene.number}
-                    </div>
-                    {/* Action Buttons */}
-                    <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        onClick={() => handleEditOpen(scene)}
-                        size="sm"
-                        className="bg-gray-900/90 hover:bg-gray-800 text-white rounded-lg h-8 w-8 p-0"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(scene.id)}
-                        size="sm"
-                        className="bg-gray-900/90 hover:bg-red-600 text-white rounded-lg h-8 w-8 p-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Scene Details */}
-                  <div className="p-5 space-y-2">
-                    <h3 className="text-white">{scene.title}</h3>
-                    <p className="text-gray-400 line-clamp-2">{scene.description}</p>
-                    <p className="text-gray-600 italic line-clamp-2">{scene.visualNote}</p>
-                  </div>
-                </Card>
-              ))}
-
-              {/* Add Scene Card */}
-              <Card
-                onClick={handleAddScene}
-                className="bg-[#151515] border-gray-800 border-dashed rounded-xl min-w-[340px] flex-shrink-0 cursor-pointer hover:border-blue-500 transition-all flex items-center justify-center h-[380px]"
-              >
-                <div className="text-center">
-                  <Plus className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500">Add Scene</p>
-                </div>
-              </Card>
-            </div>
-          </ScrollArea>
-
-          {/* Actions */}
-          <div className="flex items-center justify-between">
-            <Button
-              onClick={handleGenerate}
-              variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Regenerate
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={scenes.length === 0 || isSaving}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
-              size="lg"
-            >
-              {isSaving ? (
-                <>
-                  <div className="animate-spin mr-2">⏳</div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  Continue to Screenplay
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </>
-              )}
-            </Button>
-          </div>
-        </>
-      )}
-
       {/* Storyboard Scenes - Grid View */}
-      {scenes.length > 0 && viewMode === 'grid' && (
+      {scenes.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {scenes.map((scene) => (
@@ -418,7 +553,8 @@ export function Stage4Storyboard({ projectId }: Stage4Props) {
           {/* Actions */}
           <div className="flex items-center justify-between">
             <Button
-              onClick={handleGenerate}
+              onClick={handleGenerateStoryboard}
+              disabled={isGenerating}
               variant="outline"
               className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
             >

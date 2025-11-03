@@ -42,6 +42,12 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
     });
   };
 
+  const handleParametersChange = (field: string, value: any) => {
+    onUpdate({
+      parameters: { ...nodeData.parameters, [field]: value },
+    });
+  };
+
   const handleOpenPromptModal = () => {
     setPromptValue(nodeData.prompt || '');
     setIsPromptModalOpen(true);
@@ -176,6 +182,22 @@ export function RecipeNodePanel({ node, onUpdate, onDelete }: RecipeNodePanelPro
             placeholder="e.g., personaDetails"
           />
         </div>
+
+        {/* Parameters - Number of Scenes */}
+        {nodeData.parameters && (
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-300">Number of Scenes</Label>
+            <Input
+              type="number"
+              value={nodeData.parameters.numberOfScenes || 6}
+              onChange={(e) => handleParametersChange('numberOfScenes', parseInt(e.target.value, 10))}
+              className="bg-[#0a0a0a] border-gray-700 text-white text-sm"
+              placeholder="e.g., 6"
+              min="1"
+              max="20"
+            />
+          </div>
+        )}
 
         {/* Error Handling */}
         <div className="space-y-2">

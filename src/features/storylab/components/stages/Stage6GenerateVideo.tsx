@@ -8,13 +8,29 @@ import { Separator } from '../ui/separator';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 
 interface Stage6Props {
-  projectId: string;
+  project?: any;
+  projectId?: string;
+  updateVideoProduction?: (video: any, projectId?: string) => Promise<void>;
+  markStageCompleted?: (stage: string) => Promise<void>;
+  advanceToNextStage?: () => Promise<void>;
 }
 
-export function Stage6GenerateVideo({ projectId }: Stage6Props) {
-  // Load project using new hook
-  const { project, isSaving, updateVideoProduction, markStageCompleted } =
-    useStoryLabProject({ autoLoad: true, projectId });
+export function Stage6GenerateVideo({
+  project: propProject,
+  projectId: propProjectId,
+  updateVideoProduction: propUpdateVideoProduction,
+  markStageCompleted: propMarkStageCompleted,
+  advanceToNextStage: propAdvanceToNextStage,
+}: Stage6Props) {
+  // Load project using hook, but prefer passed props from WorkflowView
+  const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
+
+  // Use passed props from WorkflowView (preferred) or fall back to hook results
+  const project = propProject || hookResult.project;
+  const isSaving = hookResult.isSaving;
+  const updateVideoProduction = propUpdateVideoProduction || hookResult.updateVideoProduction;
+  const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
+  const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
 
   const [status, setStatus] = useState<'idle' | 'generating' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
@@ -123,27 +139,31 @@ export function Stage6GenerateVideo({ projectId }: Stage6Props) {
           {/* Summary */}
           <Card className="bg-[#151515] border-gray-800 rounded-xl p-6">
             <h3 className="text-white mb-4">Campaign Summary</h3>
-            <div className="space-y-3 text-gray-400">
-              <div className="flex items-center justify-between">
-                <span>Campaign Name:</span>
-                <span className="text-gray-300">{project.data.campaignDetails?.campaignName || 'Not set'}</span>
+            {project ? (
+              <div className="space-y-3 text-gray-400">
+                <div className="flex items-center justify-between">
+                  <span>Campaign Name:</span>
+                  <span className="text-gray-300">{project.campaignDetails?.campaignName || 'Not set'}</span>
+                </div>
+                <Separator className="bg-gray-800" />
+                <div className="flex items-center justify-between">
+                  <span>Video Length:</span>
+                  <span className="text-gray-300">{project.campaignDetails?.videoLength || 'Not set'}</span>
+                </div>
+                <Separator className="bg-gray-800" />
+                <div className="flex items-center justify-between">
+                  <span>Selected Personas:</span>
+                  <span className="text-gray-300">{project.aiGeneratedPersonas?.personas?.length || 0} personas</span>
+                </div>
+                <Separator className="bg-gray-800" />
+                <div className="flex items-center justify-between">
+                  <span>Storyboard Scenes:</span>
+                  <span className="text-gray-300">{project.aiGeneratedStoryboard?.scenes?.length || 0} scenes</span>
+                </div>
               </div>
-              <Separator className="bg-gray-800" />
-              <div className="flex items-center justify-between">
-                <span>Video Length:</span>
-                <span className="text-gray-300">{project.data.campaignDetails?.videoLength || 'Not set'}</span>
-              </div>
-              <Separator className="bg-gray-800" />
-              <div className="flex items-center justify-between">
-                <span>Selected Personas:</span>
-                <span className="text-gray-300">{project.data.personas?.length || 0} personas</span>
-              </div>
-              <Separator className="bg-gray-800" />
-              <div className="flex items-center justify-between">
-                <span>Storyboard Scenes:</span>
-                <span className="text-gray-300">{project.data.storyboard?.length || 0} scenes</span>
-              </div>
-            </div>
+            ) : (
+              <div className="text-gray-400">Loading project data...</div>
+            )}
           </Card>
         </div>
       )}

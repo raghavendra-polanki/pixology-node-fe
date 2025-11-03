@@ -45,8 +45,10 @@ interface UseStoryLabProjectResult {
   updateScriptPreferences: (preferences: any) => Promise<void>;
   updateAIPersonas: (personas: AIGeneratedPersonas) => Promise<void>;
   updatePersonaSelection: (selection: any) => Promise<void>;
+  updateAINarratives: (narratives: any) => Promise<void>;
   updateAINarrative: (narrative: AIGeneratedNarrative) => Promise<void>;
-  updateAIStoryboard: (storyboard: AIGeneratedStoryboard) => Promise<void>;
+  updateAIStoryboard: (storyboard: AIGeneratedStoryboard, projectIdOverride?: string) => Promise<StoryLabProject | void>;
+  updateStoryboardCustomizations: (customizations: any, projectIdOverride?: string) => Promise<void>;
   updateAIScreenplay: (screenplay: AIGeneratedScreenplay) => Promise<void>;
   updateVideoProduction: (video: VideoProductionData) => Promise<void>;
 
@@ -154,7 +156,17 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
       try {
         setIsSaving(true);
         setError(null);
+
+        console.log('updateProject called with:', { projectId, updateKeys: Object.keys(updates) });
+
         const updated = await projectService.current.updateProject(projectId, updates);
+
+        console.log('updateProject service returned:', {
+          hasProject: !!updated,
+          hasAIGeneratedNarratives: !!updated?.aiGeneratedNarratives,
+          narrativeCount: updated?.aiGeneratedNarratives?.narratives?.length,
+        });
+
         setProject(updated);
         setHasUnsavedChanges(false);
         return updated;
@@ -189,60 +201,87 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
 
   // Update campaign details
   const updateCampaignDetails = useCallback(
-    async (details: Partial<UserInputCampaignDetails>) => {
-      if (!project) throw new Error('No project loaded');
+    async (details: Partial<UserInputCampaignDetails>, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ campaignDetails: details });
+      await updateProject({ campaignDetails: details }, projectId);
     },
     [updateProject, project],
   );
 
   // Update narrative preferences
   const updateNarrativePreferences = useCallback(
-    async (preferences: any) => {
-      if (!project) throw new Error('No project loaded');
+    async (preferences: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ narrativePreferences: preferences });
+      await updateProject({ narrativePreferences: preferences }, projectId);
     },
     [updateProject, project],
   );
 
   // Update visual direction
   const updateVisualDirection = useCallback(
-    async (direction: any) => {
-      if (!project) throw new Error('No project loaded');
+    async (direction: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ visualDirection: direction });
+      await updateProject({ visualDirection: direction }, projectId);
     },
     [updateProject, project],
   );
 
   // Update script preferences
   const updateScriptPreferences = useCallback(
-    async (preferences: any) => {
-      if (!project) throw new Error('No project loaded');
+    async (preferences: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ scriptPreferences: preferences });
+      await updateProject({ scriptPreferences: preferences }, projectId);
     },
     [updateProject, project],
   );
 
   // Update AI personas
   const updateAIPersonas = useCallback(
-    async (personas: AIGeneratedPersonas) => {
-      if (!project) throw new Error('No project loaded');
+    async (personas: AIGeneratedPersonas, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ aiGeneratedPersonas: personas });
+      await updateProject({ aiGeneratedPersonas: personas }, projectId);
     },
     [updateProject, project],
   );
 
   // Update persona selection
   const updatePersonaSelection = useCallback(
-    async (selection: any) => {
-      if (!project) throw new Error('No project loaded');
+    async (selection: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ userPersonaSelection: selection });
+      await updateProject({ userPersonaSelection: selection }, projectId);
+    },
+    [updateProject, project],
+  );
+
+  // Update AI generated narratives
+  const updateAINarratives = useCallback(
+    async (narratives: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
+      setHasUnsavedChanges(true);
+
+      console.log('updateAINarratives called with:', { projectId, narrativeCount: narratives.narratives?.length });
+
+      try {
+        const result = await updateProject({ aiGeneratedNarratives: narratives }, projectId);
+        console.log('updateAINarratives returned:', result?.aiGeneratedNarratives);
+        return result;
+      } catch (error) {
+        console.error('updateAINarratives error:', error);
+        throw error;
+      }
     },
     [updateProject, project],
   );
@@ -259,10 +298,32 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
 
   // Update AI storyboard
   const updateAIStoryboard = useCallback(
-    async (storyboard: AIGeneratedStoryboard) => {
-      if (!project) throw new Error('No project loaded');
+    async (storyboard: AIGeneratedStoryboard, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
-      await updateProject({ aiGeneratedStoryboard: storyboard });
+
+      console.log('updateAIStoryboard called with:', { projectId, sceneCount: storyboard.scenes?.length });
+
+      try {
+        const result = await updateProject({ aiGeneratedStoryboard: storyboard }, projectId);
+        console.log('updateAIStoryboard returned:', result?.aiGeneratedStoryboard);
+        return result;
+      } catch (error) {
+        console.error('updateAIStoryboard error:', error);
+        throw error;
+      }
+    },
+    [updateProject, project],
+  );
+
+  // Update storyboard customizations (scene edits)
+  const updateStoryboardCustomizations = useCallback(
+    async (customizations: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
+      setHasUnsavedChanges(true);
+      await updateProject({ storyboardCustomizations: customizations }, projectId);
     },
     [updateProject, project],
   );
@@ -388,8 +449,10 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     updateScriptPreferences,
     updateAIPersonas,
     updatePersonaSelection,
+    updateAINarratives,
     updateAINarrative,
     updateAIStoryboard,
+    updateStoryboardCustomizations,
     updateAIScreenplay,
     updateVideoProduction,
 

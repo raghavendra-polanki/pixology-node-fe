@@ -115,7 +115,7 @@ export interface AIGeneratedPersonas {
 }
 
 /**
- * Stage 3: AI-Generated Narrative
+ * Stage 3: AI-Generated Narrative Theme (individual theme from generation)
  */
 export interface AIGeneratedNarrative {
   narrativeId: string;
@@ -137,33 +137,70 @@ export interface AIGeneratedNarrative {
 }
 
 /**
+ * Stage 3: AI-Generated Narratives (collection of theme options)
+ */
+export interface AIGeneratedNarratives {
+  narratives: {
+    id: string;
+    title: string;
+    description: string;
+    structure: string;
+    gradient: string;
+    patternColor: string;
+    ringColor: string;
+    detailedExplanation?: string;
+  }[];
+  generatedAt: Date;
+  generationRecipeId: string;
+  generationExecutionId: string;
+  model: string;
+  count: number;
+}
+
+/**
  * Stage 4: AI-Generated Storyboard
  */
 export interface StoryboardScene {
   sceneNumber: number;
   title: string;
   description: string;
-  visualDirection: string;
   duration: string;
+  location?: string;
+  persona?: string;
+  product?: string;
+  visualElements?: string;
+  dialogue?: string;
+  cameraWork?: string;
+  keyFrameDescription?: string;
+  visualDirection?: string;
   cameraInstructions?: string;
   lighting?: string;
   props?: string[];
   suggestedAssets?: string[];
   narrativeContent?: string;
   dialogueOrVoiceover?: string;
+  image?: {
+    url: string;
+    uploadedAt?: Date;
+  } | string;
+  referenceImage?: {
+    url: string;
+    uploadedAt?: Date;
+  } | string;
 }
 
 export interface AIGeneratedStoryboard {
-  storyboardId: string;
+  storyboardId?: string;
   scenes: StoryboardScene[];
-  totalDuration: string;
+  totalDuration?: string;
   completionNotes?: string;
-  visualTheme: string;
+  visualTheme?: string;
   consistencyNotes?: string;
-  generatedAt: Date;
+  generatedAt?: Date;
   generationRecipeId?: string;
   generationExecutionId?: string;
-  model: string;
+  model?: string;
+  count?: number;
   temperature?: number;
 }
 
@@ -267,6 +304,7 @@ export interface StoryLabProject {
   // STAGE 3: NARRATIVE
   narrativePreferences?: UserInputNarrativePreferences;
   aiGeneratedNarrative?: AIGeneratedNarrative;
+  aiGeneratedNarratives?: AIGeneratedNarratives;
 
   // STAGE 4: STORYBOARD
   visualDirection?: UserInputVisualDirection;
@@ -345,6 +383,7 @@ export interface UpdateProjectInput {
   userPersonaSelection?: UserInputPersonaSelection;
   aiGeneratedPersonas?: AIGeneratedPersonas;
   aiGeneratedNarrative?: AIGeneratedNarrative;
+  aiGeneratedNarratives?: AIGeneratedNarratives;
   aiGeneratedStoryboard?: AIGeneratedStoryboard;
   aiGeneratedScreenplay?: AIGeneratedScreenplay;
   videoProduction?: VideoProductionData;

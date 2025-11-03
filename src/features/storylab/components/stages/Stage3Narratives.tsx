@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight,
   BookOpen,
   Lightbulb,
   Check,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wand2,
+  SettingsIcon
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -14,6 +16,7 @@ import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
+import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
 interface Narrative {
   id: string;
@@ -26,7 +29,12 @@ interface Narrative {
 }
 
 interface Stage3Props {
-  projectId: string;
+  project?: any;
+  projectId?: string;
+  updateNarrativePreferences?: (preferences: any) => Promise<void>;
+  updateAINarratives?: (narratives: any) => Promise<void>;
+  markStageCompleted?: (stage: string) => Promise<void>;
+  advanceToNextStage?: () => Promise<void>;
 }
 
 const narrativeOptions: Narrative[] = [
@@ -77,26 +85,176 @@ const narrativeOptions: Narrative[] = [
   },
 ];
 
-export function Stage3Narratives({ projectId }: Stage3Props) {
-  // Load project using new hook
-  const { project, isSaving, updateNarrativePreferences, markStageCompleted, advanceToNextStage } =
-    useStoryLabProject({ autoLoad: true, projectId });
+// Color palette for AI-generated narratives
+const colorPalette = [
+  {
+    gradient: 'from-red-600 via-red-500 to-orange-500',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-red-500',
+  },
+  {
+    gradient: 'from-orange-600 via-orange-500 to-yellow-500',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-orange-500',
+  },
+  {
+    gradient: 'from-cyan-600 via-blue-500 to-indigo-600',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-cyan-500',
+  },
+  {
+    gradient: 'from-green-600 via-emerald-500 to-teal-500',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-green-500',
+  },
+  {
+    gradient: 'from-blue-600 via-blue-500 to-cyan-500',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-blue-500',
+  },
+  {
+    gradient: 'from-purple-600 via-purple-500 to-pink-500',
+    patternColor: 'rgba(255, 255, 255, 0.1)',
+    ringColor: 'ring-purple-500',
+  },
+];
 
+// Function to get color for a narrative by index
+const getColorForNarrative = (index: number) => {
+  return colorPalette[index % colorPalette.length];
+};
+
+// Shape configurations for hover animations
+const shapeConfigurations = [
+  {
+    // Shape 1: Square + Circle
+    topLeftClass: 'rounded-lg rotate-12 group-hover:rotate-45',
+    topLeftHoverScale: 'group-hover:scale-125',
+    bottomRightClass: 'rounded-full group-hover:scale-110',
+    bottomRightHoverRotate: '',
+  },
+  {
+    // Shape 2: Circle + Rounded Square
+    topLeftClass: 'rounded-full rotate-45 group-hover:rotate-90',
+    topLeftHoverScale: 'group-hover:scale-110',
+    bottomRightClass: 'rounded-2xl group-hover:scale-125',
+    bottomRightHoverRotate: 'group-hover:rotate-12',
+  },
+  {
+    // Shape 3: Small Square + Large Circle
+    topLeftClass: 'rounded-sm rotate-0 group-hover:rotate-180',
+    topLeftHoverScale: 'group-hover:scale-150',
+    bottomRightClass: 'rounded-full group-hover:scale-125',
+    bottomRightHoverRotate: 'group-hover:rotate-45',
+  },
+  {
+    // Shape 4: Diamond + Circle
+    topLeftClass: 'rounded-none rotate-45 group-hover:rotate-90',
+    topLeftHoverScale: 'group-hover:scale-110',
+    bottomRightClass: 'rounded-full group-hover:scale-110',
+    bottomRightHoverRotate: 'group-hover:rotate-180',
+  },
+  {
+    // Shape 5: Curved Square + Square
+    topLeftClass: 'rounded-3xl rotate-0 group-hover:rotate-360',
+    topLeftHoverScale: 'group-hover:scale-110',
+    bottomRightClass: 'rounded-lg group-hover:scale-125',
+    bottomRightHoverRotate: 'group-hover:rotate-45',
+  },
+  {
+    // Shape 6: Large Circle + Small Square
+    topLeftClass: 'rounded-full rotate-0 group-hover:rotate-360',
+    topLeftHoverScale: 'group-hover:scale-125',
+    bottomRightClass: 'rounded-md group-hover:scale-110',
+    bottomRightHoverRotate: 'group-hover:rotate-90',
+  },
+];
+
+// Function to get shape configuration by index
+const getShapeForNarrative = (index: number) => {
+  return shapeConfigurations[index % shapeConfigurations.length];
+};
+
+export function Stage3Narratives({
+  project: propProject,
+  projectId,
+  updateNarrativePreferences: propUpdateNarrativePreferences,
+  updateAINarratives: propUpdateAINarratives,
+  markStageCompleted: propMarkStageCompleted,
+  advanceToNextStage: propAdvanceToNextStage,
+}: Stage3Props) {
+  // All state declarations FIRST
   const [selectedNarrative, setSelectedNarrative] = useState<string>('');
   const [customNarrative, setCustomNarrative] = useState<string>('');
   const [useCustom, setUseCustom] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [narrativeUpdateTrigger, setNarrativeUpdateTrigger] = useState(0);
+
+  // All refs SECOND
+  const generatedNarrativesRef = useRef<HTMLDivElement>(null);
+
+  // Use project from props (passed from WorkflowView), or load if not provided
+  const hookResult = useStoryLabProject({ autoLoad: true, projectId: projectId || '' });
+
+  // Always prefer hook's project if available and has data, fall back to propProject
+  const project = hookResult.project?.id
+    ? (hookResult.project?.aiGeneratedNarratives?.narratives?.length > 0 ? hookResult.project : (propProject || hookResult.project))
+    : propProject;
+
+  const updateNarrativePreferences = propUpdateNarrativePreferences || hookResult.updateNarrativePreferences;
+  const updateAINarratives = propUpdateAINarratives || hookResult.updateAINarratives;
+  const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
+  const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
+  const isSaving = hookResult.isSaving;
+
+  // DEBUG: Log project state for troubleshooting
+  useEffect(() => {
+    console.log('Stage3Narratives project state:', {
+      hasHookProject: !!hookResult.project?.id,
+      hasAIGeneratedNarratives: !!project?.aiGeneratedNarratives,
+      narrativesCount: project?.aiGeneratedNarratives?.narratives?.length,
+      narrativeUpdateTrigger: narrativeUpdateTrigger,
+    });
+  }, [project?.id, project?.aiGeneratedNarratives?.narratives?.length, narrativeUpdateTrigger]);
 
   // Sync form with project data when loaded
   useEffect(() => {
     if (project?.narrativePreferences) {
       setCustomNarrative(project.narrativePreferences.customNarrative || '');
       setUseCustom(project.narrativePreferences.useCustomStructure || false);
-      setSelectedNarrative(
-        narrativeOptions.find(n => n.id === project.narrativePreferences?.narrativeStyle)?.id || ''
-      );
+
+      // Check if the selected narrative is from mock options
+      const mockNarrativeId = narrativeOptions.find(n => n.id === project.narrativePreferences?.narrativeStyle)?.id;
+      if (mockNarrativeId) {
+        setSelectedNarrative(mockNarrativeId);
+      }
     }
-  }, [project?.narrativePreferences]);
+
+    // Also sync if there are AI-generated narratives and a selection exists
+    if (project?.aiGeneratedNarratives?.narratives?.length > 0) {
+      // If we have saved narrative preferences with a style, try to find it in AI narratives
+      if (project.narrativePreferences?.narrativeStyle) {
+        const selectedAI = project.aiGeneratedNarratives.narratives.find(
+          (n: any) => n.id === project.narrativePreferences?.narrativeStyle
+        );
+        if (selectedAI) {
+          setSelectedNarrative(selectedAI.id);
+        }
+      }
+    }
+  }, [project?.narrativePreferences, project?.aiGeneratedNarratives?.narratives]);
+
+  // Force UI update when narratives are generated
+  useEffect(() => {
+    if (hookResult.project?.aiGeneratedNarratives?.narratives?.length > 0) {
+      console.log('AI Generated Narratives detected:', hookResult.project.aiGeneratedNarratives.narratives.length);
+      setNarrativeUpdateTrigger(prev => prev + 1);
+    }
+  }, [hookResult.project?.aiGeneratedNarratives?.narratives?.length]);
 
   const handleSelectNarrative = (id: string) => {
     setSelectedNarrative(id);
@@ -104,8 +262,195 @@ export function Stage3Narratives({ projectId }: Stage3Props) {
     setCustomNarrative('');
   };
 
+  const handleGenerateNarratives = async () => {
+    setIsGenerating(true);
+    try {
+      if (!project) throw new Error('No project loaded. Please go back and reload the project.');
+
+      const token = sessionStorage.getItem('authToken');
+      if (!token) throw new Error('Authentication token not found');
+
+      // Step 1: Fetch the recipe
+      const recipeResponse = await fetch('/api/recipes?stageType=stage_3_narratives');
+      const recipeData = await recipeResponse.json();
+
+      if (!recipeData.recipes || recipeData.recipes.length === 0) {
+        throw new Error('No recipe found for narrative generation. Please seed recipes first.');
+      }
+
+      const recipeId = recipeData.recipes[0].id;
+
+      // Step 2: Get selected personas for input
+      const selectedPersonas = project?.aiGeneratedPersonas?.personas
+        ?.filter((p: any) => project?.userPersonaSelection?.selectedPersonaIds?.includes(p.id))
+        ?.map((p: any) => p.coreIdentity?.name || p.name || 'Unknown')
+        .join(', ') || 'No personas selected';
+
+      // Step 3: Execute the recipe
+      const executionResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          input: {
+            productDescription: project?.campaignDetails?.productDescription || '',
+            targetAudience: project?.campaignDetails?.targetAudience || '',
+            numberOfNarratives: 6,
+            selectedPersonas: selectedPersonas,
+          },
+          projectId: project?.id,
+          stageId: 'stage_3',
+        }),
+      });
+
+      if (!executionResponse.ok) {
+        const errorData = await executionResponse.json();
+        throw new Error(errorData.error || 'Failed to execute recipe');
+      }
+
+      const executionData = await executionResponse.json();
+      const executionId = executionData.executionId;
+
+      // Step 4: Poll for execution results
+      let execution: any = null;
+      let attempts = 0;
+      const maxAttempts = 60; // 5 minutes with 5-second polling
+
+      while (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
+        execution = await statusResponse.json();
+
+        if (execution.execution.status === 'completed') {
+          break;
+        }
+
+        if (execution.execution.status === 'failed') {
+          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
+        }
+
+        attempts++;
+      }
+
+      if (!execution || execution.execution.status !== 'completed') {
+        throw new Error('Recipe execution timed out after 5 minutes');
+      }
+
+      // Step 5: Process results
+      const finalNarratives = execution.execution.finalOutput || [];
+
+      if (!Array.isArray(finalNarratives) || finalNarratives.length === 0) {
+        throw new Error('No narratives returned from recipe execution');
+      }
+
+      // Step 6: Save generated narratives to project
+      const narrativesPayload = {
+        narratives: finalNarratives,
+        generatedAt: new Date(),
+        generationRecipeId: recipeId,
+        generationExecutionId: executionId,
+        model: 'narrative-generation-pipeline',
+        count: finalNarratives.length,
+      };
+
+      console.log('Saving narratives to project...', {
+        projectId: project.id,
+        narrativeCount: finalNarratives.length,
+        payload: narrativesPayload
+      });
+
+      const savedProject = await updateAINarratives(narrativesPayload, project.id);
+      console.log('After updateAINarratives - returned project:', savedProject?.aiGeneratedNarratives);
+
+      console.log('Narratives saved to database. Reloading project from Firestore...');
+
+      // Step 7: Small delay to ensure database write completes, then reload project
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const reloadedProject = await hookResult.loadProject(project.id);
+
+      console.log('Project reloaded from DB:', {
+        hasAIGeneratedNarratives: !!reloadedProject?.aiGeneratedNarratives,
+        narrativesCount: reloadedProject?.aiGeneratedNarratives?.narratives?.length,
+        fullNarratives: reloadedProject?.aiGeneratedNarratives,
+      });
+
+      alert(`Successfully generated ${finalNarratives.length} narrative themes!`);
+
+      // Scroll to the generated narratives section
+      setTimeout(() => {
+        if (generatedNarrativesRef.current) {
+          generatedNarrativesRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 500);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate narratives';
+      console.error('Error generating narratives:', errorMessage);
+      alert(`Failed to generate narratives: ${errorMessage}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const loadRecipe = async () => {
+    try {
+      setIsLoadingRecipe(true);
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      // Fetch narrative generation recipe
+      const response = await fetch('/api/recipes?stageType=stage_3_narratives');
+      const data = await response.json();
+
+      if (data.recipes && data.recipes.length > 0) {
+        setCurrentRecipe(data.recipes[0]);
+        setShowRecipeEditor(true);
+      } else {
+        alert('No narrative recipe found. Please seed recipes first.');
+      }
+    } catch (error) {
+      console.error('Error loading recipe:', error);
+      alert('Failed to load narrative recipe');
+    } finally {
+      setIsLoadingRecipe(false);
+    }
+  };
+
+  const handleSaveRecipe = async (recipe: any) => {
+    try {
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      const response = await fetch(`/api/recipes/${recipe.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(recipe),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save recipe');
+      }
+
+      setShowRecipeEditor(false);
+      alert('Narrative recipe saved successfully!');
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      alert(`Failed to save recipe: ${error}`);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
+      if (!project?.id) {
+        throw new Error('No project loaded. Please go back and reload the project.');
+      }
+
       if (useCustom && customNarrative) {
         // Save custom narrative preferences
         await updateNarrativePreferences({
@@ -113,7 +458,7 @@ export function Stage3Narratives({ projectId }: Stage3Props) {
           useCustomStructure: true,
           customNarrative: customNarrative,
           tone: 'custom',
-        });
+        }, project.id);
       } else if (selectedNarrative) {
         // Save selected narrative preferences
         const selected = narrativeOptions.find(n => n.id === selectedNarrative);
@@ -121,140 +466,223 @@ export function Stage3Narratives({ projectId }: Stage3Props) {
           narrativeStyle: selectedNarrative,
           useCustomStructure: false,
           tone: selectedNarrative,
-        });
+        }, project.id);
       }
+
       // Mark stage as completed
+      console.log('Marking narrative stage as completed...');
       await markStageCompleted('narrative');
-      // Advance to next stage
+
+      console.log('Stage completed successfully. Advancing to next stage...');
+      alert('Narrative preferences saved! Moving to next stage...');
+
+      // Advance to the next stage (Stage 4 - Storyboard)
       await advanceToNextStage();
     } catch (error) {
       console.error('Failed to save narrative preferences:', error);
+      alert(`Failed to save narrative preferences: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   const canProceed = (useCustom && customNarrative.trim()) || (!useCustom && selectedNarrative);
 
+  // Show recipe editor if requested
+  if (showRecipeEditor && currentRecipe) {
+    // Get selected personas as text
+    const selectedPersonas = project?.aiGeneratedPersonas?.personas
+      ?.filter((p: any) => project?.userPersonaSelection?.selectedPersonaIds?.includes(p.id))
+      ?.map((p: any) => p.coreIdentity?.name || p.name || 'Unknown')
+      .join(', ') || 'No personas selected';
+
+    // Prepare external input with all required data from previous stages
+    const externalInput = {
+      productDescription: project?.campaignDetails?.productDescription || '',
+      targetAudience: project?.campaignDetails?.targetAudience || '',
+      numberOfNarratives: 6, // Default to 6 narrative themes
+      selectedPersonas: selectedPersonas, // Add selected personas as text
+    };
+
+    return (
+      <RecipeEditorPage
+        recipe={currentRecipe}
+        previousStageOutput={externalInput}
+        onSave={handleSaveRecipe}
+        onBack={() => setShowRecipeEditor(false)}
+        title="Edit Narrative Generation Recipe"
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
-            <BookOpen className="w-6 h-6 text-blue-500" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
+              <BookOpen className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <h2 className="text-white">Select Narrative Theme</h2>
+              <p className="text-gray-400">
+                Choose the overall tone and story structure for your video
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-white">Select Narrative Theme</h2>
-            <p className="text-gray-400">
-              Choose the overall tone and story structure for your video
-            </p>
+          <div className="flex gap-3">
+            <Button
+              onClick={loadRecipe}
+              disabled={isLoadingRecipe}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
+            >
+              <SettingsIcon className="w-5 h-5 mr-2" />
+              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+            </Button>
+            <Button
+              onClick={handleGenerateNarratives}
+              disabled={isGenerating}
+              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+              size="lg"
+            >
+              <Wand2 className="w-5 h-5 mr-2" />
+              {isGenerating ? 'Generating...' : 'Generate Narratives'}
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* AI-Generated Narratives */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-6">
-          <Lightbulb className="w-5 h-5 text-blue-500" />
-          <h3 className="text-white">AI-Suggested Themes</h3>
-        </div>
+      {/* AI-Generated Narratives Section */}
+      {project?.aiGeneratedNarratives?.narratives && project.aiGeneratedNarratives.narratives.length > 0 && (
+        <>
+      <div ref={generatedNarrativesRef} className="mb-8">
+            <div className="flex items-center gap-2 mb-6">
+              <Lightbulb className="w-5 h-5 text-purple-500" />
+              <h3 className="text-white">AI-Generated Narrative Themes</h3>
+              <span className="text-xs text-gray-500 ml-2">
+                Generated on {new Date(project.aiGeneratedNarratives.generatedAt).toLocaleDateString()}
+              </span>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-          {narrativeOptions.map((narrative) => {
-            const isSelected = selectedNarrative === narrative.id && !useCustom;
-            const isExpanded = expandedId === narrative.id;
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              {project.aiGeneratedNarratives.narratives.map((narrative: any, index: number) => {
+                const colors = getColorForNarrative(index);
+                const shapes = getShapeForNarrative(index);
+                const isSelected = selectedNarrative === narrative.id && !useCustom;
+                const isExpanded = expandedId === narrative.id;
 
-            return (
-              <Card
-                key={narrative.id}
-                onClick={() => handleSelectNarrative(narrative.id)}
-                className={`bg-[#151515] border-gray-800 rounded-xl overflow-hidden cursor-pointer transition-all group relative ${
-                  isSelected
-                    ? `ring-2 ${narrative.ringColor} border-transparent`
-                    : 'hover:border-gray-700'
-                }`}
-              >
-                {/* Selected Indicator */}
-                {isSelected && (
-                  <div className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-lg">
-                    <Check className="w-5 h-5 text-white" />
-                  </div>
-                )}
-
-                {/* Gradient Header */}
-                <div className="relative h-36 overflow-hidden">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${narrative.gradient}`} />
-                  
-                  {/* Decorative Pattern */}
-                  <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <pattern id={`pattern-${narrative.id}`} x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <circle cx="20" cy="20" r="2" fill={narrative.patternColor} />
-                        <circle cx="0" cy="0" r="2" fill={narrative.patternColor} />
-                        <circle cx="40" cy="0" r="2" fill={narrative.patternColor} />
-                        <circle cx="0" cy="40" r="2" fill={narrative.patternColor} />
-                        <circle cx="40" cy="40" r="2" fill={narrative.patternColor} />
-                      </pattern>
-                    </defs>
-                    <rect x="0" y="0" width="100%" height="100%" fill={`url(#pattern-${narrative.id})`} />
-                  </svg>
-
-                  {/* Geometric Shapes */}
-                  <div className="absolute top-4 left-4 w-12 h-12 rounded-lg bg-white/10 backdrop-blur-sm rotate-12 group-hover:rotate-45 transition-transform duration-500" />
-                  <div className="absolute bottom-4 right-4 w-16 h-16 rounded-full bg-white/10 backdrop-blur-sm group-hover:scale-110 transition-transform duration-500" />
-                  
-                  {/* Title */}
-                  <div className="absolute inset-0 flex items-center justify-center p-4">
-                    <h3 className="text-white text-center drop-shadow-lg">{narrative.title}</h3>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-5">
-                  <p className="text-gray-400 leading-relaxed">
-                    {narrative.description}
-                  </p>
-
-                  {/* Expandable Structure */}
-                  <Collapsible
-                    open={isExpanded}
-                    onOpenChange={() => setExpandedId(isExpanded ? null : narrative.id)}
+                return (
+                  <Card
+                    key={narrative.id}
+                    onClick={() => handleSelectNarrative(narrative.id)}
+                    className={`bg-[#151515] border-gray-800 rounded-xl overflow-hidden cursor-pointer transition-all group relative ${
+                      isSelected
+                        ? `ring-2 ${colors.ringColor} border-transparent`
+                        : 'hover:border-gray-700'
+                    }`}
                   >
-                    <CollapsibleTrigger
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-2 text-gray-500 hover:text-gray-300 mt-3 transition-colors"
-                    >
-                      <span>View Structure</span>
-                      {isExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-3 pt-3 border-t border-gray-800">
-                      <div className="space-y-2">
-                        {narrative.structure.split(' → ').map((step, index) => (
-                          <div key={index} className="flex items-start gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-600 mt-2 shrink-0" />
-                            <p className="text-gray-500">{step}</p>
-                          </div>
-                        ))}
+                    {/* Selected Indicator */}
+                    {isSelected && (
+                      <div className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-lg">
+                        <Check className="w-5 h-5 text-white" />
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+                    )}
 
-      {/* Separator */}
-      <div className="relative my-8">
-        <Separator className="bg-gray-800" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0a] px-4">
-          <span className="text-gray-500">OR</span>
+                    {/* Gradient Header */}
+                    <div className="relative h-36 overflow-hidden">
+                      <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradient}`} />
+
+                      {/* Decorative Pattern */}
+                      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <pattern id={`pattern-generated-${narrative.id}`} x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <circle cx="20" cy="20" r="2" fill={colors.patternColor} />
+                            <circle cx="0" cy="0" r="2" fill={colors.patternColor} />
+                            <circle cx="40" cy="0" r="2" fill={colors.patternColor} />
+                            <circle cx="0" cy="40" r="2" fill={colors.patternColor} />
+                            <circle cx="40" cy="40" r="2" fill={colors.patternColor} />
+                          </pattern>
+                        </defs>
+                        <rect x="0" y="0" width="100%" height="100%" fill={`url(#pattern-generated-${narrative.id})`} />
+                      </svg>
+
+                      {/* Geometric Shapes */}
+                      <div className={`absolute top-4 left-4 w-12 h-12 bg-white/10 backdrop-blur-sm transition-transform duration-500 ${shapes.topLeftClass} ${shapes.topLeftHoverScale}`} />
+                      <div className={`absolute bottom-4 right-4 w-16 h-16 bg-white/10 backdrop-blur-sm transition-transform duration-500 ${shapes.bottomRightClass} ${shapes.bottomRightHoverRotate}`} />
+
+                      {/* Title */}
+                      <div className="absolute inset-0 flex items-center justify-center p-4">
+                        <h3 className="text-white text-center drop-shadow-lg">{narrative.title}</h3>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5">
+                      <p className="text-gray-400 leading-relaxed">
+                        {narrative.description}
+                      </p>
+
+                      {/* Expandable Structure */}
+                      <Collapsible
+                        open={isExpanded}
+                        onOpenChange={() => setExpandedId(isExpanded ? null : narrative.id)}
+                      >
+                        <CollapsibleTrigger
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 text-gray-500 hover:text-gray-300 mt-3 transition-colors"
+                        >
+                          <span>View Structure</span>
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-3 pt-3 border-t border-gray-800">
+                          <div className="space-y-2">
+                            {narrative.structure.split(' → ').map((step: string, index: number) => (
+                              <div key={index} className="flex items-start gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-600 mt-2 shrink-0" />
+                                <p className="text-gray-500">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Show message if no narratives generated yet */}
+      {(!project?.aiGeneratedNarratives?.narratives || project.aiGeneratedNarratives.narratives.length === 0) && (
+        <div className="mb-8 p-6 bg-blue-600/10 border border-blue-600/30 rounded-xl">
+          <div className="flex items-center gap-3">
+            <Lightbulb className="w-5 h-5 text-blue-400 flex-shrink-0" />
+            <div>
+              <h3 className="text-white font-medium">Generate AI Narratives</h3>
+              <p className="text-gray-400 text-sm mt-1">
+                Click "Generate Narratives" above to create personalized narrative themes based on your campaign details and selected personas.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Separator - only show if we have generated narratives */}
+      {project?.aiGeneratedNarratives?.narratives && project.aiGeneratedNarratives.narratives.length > 0 && (
+        <div className="relative my-8">
+          <Separator className="bg-gray-800" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0a] px-4">
+            <span className="text-gray-500">OR</span>
+          </div>
+        </div>
+      )}
 
       {/* Custom Narrative */}
       <div className="mb-8">

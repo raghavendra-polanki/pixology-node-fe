@@ -2,7 +2,7 @@ import RecipeManager from './RecipeManager.js';
 import RecipeOrchestrator from './RecipeOrchestrator.js';
 import ActionResultTracker from './ActionResultTracker.js';
 import DAGValidator from './DAGValidator.js';
-import { PERSONA_GENERATION_RECIPE } from './RecipeSeedData.js';
+import { PERSONA_GENERATION_RECIPE, NARRATIVE_GENERATION_RECIPE, STORYBOARD_GENERATION_RECIPE } from './RecipeSeedData.js';
 import { db } from '../config/firestore.js';
 
 /**
@@ -291,28 +291,63 @@ export class AgentService {
   static async seedInitialRecipes(userId) {
     try {
       console.log('Seeding initial recipes...');
+      const seededRecipes = [];
 
       // Check if persona recipe already exists
-      const existingRecipes = await RecipeManager.listRecipes({
+      const existingPersonaRecipes = await RecipeManager.listRecipes({
         stageType: 'stage_2_personas',
       });
 
-      if (existingRecipes.length > 0) {
+      if (existingPersonaRecipes.length === 0) {
+        // Create persona generation recipe
+        const personaRecipe = await RecipeManager.createRecipe(
+          PERSONA_GENERATION_RECIPE,
+          userId || 'system'
+        );
+        console.log('Seeded persona generation recipe:', personaRecipe.id);
+        seededRecipes.push(personaRecipe);
+      } else {
         console.log('Persona generation recipe already exists. Skipping seed.');
-        return { skipped: true, existing: existingRecipes };
       }
 
-      // Create persona generation recipe
-      const personaRecipe = await RecipeManager.createRecipe(
-        PERSONA_GENERATION_RECIPE,
-        userId || 'system'
-      );
+      // Check if narrative recipe already exists
+      const existingNarrativeRecipes = await RecipeManager.listRecipes({
+        stageType: 'stage_3_narratives',
+      });
 
-      console.log('Seeded persona generation recipe:', personaRecipe.id);
+      if (existingNarrativeRecipes.length === 0) {
+        // Create narrative generation recipe
+        const narrativeRecipe = await RecipeManager.createRecipe(
+          NARRATIVE_GENERATION_RECIPE,
+          userId || 'system'
+        );
+        console.log('Seeded narrative generation recipe:', narrativeRecipe.id);
+        seededRecipes.push(narrativeRecipe);
+      } else {
+        console.log('Narrative generation recipe already exists. Skipping seed.');
+      }
+
+      // Check if storyboard recipe already exists
+      const existingStoryboardRecipes = await RecipeManager.listRecipes({
+        stageType: 'stage_4_storyboard',
+      });
+
+      if (existingStoryboardRecipes.length === 0) {
+        // Create storyboard generation recipe
+        const storyboardRecipe = await RecipeManager.createRecipe(
+          STORYBOARD_GENERATION_RECIPE,
+          userId || 'system'
+        );
+        console.log('Seeded storyboard generation recipe:', storyboardRecipe.id);
+        seededRecipes.push(storyboardRecipe);
+      } else {
+        console.log('Storyboard generation recipe already exists. Skipping seed.');
+      }
 
       return {
         success: true,
-        recipes: [personaRecipe],
+        recipes: seededRecipes,
+        message: seededRecipes.length > 0 ? `Seeded ${seededRecipes.length} recipes` : 'All recipes already seeded',
       };
     } catch (error) {
       console.error('Error seeding recipes:', error);

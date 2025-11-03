@@ -1,5 +1,10 @@
-import { generateMultiplePersonasInSingleCall } from './geminiService.js';
-import { generatePersonaImage } from './imageGenerationService.js';
+import {
+  generateMultiplePersonasInSingleCall,
+  generateNarrativesInSingleCall,
+  generateStoryScenesInSingleCall,
+  generateScreenplayFromStoryboard,
+} from './geminiService.js';
+import { generatePersonaImage, generateMultipleSceneImages } from './imageGenerationService.js';
 import { uploadImageToGCS } from './gcsService.js';
 
 /**
@@ -85,24 +90,121 @@ export class ActionExecutor {
 
   /**
    * Execute text generation action
+   * Handles persona, narrative, and storyboard scene generation based on node type
+   * Supports custom prompts from recipe nodes
    */
   static async executeTextGeneration(node, input) {
     try {
-      const { productDescription, targetAudience, numberOfPersonas } = input;
+      // Extract custom prompt from recipe node if available
+      const customPrompt = node.prompt || null;
+      if (customPrompt) {
+        console.log(`Using custom prompt from recipe node: ${node.id}`);
+      }
 
+      // Check node type to determine generation path
+      const isScreenplayGeneration = node.id && node.id.includes('screenplay');
+      const isNarrativeGeneration = node.id && node.id.includes('narrative');
+      const isStoryGeneration = node.id && node.id.includes('story');
+
+      // Extract inputs (some are optional depending on the generation path)
+      const {
+        productDescription,
+        targetAudience,
+        numberOfPersonas,
+        numberOfNarratives,
+        selectedPersonas,
+        selectedPersonaName,
+        selectedPersonaDescription,
+        narrativeTheme,
+        narrativeStructure,
+        numberOfScenes,
+        videoDuration,
+        storyboardScenes,
+      } = input;
+
+      if (isScreenplayGeneration) {
+        // Screenplay generation path
+        const duration = videoDuration || '30s';
+
+        console.log(`Generating screenplay for ${storyboardScenes?.length || 0} storyboard scenes...`);
+
+        if (!storyboardScenes || !Array.isArray(storyboardScenes) || storyboardScenes.length === 0) {
+          throw new Error('Missing required input for screenplay: storyboardScenes must be a non-empty array');
+        }
+
+        if (!selectedPersonaName) {
+          throw new Error('Missing required input for screenplay: selectedPersonaName');
+        }
+
+        const screenplay = await generateScreenplayFromStoryboard(
+          storyboardScenes,
+          duration,
+          selectedPersonaName,
+          customPrompt  // Pass custom prompt if available
+        );
+
+        return screenplay;
+      }
+
+      // Validate common inputs for other generation types
       if (!productDescription || !targetAudience) {
         throw new Error('Missing required input: productDescription, targetAudience');
       }
 
-      console.log(`Generating ${numberOfPersonas || 3} personas...`);
+      if (isStoryGeneration) {
+        // Story/Storyboard scene generation path
+        const sceneCount = numberOfScenes || node.parameters?.numberOfScenes || 6;
+        const duration = videoDuration || '30s';
 
-      const personas = await generateMultiplePersonasInSingleCall(
-        productDescription,
-        targetAudience,
-        numberOfPersonas || node.parameters?.numberOfPersonas || 3
-      );
+        console.log(`Generating ${sceneCount} story scenes for "${narrativeTheme}"...`);
 
-      return personas;
+        if (!selectedPersonaName || !narrativeTheme || !narrativeStructure) {
+          throw new Error(
+            'Missing required input for storyboard: selectedPersonaName, narrativeTheme, narrativeStructure'
+          );
+        }
+
+        const scenes = await generateStoryScenesInSingleCall(
+          productDescription,
+          targetAudience,
+          selectedPersonaName,
+          selectedPersonaDescription || 'Selected persona',
+          narrativeTheme,
+          narrativeStructure,
+          sceneCount,
+          duration,
+          customPrompt  // Pass custom prompt if available
+        );
+
+        return scenes;
+      } else if (isNarrativeGeneration) {
+        // Narrative generation path
+        const narrativeCount = numberOfNarratives || node.parameters?.numberOfNarratives || 6;
+        console.log(`Generating ${narrativeCount} narrative themes...`);
+
+        const narratives = await generateNarrativesInSingleCall(
+          productDescription,
+          targetAudience,
+          narrativeCount,
+          selectedPersonas || 'Unknown personas',
+          customPrompt  // Pass custom prompt if available
+        );
+
+        return narratives;
+      } else {
+        // Persona generation path (default)
+        const personaCount = numberOfPersonas || node.parameters?.numberOfPersonas || 3;
+        console.log(`Generating ${personaCount} personas...`);
+
+        const personas = await generateMultiplePersonasInSingleCall(
+          productDescription,
+          targetAudience,
+          personaCount,
+          customPrompt  // Pass custom prompt if available
+        );
+
+        return personas;
+      }
     } catch (error) {
       console.error('Error in text generation:', error);
       throw error;
@@ -111,56 +213,80 @@ export class ActionExecutor {
 
   /**
    * Execute image generation action
+   * Handles both persona images and scene images based on input
    */
   static async executeImageGeneration(node, input) {
     try {
-      const { personaData } = input;
+      const { personaData, sceneData } = input;
 
-      if (!personaData || !Array.isArray(personaData)) {
-        throw new Error('Missing or invalid input: personaData must be an array');
-      }
+      // Check if this is scene image generation (Node 2 for storyboard)
+      const isSceneImageGeneration = node.id && node.id.includes('generate_scene_images');
 
-      console.log(`Generating ${personaData.length} persona images...`);
-
-      const images = [];
-
-      for (let i = 0; i < personaData.length; i++) {
-        try {
-          const persona = personaData[i];
-          const imagePrompt = this.generateImagePrompt(persona);
-
-          console.log(`Generating image for persona ${i + 1}/${personaData.length}`);
-
-          const imageBuffer = await generatePersonaImage(imagePrompt);
-
-          images.push({
-            personaId: persona.id || `persona_${i}`,
-            personaName: persona.coreIdentity?.name || 'Unknown',
-            buffer: imageBuffer,
-            generatedAt: Date.now(),
-          });
-
-          // Add small delay between image generations to avoid rate limiting
-          if (i < personaData.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-        } catch (personaError) {
-          console.error(`Error generating image for persona ${i + 1}:`, personaError);
-          // Continue with next persona if error handling is 'skip'
-          if (node.errorHandling?.onError === 'skip') {
-            images.push({
-              personaId: personaData[i].id || `persona_${i}`,
-              personaName: personaData[i].coreIdentity?.name || 'Unknown',
-              buffer: null,
-              error: personaError.message,
-            });
-            continue;
-          }
-          throw personaError;
+      if (isSceneImageGeneration) {
+        // Scene image generation path
+        if (!sceneData || !Array.isArray(sceneData)) {
+          throw new Error('Missing or invalid input: sceneData must be an array');
         }
-      }
 
-      return images;
+        const { selectedPersonaName, selectedPersonaImage } = input;
+
+        console.log(`Generating images for ${sceneData.length} storyboard scenes...`);
+
+        // Generate actual images using Gemini API with persona consistency
+        const sceneImages = await generateMultipleSceneImages(
+          sceneData,
+          selectedPersonaName || 'Character',
+          selectedPersonaImage || null
+        );
+
+        console.log(`Generated ${sceneImages.length} scene images using Gemini API`);
+        return sceneImages;
+      } else if (personaData && Array.isArray(personaData)) {
+        // Persona image generation path
+        console.log(`Generating ${personaData.length} persona images...`);
+
+        const images = [];
+
+        for (let i = 0; i < personaData.length; i++) {
+          try {
+            const persona = personaData[i];
+            const imagePrompt = this.generateImagePrompt(persona);
+
+            console.log(`Generating image for persona ${i + 1}/${personaData.length}`);
+
+            const imageBuffer = await generatePersonaImage(imagePrompt);
+
+            images.push({
+              personaId: persona.id || `persona_${i}`,
+              personaName: persona.coreIdentity?.name || 'Unknown',
+              buffer: imageBuffer,
+              generatedAt: Date.now(),
+            });
+
+            // Add small delay between image generations to avoid rate limiting
+            if (i < personaData.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          } catch (personaError) {
+            console.error(`Error generating image for persona ${i + 1}:`, personaError);
+            // Continue with next persona if error handling is 'skip'
+            if (node.errorHandling?.onError === 'skip') {
+              images.push({
+                personaId: personaData[i].id || `persona_${i}`,
+                personaName: personaData[i].coreIdentity?.name || 'Unknown',
+                buffer: null,
+                error: personaError.message,
+              });
+              continue;
+            }
+            throw personaError;
+          }
+        }
+
+        return images;
+      } else {
+        throw new Error('Missing or invalid input: sceneData or personaData required');
+      }
     } catch (error) {
       console.error('Error in image generation:', error);
       throw error;
@@ -176,67 +302,145 @@ export class ActionExecutor {
 
   /**
    * Execute data processing action
+   * Handles both persona uploads and storyboard uploads
    */
   static async executeDataProcessing(node, input) {
     try {
-      const { personaDetails, personaImages } = input;
+      const { personaDetails, personaImages, sceneDetails, sceneImages } = input;
 
-      if (!personaDetails || !Array.isArray(personaDetails)) {
-        throw new Error('Missing or invalid input: personaDetails must be an array');
-      }
+      // Check if this is storyboard processing (node.id contains 'upload_and_save')
+      const isStoryboardUpload = node.id && node.id.includes('upload_and_save');
 
-      console.log(`Processing and uploading ${personaDetails.length} personas...`);
-
-      const finalPersonas = [];
-
-      for (let i = 0; i < personaDetails.length; i++) {
-        try {
-          const personaDetail = personaDetails[i];
-          const personaImage = personaImages?.[i];
-
-          console.log(`Processing persona ${i + 1}/${personaDetails.length}`);
-
-          let imageUrl = null;
-
-          // Upload image to GCS if available
-          if (personaImage?.buffer) {
-            const personaName = personaDetail.coreIdentity?.name || `persona_${i}`;
-
-            imageUrl = await uploadImageToGCS(
-              personaImage.buffer,
-              `personas_${Date.now()}`, // Use timestamp as project identifier
-              personaName
-            );
-
-            console.log(`Uploaded image for ${personaName}: ${imageUrl}`);
-          }
-
-          // Combine persona data with image URL
-          const combinedPersona = {
-            id: personaDetail.id || personaImage?.personaId || `persona_${Date.now()}_${i}`,
-            ...personaDetail,
-            image: {
-              url: imageUrl,
-              uploadedAt: imageUrl ? Date.now() : null,
-            },
-          };
-
-          finalPersonas.push(combinedPersona);
-        } catch (processingError) {
-          console.error(`Error processing persona ${i + 1}:`, processingError);
-          if (node.errorHandling?.onError === 'skip') {
-            finalPersonas.push({
-              ...personaDetails[i],
-              image: null,
-              processingError: processingError.message,
-            });
-            continue;
-          }
-          throw processingError;
+      if (isStoryboardUpload) {
+        // Storyboard scene upload path
+        if (!sceneDetails || !Array.isArray(sceneDetails)) {
+          throw new Error('Missing or invalid input: sceneDetails must be an array');
         }
-      }
 
-      return finalPersonas;
+        console.log(`Processing and uploading ${sceneDetails.length} storyboard scenes...`);
+
+        const finalStoryboard = [];
+
+        for (let i = 0; i < sceneDetails.length; i++) {
+          try {
+            const sceneDetail = sceneDetails[i];
+            const sceneImage = sceneImages?.[i];
+
+            console.log(`Processing scene ${i + 1}/${sceneDetails.length}: "${sceneDetail.title}"`);
+
+            let imageUrl = null;
+
+            // Upload image to GCS if actual image buffer is available
+            if (sceneImage?.buffer) {
+              const sceneName = sceneDetail.title || `scene_${i + 1}`;
+
+              imageUrl = await uploadImageToGCS(
+                sceneImage.buffer,
+                `storyboards_${Date.now()}`, // Use timestamp as storyboard project identifier
+                sceneName
+              );
+
+              console.log(`Uploaded image for scene ${i + 1}: ${imageUrl}`);
+            } else if (sceneImage?.mockUrl) {
+              // Use placeholder/mock image URL if provided (from Node 2)
+              imageUrl = sceneImage.mockUrl;
+              console.log(`Using placeholder image for scene ${i + 1}: ${imageUrl}`);
+            }
+
+            // Combine scene data with image URL
+            const combinedScene = {
+              sceneNumber: sceneDetail.sceneNumber,
+              title: sceneDetail.title,
+              duration: sceneDetail.duration,
+              description: sceneDetail.description,
+              location: sceneDetail.location,
+              persona: sceneDetail.persona,
+              product: sceneDetail.product,
+              visualElements: sceneDetail.visualElements,
+              dialogue: sceneDetail.dialogue,
+              cameraWork: sceneDetail.cameraWork,
+              keyFrameDescription: sceneDetail.keyFrameDescription,
+              image: {
+                url: imageUrl,
+                uploadedAt: imageUrl ? new Date() : null,
+              },
+            };
+
+            finalStoryboard.push(combinedScene);
+          } catch (processingError) {
+            console.error(`Error processing scene ${i + 1}:`, processingError);
+            if (node.errorHandling?.onError === 'skip') {
+              finalStoryboard.push({
+                ...sceneDetails[i],
+                image: null,
+                processingError: processingError.message,
+              });
+              continue;
+            }
+            throw processingError;
+          }
+        }
+
+        return finalStoryboard;
+      } else {
+        // Persona upload path (original logic)
+        if (!personaDetails || !Array.isArray(personaDetails)) {
+          throw new Error('Missing or invalid input: personaDetails must be an array');
+        }
+
+        console.log(`Processing and uploading ${personaDetails.length} personas...`);
+
+        const finalPersonas = [];
+
+        for (let i = 0; i < personaDetails.length; i++) {
+          try {
+            const personaDetail = personaDetails[i];
+            const personaImage = personaImages?.[i];
+
+            console.log(`Processing persona ${i + 1}/${personaDetails.length}`);
+
+            let imageUrl = null;
+
+            // Upload image to GCS if available
+            if (personaImage?.buffer) {
+              const personaName = personaDetail.coreIdentity?.name || `persona_${i}`;
+
+              imageUrl = await uploadImageToGCS(
+                personaImage.buffer,
+                `personas_${Date.now()}`, // Use timestamp as project identifier
+                personaName
+              );
+
+              console.log(`Uploaded image for ${personaName}: ${imageUrl}`);
+            }
+
+            // Combine persona data with image URL
+            const combinedPersona = {
+              id: personaDetail.id || personaImage?.personaId || `persona_${Date.now()}_${i}`,
+              ...personaDetail,
+              image: {
+                url: imageUrl,
+                uploadedAt: imageUrl ? Date.now() : null,
+              },
+            };
+
+            finalPersonas.push(combinedPersona);
+          } catch (processingError) {
+            console.error(`Error processing persona ${i + 1}:`, processingError);
+            if (node.errorHandling?.onError === 'skip') {
+              finalPersonas.push({
+                ...personaDetails[i],
+                image: null,
+                processingError: processingError.message,
+              });
+              continue;
+            }
+            throw processingError;
+          }
+        }
+
+        return finalPersonas;
+      }
     } catch (error) {
       console.error('Error in data processing:', error);
       throw error;

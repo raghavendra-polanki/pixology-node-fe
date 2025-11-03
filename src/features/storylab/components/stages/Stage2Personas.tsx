@@ -287,9 +287,17 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
 
   // Show full-screen recipe editor if editing
   if (showRecipeEditor && currentRecipe) {
+    // Pass previous stage output (Stage 1 campaign details) to the editor
+    const previousStageOutput = {
+      numberOfPersonas: project?.numberOfPersonas || 3,
+      productDescription: project?.campaignDetails?.productDescription || '',
+      targetAudience: project?.campaignDetails?.targetAudience || '',
+    };
+
     return (
       <RecipeEditorPage
         recipe={currentRecipe}
+        previousStageOutput={previousStageOutput}
         onSave={handleRecipeSaved}
         onBack={() => setShowRecipeEditor(false)}
         title="Edit Persona Generation Recipe"
