@@ -154,3 +154,46 @@ export async function imageExistsInGCS(imageUrl) {
     return false;
   }
 }
+
+/**
+ * Upload video buffer to Google Cloud Storage
+ * Returns the public URL of the uploaded video
+ */
+export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
+  try {
+    // Validate inputs
+    if (!videoBuffer || !projectId || !sceneName) {
+      throw new Error('Missing required parameters: videoBuffer, projectId, sceneName');
+    }
+
+    const videoBucketName = process.env.GCS_VIDEO_BUCKET || 'pixology-videos';
+    const bucket = storage.bucket(videoBucketName);
+
+    // Create unique filename with scene name and timestamp
+    const sanitizedName = sceneName.toString().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const timestamp = Date.now();
+    const uniqueId = uuidv4().substring(0, 8);
+    const filename = `videos/${projectId}/${sanitizedName}-${timestamp}-${uniqueId}.mp4`;
+
+    // Create file object
+    const file = bucket.file(filename);
+
+    // Upload the video as publicly readable
+    await file.save(videoBuffer, {
+      metadata: {
+        contentType: 'video/mp4',
+        cacheControl: 'public, max-age=604800', // Cache for 7 days
+      },
+    });
+
+    // Generate the public URL
+    const publicUrl = `https://storage.googleapis.com/${videoBucketName}/${filename}`;
+
+    console.log(`Successfully uploaded video to GCS as public: ${publicUrl}`);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading video to GCS:', error);
+    throw new Error(`Failed to upload video to GCS: ${error.message}`);
+  }
+}
