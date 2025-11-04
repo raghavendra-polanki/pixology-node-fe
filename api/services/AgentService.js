@@ -2,7 +2,7 @@ import RecipeManager from './RecipeManager.js';
 import RecipeOrchestrator from './RecipeOrchestrator.js';
 import ActionResultTracker from './ActionResultTracker.js';
 import DAGValidator from './DAGValidator.js';
-import { PERSONA_GENERATION_RECIPE, NARRATIVE_GENERATION_RECIPE, STORYBOARD_GENERATION_RECIPE } from './RecipeSeedData.js';
+import { PERSONA_GENERATION_RECIPE, NARRATIVE_GENERATION_RECIPE, STORYBOARD_GENERATION_RECIPE, SCREENPLAY_GENERATION_RECIPE, VIDEO_GENERATION_RECIPE } from './RecipeSeedData.js';
 import { db } from '../config/firestore.js';
 
 /**
@@ -363,6 +363,54 @@ export class AgentService {
         seededRecipes.push(storyboardRecipe);
       } else {
         console.log('Storyboard generation recipe already exists. Skipping seed.');
+      }
+
+      // Check if screenplay recipe already exists
+      const existingScreenplayRecipes = await RecipeManager.listRecipes({
+        stageType: 'stage_5_screenplay',
+      });
+
+      if (existingScreenplayRecipes.length === 0 || forceReseed) {
+        // Delete existing recipes if force reseeding
+        if (existingScreenplayRecipes.length > 0 && forceReseed) {
+          console.log('Force reseeding: deleting existing screenplay recipes');
+          for (const recipe of existingScreenplayRecipes) {
+            await RecipeManager.deleteRecipe(recipe.id);
+          }
+        }
+        // Create screenplay generation recipe
+        const screenplayRecipe = await RecipeManager.createRecipe(
+          SCREENPLAY_GENERATION_RECIPE,
+          userId || 'system'
+        );
+        console.log('Seeded screenplay generation recipe:', screenplayRecipe.id);
+        seededRecipes.push(screenplayRecipe);
+      } else {
+        console.log('Screenplay generation recipe already exists. Skipping seed.');
+      }
+
+      // Check if video recipe already exists
+      const existingVideoRecipes = await RecipeManager.listRecipes({
+        stageType: 'stage_6_video',
+      });
+
+      if (existingVideoRecipes.length === 0 || forceReseed) {
+        // Delete existing recipes if force reseeding
+        if (existingVideoRecipes.length > 0 && forceReseed) {
+          console.log('Force reseeding: deleting existing video recipes');
+          for (const recipe of existingVideoRecipes) {
+            await RecipeManager.deleteRecipe(recipe.id);
+          }
+        }
+        // Create video generation recipe
+        const videoRecipe = await RecipeManager.createRecipe(
+          VIDEO_GENERATION_RECIPE,
+          userId || 'system'
+        );
+        console.log('Seeded video generation recipe:', videoRecipe.id);
+        seededRecipes.push(videoRecipe);
+      } else {
+        console.log('Video generation recipe already exists. Skipping seed.');
       }
 
       return {
