@@ -288,9 +288,9 @@ export class AgentService {
    * @param {string} userId - User ID for creation
    * @returns {Promise<object>} Created recipes
    */
-  static async seedInitialRecipes(userId) {
+  static async seedInitialRecipes(userId, forceReseed = false) {
     try {
-      console.log('Seeding initial recipes...');
+      console.log('Seeding initial recipes...', forceReseed ? '(force reseed enabled)' : '');
       const seededRecipes = [];
 
       // Check if persona recipe already exists
@@ -298,7 +298,14 @@ export class AgentService {
         stageType: 'stage_2_personas',
       });
 
-      if (existingPersonaRecipes.length === 0) {
+      if (existingPersonaRecipes.length === 0 || forceReseed) {
+        // Delete existing recipes if force reseeding
+        if (existingPersonaRecipes.length > 0 && forceReseed) {
+          console.log('Force reseeding: deleting existing persona recipes');
+          for (const recipe of existingPersonaRecipes) {
+            await RecipeManager.deleteRecipe(recipe.id);
+          }
+        }
         // Create persona generation recipe
         const personaRecipe = await RecipeManager.createRecipe(
           PERSONA_GENERATION_RECIPE,
@@ -315,7 +322,14 @@ export class AgentService {
         stageType: 'stage_3_narratives',
       });
 
-      if (existingNarrativeRecipes.length === 0) {
+      if (existingNarrativeRecipes.length === 0 || forceReseed) {
+        // Delete existing recipes if force reseeding
+        if (existingNarrativeRecipes.length > 0 && forceReseed) {
+          console.log('Force reseeding: deleting existing narrative recipes');
+          for (const recipe of existingNarrativeRecipes) {
+            await RecipeManager.deleteRecipe(recipe.id);
+          }
+        }
         // Create narrative generation recipe
         const narrativeRecipe = await RecipeManager.createRecipe(
           NARRATIVE_GENERATION_RECIPE,
@@ -332,7 +346,14 @@ export class AgentService {
         stageType: 'stage_4_storyboard',
       });
 
-      if (existingStoryboardRecipes.length === 0) {
+      if (existingStoryboardRecipes.length === 0 || forceReseed) {
+        // Delete existing recipes if force reseeding
+        if (existingStoryboardRecipes.length > 0 && forceReseed) {
+          console.log('Force reseeding: deleting existing storyboard recipes');
+          for (const recipe of existingStoryboardRecipes) {
+            await RecipeManager.deleteRecipe(recipe.id);
+          }
+        }
         // Create storyboard generation recipe
         const storyboardRecipe = await RecipeManager.createRecipe(
           STORYBOARD_GENERATION_RECIPE,
@@ -347,7 +368,7 @@ export class AgentService {
       return {
         success: true,
         recipes: seededRecipes,
-        message: seededRecipes.length > 0 ? `Seeded ${seededRecipes.length} recipes` : 'All recipes already seeded',
+        message: seededRecipes.length > 0 ? `Seeded ${seededRecipes.length} recipes${forceReseed ? ' (force reseeded)' : ''}` : 'All recipes already seeded',
       };
     } catch (error) {
       console.error('Error seeding recipes:', error);

@@ -466,10 +466,12 @@ router.post('/executions/:executionId/retry', verifyToken, async (req, res) => {
  * POST /api/recipes/seed/initial
  * Seed initial recipes
  * Requires authentication
+ * Body: { forceReseed?: boolean }
  */
 router.post('/seed/initial', verifyToken, async (req, res) => {
   try {
-    const result = await AgentService.seedInitialRecipes(req.userId);
+    const { forceReseed = false } = req.body;
+    const result = await AgentService.seedInitialRecipes(req.userId, forceReseed);
 
     return res.status(200).json({
       success: true,
