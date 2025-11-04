@@ -312,11 +312,18 @@ export function Stage5Screenplay({
 
   // Show recipe editor if requested
   if (showRecipeEditor && currentRecipe) {
+    // Build previous stage output from project data (Stage 4 storyboard output)
+    const previousStageOutput = {
+      selectedPersonaName: project?.selectedPersonaName,
+      storyboardScenes: project?.storyboard?.scenes || project?.aiGeneratedStoryboard?.scenes || [],
+    };
+
     return (
       <RecipeEditorPage
         onBack={() => setShowRecipeEditor(false)}
         recipe={currentRecipe}
         onSave={handleSaveRecipe}
+        previousStageOutput={previousStageOutput}
       />
     );
   }
