@@ -313,8 +313,14 @@ export function Stage5Screenplay({
   // Show recipe editor if requested
   if (showRecipeEditor && currentRecipe) {
     // Build previous stage output from project data (Stage 4 storyboard output)
+    // Extract persona name from selected persona
+    const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
+      (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
+    );
+    const selectedPersonaName = selectedPersona?.coreIdentity?.name || 'Character';
+
     const previousStageOutput = {
-      selectedPersonaName: project?.selectedPersonaName,
+      selectedPersonaName,
       storyboardScenes: project?.storyboard?.scenes || project?.aiGeneratedStoryboard?.scenes || [],
     };
 
