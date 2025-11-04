@@ -536,6 +536,55 @@ router.post('/seed/storyboard', async (req, res) => {
 });
 
 /**
+ * POST /api/recipes/seed/screenplay
+ * Seed screenplay recipe only (development endpoint with force reseed support)
+ */
+router.post('/seed/screenplay', async (req, res) => {
+  try {
+    const { SCREENPLAY_GENERATION_RECIPE } = await import('./services/RecipeSeedData.js');
+    const { forceReseed = false } = req.body;
+
+    // Check if screenplay recipe already exists
+    const existingRecipes = await AgentService.listRecipes({
+      stageType: 'stage_5_screenplay',
+    });
+
+    if (existingRecipes.length > 0 && !forceReseed) {
+      return res.status(200).json({
+        success: true,
+        message: 'Screenplay recipe already exists',
+        recipes: existingRecipes,
+      });
+    }
+
+    // If forceReseed, delete existing recipes
+    if (existingRecipes.length > 0 && forceReseed) {
+      console.log('Force reseeding: deleting existing screenplay recipes');
+      for (const recipe of existingRecipes) {
+        await AgentService.deleteRecipe(recipe.id);
+      }
+    }
+
+    // Create screenplay recipe with updated metadata
+    const recipe = await AgentService.createRecipe(
+      SCREENPLAY_GENERATION_RECIPE,
+      'system'
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: forceReseed ? 'Screenplay recipe reseeded successfully' : 'Screenplay recipe seeded successfully',
+      recipes: [recipe],
+    });
+  } catch (error) {
+    console.error('Error seeding screenplay recipe:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to seed screenplay recipe',
+    });
+  }
+});
+
+/**
  * GET /api/recipes/stage/:stageType
  * Get recipes by stage type
  */
