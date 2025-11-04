@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Download, ThumbsUp, ThumbsDown, AlertCircle, Play, Volume2, RefreshCw } from 'lucide-react';
+import { Sparkles, Download, ThumbsUp, ThumbsDown, AlertCircle, Play, Volume2, RefreshCw, SettingsIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Separator } from '../ui/separator';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
+import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
 interface Stage6Props {
   project?: any;
@@ -46,6 +47,9 @@ export function Stage6GenerateVideo({
   const [feedback, setFeedback] = useState<'good' | 'needs-edit' | null>(null);
   const [videoData, setVideoData] = useState<VideoData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
 
   // Sync video status with project data when loaded
   useEffect(() => {
@@ -252,20 +256,133 @@ export function Stage6GenerateVideo({
     }
   };
 
+  const loadRecipe = async () => {
+    try {
+      setIsLoadingRecipe(true);
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      // Fetch video generation recipe with cache-busting
+      const response = await fetch(`/api/recipes?stageType=stage_6_video&t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
+      const data = await response.json();
+
+      if (data.recipes && data.recipes.length > 0) {
+        console.log('Loaded recipe from database:', {
+          id: data.recipes[0].id,
+        });
+        setCurrentRecipe(data.recipes[0]);
+        setShowRecipeEditor(true);
+      } else {
+        alert('No video recipe found. Please seed recipes first.');
+      }
+    } catch (error) {
+      console.error('Error loading recipe:', error);
+      alert('Failed to load video recipe');
+    } finally {
+      setIsLoadingRecipe(false);
+    }
+  };
+
+  const handleSaveRecipe = async (recipe: any) => {
+    try {
+      const authToken = sessionStorage.getItem('authToken');
+      if (!authToken) throw new Error('Authentication token not found');
+
+      const response = await fetch(`/api/recipes/${recipe.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(recipe),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save recipe');
+      }
+
+      // Reload recipe from database to verify the changes were saved
+      const verifyResponse = await fetch(`/api/recipes?stageType=stage_6_video&t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
+      const verifyData = await verifyResponse.json();
+
+      if (verifyData.recipes && verifyData.recipes.length > 0) {
+        const savedRecipe = verifyData.recipes[0];
+        console.log('Verified recipe from database:', {
+          id: savedRecipe.id,
+        });
+        setCurrentRecipe(savedRecipe);
+      }
+
+      setShowRecipeEditor(false);
+      alert('Video recipe saved successfully!');
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      alert(`Failed to save recipe: ${error}`);
+    }
+  };
+
+  // Show recipe editor if requested
+  if (showRecipeEditor && currentRecipe) {
+    // Build previous stage output with scene and screenplay data
+    const previousStageOutput = {
+      sceneData: project?.aiGeneratedStoryboard?.scenes?.[0] || {},
+      screenplayEntry: project?.aiGeneratedScreenplay?.screenplay?.[0] || {},
+      sceneImage: project?.aiGeneratedStoryboard?.scenes?.[0]?.image?.url || '',
+      storyboardScenes: project?.aiGeneratedStoryboard?.scenes || [],
+      screenplay: project?.aiGeneratedScreenplay?.screenplay || [],
+      projectId: project?.id || '',
+      sceneIndex: 0,
+    };
+
+    return (
+      <RecipeEditorPage
+        onBack={() => setShowRecipeEditor(false)}
+        recipe={currentRecipe}
+        onSave={handleSaveRecipe}
+        previousStageOutput={previousStageOutput}
+      />
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-white">Generate Video</h2>
+              <p className="text-gray-400">
+                Initiate final video assembly and review the result
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-white">Generate Video</h2>
-            <p className="text-gray-400">
-              Initiate final video assembly and review the result
-            </p>
-          </div>
+          <Button
+            onClick={loadRecipe}
+            disabled={isLoadingRecipe}
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+          >
+            <SettingsIcon className="w-4 h-4 mr-2" />
+            {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+          </Button>
         </div>
       </div>
 
