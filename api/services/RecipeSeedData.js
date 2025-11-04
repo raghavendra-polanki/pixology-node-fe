@@ -640,9 +640,36 @@ export const SCREENPLAY_GENERATION_RECIPE = {
       order: 1,
 
       inputMapping: {
-        storyboardScenes: 'external_input.storyboardScenes',
-        videoDuration: 'external_input.videoDuration',
-        selectedPersonaName: 'external_input.selectedPersonaName',
+        storyboardScenes: {
+          source: 'external_input.storyboardScenes',
+          description: 'Array of storyboard scene objects with title, description, duration, visual elements',
+          required: true,
+          type: 'array',
+          sampleData: [
+            {
+              sceneNumber: 1,
+              title: 'Product Introduction',
+              description: 'Close-up of the product with character introducing it',
+              duration: '0:00-0:08',
+              visualElements: ['product', 'character', 'professional lighting'],
+              location: 'Modern office setting'
+            }
+          ]
+        },
+        videoDuration: {
+          source: 'external_input.videoDuration',
+          description: 'Total video duration in format like "30s" or "60s"',
+          required: true,
+          type: 'string',
+          sampleData: '30s'
+        },
+        selectedPersonaName: {
+          source: 'external_input.selectedPersonaName',
+          description: 'Name of the persona who will be featured in the video',
+          required: true,
+          type: 'string',
+          sampleData: 'Sarah Johnson'
+        },
       },
       outputKey: 'screenplayEntries',
 
@@ -758,10 +785,63 @@ export const VIDEO_GENERATION_RECIPE = {
       order: 1,
 
       inputMapping: {
-        sceneImage: 'external_input.sceneImage',
-        sceneData: 'external_input.sceneData',
-        screenplayEntry: 'external_input.screenplayEntry',
-        projectId: 'external_input.projectId',
+        sceneImage: {
+          source: 'external_input.sceneImage',
+          description: 'Base64 encoded storyboard image used as visual reference for Veo 3.1 video generation',
+          required: true,
+          type: 'string',
+          format: 'base64',
+          sampleData: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        },
+        sceneData: {
+          source: 'external_input.sceneData',
+          description: 'Scene data object containing title, description, duration, and visual elements from storyboard',
+          required: true,
+          type: 'object',
+          sampleData: {
+            sceneNumber: 1,
+            title: 'Product Introduction',
+            description: 'Close-up of the product with character introducing it',
+            duration: '0:00-0:08',
+            visualElements: ['product', 'character', 'professional lighting'],
+            location: 'Modern office setting'
+          }
+        },
+        screenplayEntry: {
+          source: 'external_input.screenplayEntry',
+          description: 'Screenplay entry containing timing, visual description, camera flow, script, and music directions',
+          required: true,
+          type: 'object',
+          sampleData: {
+            sceneNumber: 1,
+            timeStart: '0:00',
+            timeEnd: '0:08',
+            visual: 'Close-up of product at 0:00-0:02. Character picks up product at 0:02-0:05. Product in use at 0:05-0:08',
+            cameraFlow: 'Start with tight close-up on product. Pan up to reveal character face at 0:02. Slow zoom out at 0:05',
+            script: {
+              type: 'voiceover',
+              speaker: 'Narrator',
+              text: 'Introducing our amazing product that will change your life'
+            },
+            backgroundMusic: 'Upbeat, modern pop instrumental. Starts at 0:00, peaks at 0:04-0:06, fades at 0:07',
+            transition: 'Cut to next scene'
+          }
+        },
+        projectId: {
+          source: 'external_input.projectId',
+          description: 'Project ID for organizing and storing generated videos in GCS',
+          required: true,
+          type: 'string',
+          pattern: '^[a-zA-Z0-9_-]+$',
+          sampleData: 'project_12345'
+        },
+        sceneIndex: {
+          source: 'external_input.sceneIndex',
+          description: 'Index of the scene being generated (0-based numbering)',
+          required: false,
+          type: 'number',
+          sampleData: 0
+        }
       },
       outputKey: 'uploadedVideos',
 

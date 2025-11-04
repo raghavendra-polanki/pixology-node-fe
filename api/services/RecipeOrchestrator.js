@@ -248,33 +248,47 @@ export class RecipeOrchestrator {
       return resolved;
     }
 
-    Object.entries(inputMapping).forEach(([key, source]) => {
+    Object.entries(inputMapping).forEach(([key, inputDef]) => {
       try {
-        if (source.startsWith('external_input.')) {
+        let sourceString = '';
+
+        // Handle both old string format and new object format with metadata
+        if (typeof inputDef === 'string') {
+          // Old format: inputMapping: { field: 'external_input.fieldName' }
+          sourceString = inputDef;
+        } else if (typeof inputDef === 'object' && inputDef !== null && inputDef.source) {
+          // New format: inputMapping: { field: { source: 'external_input.fieldName', description: '...', ... } }
+          sourceString = inputDef.source;
+        }
+
+        if (sourceString.startsWith('external_input.')) {
           // Get from external input
-          const fieldPath = source.replace('external_input.', '');
+          const fieldPath = sourceString.replace('external_input.', '');
           resolved[key] = this.getNestedValue(externalInput, fieldPath);
-        } else if (source.includes('.output')) {
+        } else if (sourceString.includes('.output')) {
           // Get from previous action output (old pattern: 'nodeId.output')
-          const parts = source.split('.');
+          const parts = sourceString.split('.');
           const actionOutputKey = parts[0]; // e.g., 'generate_persona_details'
 
           // Try to find the output key in previousOutputs
-          const output = previousOutputs[actionOutputKey] || previousOutputs[source];
+          const output = previousOutputs[actionOutputKey] || previousOutputs[sourceString];
 
           if (output === undefined) {
             console.warn(
-              `Warning: Could not resolve input mapping "${key}" from "${source}". Output not found.`
+              `Warning: Could not resolve input mapping "${key}" from "${sourceString}". Output not found.`
             );
           } else {
             resolved[key] = output;
           }
-        } else if (previousOutputs.hasOwnProperty(source)) {
+        } else if (sourceString && previousOutputs.hasOwnProperty(sourceString)) {
           // Check if source is a direct outputKey reference (e.g., 'personaDetails')
-          resolved[key] = previousOutputs[source];
-        } else {
+          resolved[key] = previousOutputs[sourceString];
+        } else if (sourceString) {
           // Direct value (if not a reference to previousOutputs)
-          resolved[key] = source;
+          resolved[key] = sourceString;
+        } else {
+          // Fallback to the original inputDef if sourceString is empty
+          resolved[key] = inputDef;
         }
       } catch (error) {
         console.warn(`Error resolving input mapping for "${key}":`, error.message);

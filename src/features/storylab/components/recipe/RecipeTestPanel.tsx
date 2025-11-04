@@ -28,32 +28,55 @@ export function RecipeTestPanel({
   const externalInputFields = useMemo(() => {
     if (!recipe?.nodes || recipe.nodes.length === 0) return [];
 
-    const fields = new Set<string>();
+    const fieldsMap: any = {};
 
     // Scan ALL nodes to find external_input references
     recipe.nodes.forEach((node: any) => {
       if (node?.inputMapping) {
-        Object.values(node.inputMapping).forEach((source: any) => {
-          if (typeof source === 'string' && source.startsWith('external_input.')) {
-            const fieldName = source.replace('external_input.', '');
-            fields.add(fieldName);
+        Object.entries(node.inputMapping).forEach(([fieldKey, inputDef]: [string, any]) => {
+          let sourceString = '';
+          let metadata: any = { required: false, type: 'string', description: '', sampleData: null };
+
+          // Handle both old string format and new object format with metadata
+          if (typeof inputDef === 'string') {
+            // Old format: inputMapping: { field: 'external_input.fieldName' }
+            sourceString = inputDef;
+          } else if (typeof inputDef === 'object' && inputDef !== null && inputDef.source) {
+            // New format: inputMapping: { field: { source: 'external_input.fieldName', description: '...', ... } }
+            sourceString = inputDef.source;
+            // Extract metadata from the object
+            metadata = {
+              required: inputDef.required ?? false,
+              type: inputDef.type ?? 'string',
+              description: inputDef.description ?? '',
+              sampleData: inputDef.sampleData ?? null,
+              format: inputDef.format ?? undefined,
+              pattern: inputDef.pattern ?? undefined,
+            };
+          }
+
+          if (sourceString.startsWith('external_input.')) {
+            const fieldName = sourceString.replace('external_input.', '');
+            // Store metadata keyed by fieldName
+            fieldsMap[fieldName] = metadata;
           }
         });
       }
     });
 
-    const sortedFields = Array.from(fields).sort();
+    const sortedFields = Object.keys(fieldsMap).sort();
     console.log('RecipeTestPanel - Extracted external input fields:', sortedFields);
+    console.log('RecipeTestPanel - Fields metadata:', fieldsMap);
     console.log('RecipeTestPanel - Recipe nodes:', recipe?.nodes?.map((n: any) => ({ id: n.id, inputMapping: n.inputMapping })));
 
-    return sortedFields;
+    return { fieldNames: sortedFields, fieldsMetadata: fieldsMap };
   }, [recipe?.nodes]);
 
   // Auto-populate from previous stage output
   useEffect(() => {
     if (previousStageOutput) {
       const newTestData: any = {};
-      externalInputFields.forEach((field) => {
+      externalInputFields.fieldNames?.forEach((field) => {
         if (previousStageOutput.hasOwnProperty(field)) {
           newTestData[field] = previousStageOutput[field];
         }
@@ -73,7 +96,7 @@ export function RecipeTestPanel({
     setTestData({});
     if (previousStageOutput) {
       const newTestData: any = {};
-      externalInputFields.forEach((field) => {
+      externalInputFields.fieldNames?.forEach((field) => {
         if (previousStageOutput.hasOwnProperty(field)) {
           newTestData[field] = previousStageOutput[field];
         }
@@ -99,7 +122,7 @@ export function RecipeTestPanel({
           </div>
           <h3 className="font-semibold text-white">Test Recipe</h3>
           <span className="text-xs text-gray-500">
-            {externalInputFields.length} input variable{externalInputFields.length !== 1 ? 's' : ''}
+            {externalInputFields.fieldNames?.length ?? 0} input variable{(externalInputFields.fieldNames?.length ?? 0) !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="text-gray-400">
@@ -118,18 +141,32 @@ export function RecipeTestPanel({
           )}
 
           {/* Input Fields */}
-          {externalInputFields.length > 0 ? (
-            <div className="space-y-3">
-              {externalInputFields.map((field) => {
+          {(externalInputFields.fieldNames?.length ?? 0) > 0 ? (
+            <div className="space-y-4">
+              {externalInputFields.fieldNames?.map((field) => {
                 const value = testData[field];
+                const metadata = externalInputFields.fieldsMetadata?.[field] || {};
                 const isJsonLike =
                   typeof value === 'object' && value !== null && Object.keys(value).length > 0;
 
                 return (
-                  <div key={field} className="space-y-1">
-                    <Label className="text-xs font-medium text-gray-300 capitalize">
-                      {field.replace(/([A-Z])/g, ' $1').trim()}
-                    </Label>
+                  <div key={field} className="space-y-2 p-3 bg-gray-900/30 rounded border border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-gray-300 capitalize">
+                        {field.replace(/([A-Z])/g, ' $1').trim()}
+                        {metadata.required && <span className="text-red-400 ml-1">*</span>}
+                      </Label>
+                      {metadata.type && (
+                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
+                          {metadata.type}
+                        </span>
+                      )}
+                    </div>
+
+                    {metadata.description && (
+                      <p className="text-xs text-gray-400">{metadata.description}</p>
+                    )}
+
                     {isJsonLike ? (
                       <Textarea
                         value={JSON.stringify(value, null, 2)}
@@ -143,14 +180,14 @@ export function RecipeTestPanel({
                           }
                         }}
                         className="bg-[#1a1a1a] border-gray-700 text-white text-xs min-h-20 font-mono resize-none"
-                        placeholder={`Enter ${field}...`}
+                        placeholder={metadata.sampleData ? JSON.stringify(metadata.sampleData, null, 2) : `Enter ${field}...`}
                       />
                     ) : (
                       <Input
                         value={value || ''}
                         onChange={(e) => handleTestDataChange(field, e.target.value)}
                         className="bg-[#1a1a1a] border-gray-700 text-white text-sm"
-                        placeholder={`Enter ${field}...`}
+                        placeholder={metadata.sampleData ? String(metadata.sampleData) : `Enter ${field}...`}
                       />
                     )}
                   </div>
@@ -167,7 +204,7 @@ export function RecipeTestPanel({
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleRunFullRecipe}
-              disabled={isLoading || externalInputFields.length === 0}
+              disabled={isLoading || (externalInputFields.fieldNames?.length ?? 0) === 0}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
               size="sm"
             >

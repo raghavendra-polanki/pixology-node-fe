@@ -31,7 +31,7 @@ export async function generateVideoWithVeo(imageBase64, sceneData, sceneIndex = 
     console.log(`Scene ${sceneIndex + 1} Video Prompt:`, prompt.substring(0, 200) + '...');
 
     // Use Gemini to enhance video description
-    const enhancedDescription = await enhanceVideoDescriptionWithGemini(prompt);
+    const enhancedDescription = prompt;//await enhanceVideoDescriptionWithGemini(prompt);
 
     console.log(`Enhanced video description for scene ${sceneIndex + 1}`);
 
@@ -199,17 +199,19 @@ async function callVeoAPIRealImplementation(imageBase64, description) {
     } else {
       promptString = String(description);
     }
-
     // Step 1: Prepare storyboard image for Veo 3.1
     // The API expects imageBytes as base64 string
     console.log('Preparing storyboard image for Veo 3.1...');
 
-    const imageBase64String = typeof imageBase64 === 'string'
+    let imageBase64String = typeof imageBase64 === 'string'
       ? imageBase64
       : imageBase64.toString('base64');
 
+    // **FIX:** The API requires raw base64 data. We must remove the data URI prefix if it exists.
+    imageBase64String = imageBase64String.replace(/^data:image\/\w+;base64,/, '');
+
     const imageForVeo = {
-      imageBytes: imageBase64String,
+      imageBytes: imageBase64String, // Now guaranteed to be raw base64
       mimeType: 'image/png',
     };
     console.log('Storyboard image prepared for Veo 3.1 API');

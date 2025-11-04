@@ -419,18 +419,28 @@ export function RecipeEditor({ recipe, previousStageOutput, onSave, onClose }: R
 
   const resolveInputs = (inputMapping: any, nodeOutputs: any, externalInput: any) => {
     const resolved: any = {};
-    Object.entries(inputMapping || {}).forEach(([key, source]: [string, any]) => {
-      if (typeof source === 'string') {
-        if (source.startsWith('external_input.')) {
-          const fieldName = source.replace('external_input.', '');
-          resolved[key] = externalInput[fieldName];
-        } else if (source.startsWith('node_')) {
-          resolved[key] = nodeOutputs[source];
-        } else {
-          resolved[key] = source;
-        }
+    Object.entries(inputMapping || {}).forEach(([key, inputDef]: [string, any]) => {
+      let sourceString = '';
+
+      // Handle both old string format and new object format with metadata
+      if (typeof inputDef === 'string') {
+        // Old format: inputMapping: { field: 'external_input.fieldName' }
+        sourceString = inputDef;
+      } else if (typeof inputDef === 'object' && inputDef !== null && inputDef.source) {
+        // New format: inputMapping: { field: { source: 'external_input.fieldName', description: '...', ... } }
+        sourceString = inputDef.source;
+      }
+
+      if (sourceString.startsWith('external_input.')) {
+        const fieldName = sourceString.replace('external_input.', '');
+        resolved[key] = externalInput[fieldName];
+      } else if (sourceString.startsWith('node_')) {
+        resolved[key] = nodeOutputs[sourceString];
+      } else if (sourceString) {
+        resolved[key] = sourceString;
       } else {
-        resolved[key] = source;
+        // Fallback for undefined sourceString
+        resolved[key] = inputDef;
       }
     });
     return resolved;
