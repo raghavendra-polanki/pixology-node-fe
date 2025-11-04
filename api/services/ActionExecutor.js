@@ -303,7 +303,10 @@ export class ActionExecutor {
       const { sceneImage, sceneData, screenplayEntry, projectId, sceneIndex = 0 } = input;
 
       // Validate required inputs
-      // Note: sceneImage is optional - Gemini 2.5 Flash will generate images for Veo 3.1
+      if (!sceneImage) {
+        throw new Error('Missing required input: sceneImage (base64 encoded image from storyboard)');
+      }
+
       if (!sceneData) {
         throw new Error('Missing required input: sceneData (scene information from storyboard)');
       }
@@ -329,9 +332,8 @@ export class ActionExecutor {
         timeEnd: screenplayEntry.duration || sceneData.duration || '8s',
       };
 
-      // Generate video using Veo 3.1 via Gemini API
-      // Note: Images will be generated with Gemini 2.5 Flash, not using storyboard images
-      const videoData = await generateVideoWithVeo(combinedSceneData, sceneIndex);
+      // Generate video using Veo 3.1 with storyboard image
+      const videoData = await generateVideoWithVeo(sceneImage, combinedSceneData, sceneIndex);
 
       console.log(`Video generated for scene ${sceneIndex + 1}`);
 
