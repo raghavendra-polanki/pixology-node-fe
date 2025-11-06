@@ -540,10 +540,25 @@ export async function generateVideoWithVeo3DirectAPI({
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `Veo 3 API error: ${response.status} - ${errorData?.error?.message || JSON.stringify(errorData)}`
-      );
+      const contentType = response.headers.get('content-type');
+      let errorMessage = `HTTP ${response.status}`;
+
+      try {
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+        } else if (contentType && contentType.includes('text/html')) {
+          const htmlText = await response.text();
+          errorMessage = `Received HTML response (possible auth error). First 200 chars: ${htmlText.substring(0, 200)}`;
+        } else {
+          const text = await response.text();
+          errorMessage = text.substring(0, 500);
+        }
+      } catch (parseError) {
+        errorMessage = `Could not parse error response. Status: ${response.status}`;
+      }
+
+      throw new Error(`Veo 3 API error: ${errorMessage}`);
     }
 
     const operationData = await response.json();
@@ -608,13 +623,40 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP ${response.status}`;
+
+        // Try to parse error response
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+          } else if (contentType && contentType.includes('text/html')) {
+            // HTML error response (401, 403, 500, etc.)
+            const htmlText = await response.text();
+            errorMessage = `HTTP ${response.status}: Received HTML response. Possible auth or server error. First 200 chars: ${htmlText.substring(0, 200)}`;
+          } else {
+            const text = await response.text();
+            errorMessage = `HTTP ${response.status}: ${text.substring(0, 200)}`;
+          }
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: Could not parse error response`;
+        }
+
+        throw new Error(`Poll error: ${errorMessage}`);
+      }
+
+      // Parse JSON response
+      let operation;
+      try {
+        operation = await response.json();
+      } catch (jsonError) {
+        const contentType = response.headers.get('content-type');
         throw new Error(
-          `Poll error: ${response.status} - ${errorData?.error?.message || 'Unknown error'}`
+          `Failed to parse operation response as JSON. Content-Type: ${contentType}. Error: ${jsonError.message}`
         );
       }
 
-      const operation = await response.json();
       pollCount++;
 
       // Log progress

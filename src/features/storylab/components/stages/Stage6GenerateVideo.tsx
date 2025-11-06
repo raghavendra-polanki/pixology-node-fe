@@ -162,6 +162,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
 
   const handleGenerate = async (sceneNumber: number) => {
     try {
+      // Reset error state before generation
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], status: 'generating', progress: 0, error: undefined }
@@ -236,11 +237,28 @@ Generate a high-quality, professional marketing video that brings this scene to 
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `API error: ${response.status}`);
+        let errorMessage = `API error: ${response.status}`;
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType?.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            const text = await response.text();
+            errorMessage = text || errorMessage;
+          }
+        } catch (e) {
+          // Fallback to status code if parsing fails
+        }
+        throw new Error(errorMessage);
       }
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error(`Failed to parse video generation response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
       console.log(`✅ Video generation response received for Scene ${sceneNumber}`);
 
       setSceneVideos(prev => ({
