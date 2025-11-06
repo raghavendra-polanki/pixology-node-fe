@@ -420,191 +420,210 @@ export function Stage6GenerateVideo({
         </div>
       </div>
 
-      {/* Scene Selection Grid */}
-      <div className="mb-8">
-        <h3 className="text-white mb-4">Select Scenes to Generate Videos</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
-            const sceneStatus = sceneVideos[scene.sceneNumber];
-            const isSelected = selectedScene === scene.sceneNumber;
-            const getImageUrl = (image: any): string | null => {
-              if (!image) return null;
-              if (typeof image === 'string') return image;
-              if (image.url) return image.url;
-              return null;
-            };
-            const imageUrl = getImageUrl(scene?.image);
-
-            return (
-              <div
-                key={scene.sceneNumber}
-                onClick={() => setSelectedScene(scene.sceneNumber)}
-                className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
-                  isSelected
-                    ? 'border-blue-500 ring-2 ring-blue-500/50'
-                    : 'border-gray-700 hover:border-gray-600'
-                }`}
-              >
-                {/* Scene Thumbnail */}
-                <div className="relative aspect-video bg-black">
-                  {imageUrl ? (
-                    <img src={imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                      <span className="text-gray-500">No image</span>
-                    </div>
-                  )}
-
-                  {/* Status Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-between p-3">
-                    <div className="flex justify-between items-start">
-                      <span className="text-white font-semibold text-sm">Scene {scene.sceneNumber}</span>
-                      {sceneStatus?.status === 'complete' && (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      )}
-                    </div>
-
-                    {/* Bottom Status */}
-                    <div>
-                      {sceneStatus?.status === 'idle' && (
-                        <p className="text-gray-300 text-xs">Not generated</p>
-                      )}
-                      {sceneStatus?.status === 'generating' && (
-                        <div className="space-y-1">
-                          <Progress value={sceneStatus.progress} className="h-1 bg-gray-700 [&>div]:bg-blue-500" />
-                          <p className="text-blue-400 text-xs">{sceneStatus.progress}%</p>
-                        </div>
-                      )}
-                      {sceneStatus?.status === 'complete' && (
-                        <p className="text-green-400 text-xs">Generated</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scene Info */}
-                <div className="bg-[#151515] p-3 border-t border-gray-800">
-                  {scene.title && <p className="text-white text-xs font-medium line-clamp-1">{scene.title}</p>}
-                  <p className="text-gray-400 text-xs mt-1">{scene.duration || '5s'}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Video Player and Controls */}
-      {selectedScene ? (
-        <div className="space-y-6">
-          {sceneVideos[selectedScene]?.status === 'generating' ? (
-            // Generating State
-            <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
-              <div className="text-center space-y-6">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-10 h-10 text-white animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-white mb-2">Generating Video for Scene {selectedScene}</h3>
-                  <p className="text-gray-400">
-                    AI is generating your scene video. This may take a few minutes...
-                  </p>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="max-w-md mx-auto space-y-3">
-                  <Progress
-                    value={sceneVideos[selectedScene]?.progress || 0}
-                    className="h-3 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-500"
-                  />
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span>Progress</span>
-                    <span>{sceneVideos[selectedScene]?.progress || 0}%</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ) : sceneVideos[selectedScene]?.status === 'complete' ? (
-            // Complete State
+      {/* Main Layout: Video Player + Scene Navigation */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        {/* Video Player - Takes 3 columns */}
+        <div className="lg:col-span-3 space-y-6">
+          {selectedScene ? (
             <>
-              {/* Video Player */}
-              <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
-                {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
-                  <div className="bg-[#0a0a0a] aspect-video relative group">
-                    <video
-                      controls
-                      className="w-full h-full bg-black"
-                      controlsList="nodownload"
-                    >
-                      <source src={sceneVideos[selectedScene]?.videoData?.videoUrl} type="video/mp4" />
-                      Your browser does not support the video tag.
-                    </video>
-
-                    {/* StoryLab Watermark */}
-                    <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                      <p className="text-white text-xs">
-                        Story<span className="text-blue-500">Lab</span>
+              {sceneVideos[selectedScene]?.status === 'generating' ? (
+                // Generating State
+                <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
+                  <div className="text-center space-y-6">
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
+                      <Sparkles className="w-10 h-10 text-white animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-white mb-2">Generating Video for Scene {selectedScene}</h3>
+                      <p className="text-gray-400">
+                        AI is generating your scene video. This may take a few minutes...
                       </p>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
-                    <p className="text-gray-400">No video data</p>
-                  </div>
-                )}
 
-                {/* Video Info */}
-                <div className="p-6 border-t border-gray-800">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-white mb-1">Scene {selectedScene}</h3>
-                      <p className="text-gray-400">Duration: {sceneVideos[selectedScene]?.videoData?.duration || '8s'}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleGenerate(selectedScene)}
-                        variant="outline"
-                        className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Regenerate
-                      </Button>
-                      <Button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
+                    {/* Progress Bar */}
+                    <div className="max-w-md mx-auto space-y-3">
+                      <Progress
+                        value={sceneVideos[selectedScene]?.progress || 0}
+                        className="h-3 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-500"
+                      />
+                      <div className="flex items-center justify-between text-gray-400">
+                        <span>Progress</span>
+                        <span>{sceneVideos[selectedScene]?.progress || 0}%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              ) : sceneVideos[selectedScene]?.status === 'complete' ? (
+                // Complete State
+                <>
+                  {/* Video Player */}
+                  <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                    {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
+                      <div className="bg-[#0a0a0a] aspect-video relative group">
+                        <video
+                          controls
+                          className="w-full h-full bg-black"
+                          controlsList="nodownload"
+                        >
+                          <source src={sceneVideos[selectedScene]?.videoData?.videoUrl} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
+
+                        {/* StoryLab Watermark */}
+                        <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                          <p className="text-white text-xs">
+                            Story<span className="text-blue-500">Lab</span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
+                        <p className="text-gray-400">No video data</p>
+                      </div>
+                    )}
+
+                    {/* Video Info */}
+                    <div className="p-6 border-t border-gray-800">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white mb-1">Scene {selectedScene}</h3>
+                          <p className="text-gray-400">Duration: {sceneVideos[selectedScene]?.videoData?.duration || '8s'}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleGenerate(selectedScene)}
+                            variant="outline"
+                            className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Regenerate
+                          </Button>
+                          <Button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </>
+              ) : (
+                // Idle State - Show placeholder
+                <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                  <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="w-20 h-20 rounded-full bg-blue-600/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
+                        <Play className="w-10 h-10 text-blue-500" />
+                      </div>
+                      <p className="text-gray-400 mb-1">Scene {selectedScene} - Not Generated Yet</p>
+                      <p className="text-gray-500 text-sm">Click "Generate Video" button below to create video for this scene</p>
+                    </div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="p-6 border-t border-gray-800 flex justify-center">
+                    <Button
+                      onClick={() => handleGenerate(selectedScene)}
+                      className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
+                      size="lg"
+                    >
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Generate Video
+                    </Button>
+                  </div>
+                </Card>
+              )}
             </>
           ) : (
-            // Idle State - Show placeholder
             <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
               <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
                 <div className="text-center">
-                  <div className="w-20 h-20 rounded-full bg-blue-600/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
-                    <Play className="w-10 h-10 text-blue-500" />
+                  <div className="w-20 h-20 rounded-full bg-gray-700/30 backdrop-blur flex items-center justify-center mx-auto mb-4">
+                    <Play className="w-10 h-10 text-gray-500" />
                   </div>
-                  <p className="text-gray-400 mb-1">Scene {selectedScene} - Not Generated Yet</p>
-                  <p className="text-gray-500 text-sm">Click "Generate Video" button below to create video for this scene</p>
+                  <p className="text-gray-400">Select a scene to start</p>
                 </div>
-              </div>
-
-              {/* Controls */}
-              <div className="p-6 border-t border-gray-800 flex justify-center">
-                <Button
-                  onClick={() => handleGenerate(selectedScene)}
-                  className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
-                  size="lg"
-                >
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Generate Video
-                </Button>
               </div>
             </Card>
           )}
         </div>
-      ) : null}
+
+        {/* Scene Navigation Sidebar - Takes 1 column */}
+        <div className="lg:col-span-1">
+          <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden h-fit max-h-[600px] flex flex-col">
+            <div className="p-4 border-b border-gray-800">
+              <h3 className="text-white font-semibold text-sm">Scenes</h3>
+              <p className="text-gray-400 text-xs mt-1">{Object.values(sceneVideos).filter(s => s.status === 'complete').length}/{project?.aiGeneratedStoryboard?.scenes?.length || 0} Generated</p>
+            </div>
+
+            {/* Scrollable Scene List */}
+            <div className="overflow-y-auto flex-1">
+              <div className="space-y-2 p-3">
+                {project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
+                  const sceneStatus = sceneVideos[scene.sceneNumber];
+                  const isSelected = selectedScene === scene.sceneNumber;
+                  const getImageUrl = (image: any): string | null => {
+                    if (!image) return null;
+                    if (typeof image === 'string') return image;
+                    if (image.url) return image.url;
+                    return null;
+                  };
+                  const imageUrl = getImageUrl(scene?.image);
+
+                  return (
+                    <div
+                      key={scene.sceneNumber}
+                      onClick={() => setSelectedScene(scene.sceneNumber)}
+                      className={`cursor-pointer rounded-lg overflow-hidden border transition-all ${
+                        isSelected
+                          ? 'border-blue-500 ring-2 ring-blue-500/50'
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      {/* Thumbnail */}
+                      <div className="relative aspect-video bg-black">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                            <span className="text-gray-600 text-xs">No image</span>
+                          </div>
+                        )}
+
+                        {/* Status Indicator */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
+                          <div className="flex items-center gap-1">
+                            {sceneStatus?.status === 'complete' && (
+                              <>
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <span className="text-green-400 text-xs font-medium">Done</span>
+                              </>
+                            )}
+                            {sceneStatus?.status === 'idle' && (
+                              <span className="text-gray-300 text-xs">Idle</span>
+                            )}
+                            {sceneStatus?.status === 'generating' && (
+                              <span className="text-blue-400 text-xs animate-pulse">Generating...</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Scene Number */}
+                      <div className="bg-[#0a0a0a] p-2 border-t border-gray-800">
+                        <p className="text-white text-xs font-medium">Scene {scene.sceneNumber}</p>
+                        {scene.title && (
+                          <p className="text-gray-400 text-xs line-clamp-1">{scene.title}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
 
       {/* Complete Project Button */}
       {allScenesGenerated && (
