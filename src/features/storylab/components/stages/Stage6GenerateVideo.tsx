@@ -75,18 +75,71 @@ export function Stage6GenerateVideo({
     }
   }, [project?.aiGeneratedStoryboard?.scenes]);
 
+  // Helper: Build video prompt from screenplay data
+  const buildVideoPrompt = (sceneData: any, screenplayEntry: any): string => {
+    const {
+      title = `Scene ${sceneData.sceneNumber}`,
+      description = 'Professional video scene',
+    } = sceneData;
+
+    const {
+      visual = 'Professional video content',
+      cameraFlow = 'Smooth camera movement',
+      script = 'Scene dialogue or narration',
+      backgroundMusic = 'Background music',
+    } = screenplayEntry;
+
+    return `Create a professional marketing video for this scene:
+
+**Scene Title:** ${title}
+**Scene Number:** ${sceneData.sceneNumber}
+
+**Visual Description:**
+${visual}
+
+**Camera Direction:**
+${cameraFlow}
+
+**Script/Dialogue/Narration:**
+${script}
+
+**Background Audio/Music:**
+${backgroundMusic}
+
+**Overall Scene Description:**
+${description}
+
+**Requirements:**
+- Professional cinematography quality
+- Natural, relatable UGC-style video
+- Smooth camera movements as specified
+- Authentic lighting and atmosphere
+- Include the script/dialogue delivery
+- Background music should enhance the scene
+- Duration: ${screenplayEntry.timeEnd || '5s'}
+- High quality 1280x720 resolution
+- 24 fps
+
+Generate a high-quality, professional marketing video that brings this scene to life.`;
+  };
+
+  // Helper: Extract GCS URI from storyboard image
+  const getSceneImageGcsUri = (sceneData: any): string | null => {
+    const image = sceneData?.image;
+    if (!image) return null;
+    // If it's already a GCS URI string
+    if (typeof image === 'string' && image.startsWith('gs://')) return image;
+    // If it's an object with url property
+    if (typeof image === 'object' && image.url && image.url.startsWith('gs://')) return image.url;
+    return null;
+  };
+
   const handleGenerate = async (sceneNumber: number) => {
     try {
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], status: 'generating', progress: 0, error: undefined }
       }));
-
-      // Get authentication token
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
 
       // Validate required project data
       if (!project?.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
@@ -100,7 +153,6 @@ export function Stage6GenerateVideo({
       // Find the scene and screenplay entry by sceneNumber
       const sceneData = project.aiGeneratedStoryboard.scenes.find((s: any) => s.sceneNumber === sceneNumber);
       const screenplayEntry = project.aiGeneratedScreenplay.screenplay.find((s: any) => s.sceneNumber === sceneNumber);
-      const sceneImage = sceneData?.image?.url || null;
 
       if (!sceneData) {
         throw new Error(`No scene data found for Scene ${sceneNumber}`);
@@ -110,127 +162,66 @@ export function Stage6GenerateVideo({
         throw new Error(`No screenplay entry found for Scene ${sceneNumber}`);
       }
 
-      if (!sceneImage) {
-        throw new Error(`No image available for Scene ${sceneNumber}. Please generate storyboard images first.`);
+      // Get GCS URI for storyboard image
+      const sceneImageGcsUri = getSceneImageGcsUri(sceneData);
+      if (!sceneImageGcsUri) {
+        throw new Error(`No GCS image URI available for Scene ${sceneNumber}. Make sure storyboard images are properly uploaded to GCS.`);
       }
 
-      console.log(`Starting video generation for Scene ${sceneNumber}...`);
+      console.log(`🎬 Starting video generation for Scene ${sceneNumber}...`);
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], progress: 10 }
       }));
 
-      // Step 1: Fetch the recipe
-      const recipeResponse = await fetch('/api/recipes?stageType=stage_6_video');
-      const recipeData = await recipeResponse.json();
+      // Build prompt from screenplay data
+      const prompt = buildVideoPrompt(sceneData, screenplayEntry);
+      console.log(`📝 Prompt generated for Scene ${sceneNumber}`);
 
-      if (!recipeData.recipes || recipeData.recipes.length === 0) {
-        throw new Error('No recipe found for video generation. Please seed recipes first.');
-      }
-
-      const recipe = recipeData.recipes[0];
-      const recipeId = recipe.id;
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], progress: 20 }
       }));
 
-      // Prepare execution input
-      const executionInput = {
-        sceneImage,
-        sceneData,
-        screenplayEntry,
-        projectId: project?.id,
-        sceneIndex: sceneNumber - 1,
-      };
-
-      // Step 2: Execute the video generation recipe
-      const executeResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+      // Call Veo3 Direct API via backend
+      const response = await fetch('/api/videos/generate-veo3', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          input: executionInput,
+          sceneImageGcsUri: sceneImageGcsUri,
+          prompt: prompt,
+          sceneData: sceneData,
+          screenplayEntry: screenplayEntry,
+          durationSeconds: 5,
+          aspectRatio: '16:9',
+          resolution: '1280x720',
           projectId: project?.id,
-          stageId: 'stage_6',
-          sceneNumber,
+          sceneNumber: sceneNumber,
         }),
       });
 
-      if (!executeResponse.ok) {
-        const errorData = await executeResponse.json();
-        throw new Error(errorData.error || 'Failed to execute recipe');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.status}`);
       }
 
-      const executionData = await executeResponse.json();
-      const executionId = executionData.executionId;
+      const result = await response.json();
+      console.log(`✅ Video generation response received for Scene ${sceneNumber}`);
 
-      console.log(`Video generation started for Scene ${sceneNumber}, execution ID:`, executionId);
       setSceneVideos(prev => ({
         ...prev,
-        [sceneNumber]: { ...prev[sceneNumber], progress: 30 }
+        [sceneNumber]: { ...prev[sceneNumber], progress: 90 }
       }));
 
-      // Step 3: Poll for execution results
-      let execution: any = null;
-      let attempts = 0;
-      const maxAttempts = 120; // 10 minutes with 5-second polling
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
-
-        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
-        execution = await statusResponse.json();
-
-        if (execution.execution?.status === 'completed') {
-          break;
-        }
-
-        if (execution.execution?.status === 'failed') {
-          throw new Error(`Recipe execution failed: ${execution.execution?.executionContext?.error}`);
-        }
-
-        // Update progress based on attempts (30% -> 90%)
-        const newProgress = Math.min(30 + (attempts * 0.5), 90);
-        setSceneVideos(prev => ({
-          ...prev,
-          [sceneNumber]: { ...prev[sceneNumber], progress: newProgress }
-        }));
-        attempts++;
-      }
-
-      if (!execution || execution.execution?.status !== 'completed') {
-        throw new Error('Recipe execution timed out after 10 minutes');
-      }
-
-      console.log(`Video generation completed for Scene ${sceneNumber}`);
-      setSceneVideos(prev => ({
-        ...prev,
-        [sceneNumber]: { ...prev[sceneNumber], progress: 95 }
-      }));
-
-      // Step 4: Extract video data from result
-      const uploadedVideos = execution.execution?.result?.uploadedVideos || [];
-
-      if (uploadedVideos.length === 0) {
-        throw new Error('No video data in result. Uploaded videos array is empty.');
-      }
-
-      const generatedVideo = uploadedVideos[0];
-
-      if (!generatedVideo) {
-        throw new Error('Generated video object is undefined. uploadedVideos structure may be incorrect.');
-      }
-
-      // Step 5: Update video state for this scene
+      // Extract video data from result
       const videoData: VideoData = {
-        sceneNumber: generatedVideo.sceneNumber || sceneNumber,
-        sceneTitle: generatedVideo.sceneTitle || `Scene ${sceneNumber}`,
-        videoUrl: generatedVideo.videoUrl || '',
-        videoFormat: generatedVideo.videoFormat || 'mp4',
-        duration: generatedVideo.duration || '8s',
+        sceneNumber: result.sceneNumber || sceneNumber,
+        sceneTitle: result.sceneTitle || `Scene ${sceneNumber}`,
+        videoUrl: result.videoUrl || '',
+        videoFormat: result.videoFormat || 'mp4',
+        duration: result.duration || '5s',
         generatedAt: new Date().toISOString(),
       };
 
@@ -243,22 +234,22 @@ export function Stage6GenerateVideo({
         }
       }));
 
-      // Step 6: Save to project
+      // Save to project
       await updateVideoProduction(
         {
-          videoUrl: generatedVideo.videoUrl,
+          videoUrl: result.videoUrl,
           status: 'complete',
-          title: generatedVideo.sceneTitle || `Scene ${sceneNumber}`,
-          videoData: generatedVideo,
+          title: result.sceneTitle || `Scene ${sceneNumber}`,
+          videoData: result,
           sceneNumber,
         },
         project?.id || projectId || ''
       );
 
-      console.log(`Video saved successfully for Scene ${sceneNumber}`);
+      console.log(`✅ Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`Error generating video for Scene ${sceneNumber}:`, err);
+      console.error(`❌ Error generating video for Scene ${sceneNumber}:`, err);
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], status: 'idle', progress: 0, error: errorMsg }
