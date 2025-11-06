@@ -56,6 +56,7 @@ export function Stage6GenerateVideo({
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Initialize scene video statuses when project loads
   useEffect(() => {
@@ -360,15 +361,39 @@ Generate a high-quality, professional marketing video that brings this scene to 
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const selectedSceneVideo = selectedScene ? sceneVideos[selectedScene]?.videoData : null;
     if (selectedSceneVideo?.videoUrl) {
-      const link = document.createElement('a');
-      link.href = selectedSceneVideo.videoUrl;
-      link.download = `scene-${selectedScene}-video.mp4`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      setIsDownloading(true);
+      try {
+        // Fetch the video file from GCS
+        const response = await fetch(selectedSceneVideo.videoUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to download video: ${response.statusText}`);
+        }
+
+        // Convert to blob
+        const blob = await response.blob();
+
+        // Create a local object URL
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `scene-${selectedScene}-video.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Clean up the object URL
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error('Download failed:', error);
+        alert(`Failed to download video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setIsDownloading(false);
+      }
     }
   };
 
@@ -591,9 +616,22 @@ Generate a high-quality, professional marketing video that brings this scene to 
                             <RefreshCw className="w-4 h-4 mr-2" />
                             Regenerate
                           </Button>
-                          <Button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                            <Download className="w-4 h-4 mr-2" />
-                            Download
+                          <Button
+                            onClick={handleDownload}
+                            disabled={isDownloading}
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isDownloading ? (
+                              <>
+                                <div className="animate-spin mr-2">⏳</div>
+                                Downloading...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>
