@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { OperationsClient } from '@google-cloud/aiplatform/build/src/v1';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -268,6 +269,14 @@ async function getAccessToken(serviceAccountType = 'default') {
     if (!token || typeof token !== 'string') {
       console.error('Unexpected response format from getAccessToken:', response);
       throw new Error(`Invalid access token format received: ${JSON.stringify(response).substring(0, 100)}`);
+    }
+
+    // Log service account info for debugging
+    try {
+      const projectId = auth.projectId;
+      console.log(`   ℹ️  Service account project: ${projectId}`);
+    } catch (e) {
+      // Silently ignore if we can't get project ID
     }
 
     return token;
@@ -579,8 +588,8 @@ export async function generateVideoWithVeo3DirectAPI({
     console.log(`   ✓ Initial API call succeeded - operation created`);
     console.log(`   Polling for completion...`);
 
-    // Poll for operation completion
-    const result = await pollVeo3Operation(operationName, accessToken, gcpLocation);
+    // Poll for operation completion using Vertex AI SDK
+    const result = await pollVeo3Operation(operationName, null, gcpLocation);
 
     // Extract video URL from result
     const videoUrl = extractVideoUrl(result);
@@ -614,7 +623,8 @@ export async function generateVideoWithVeo3DirectAPI({
 }
 
 /**
- * Poll Veo 3 long-running operation until completion
+ * Poll Veo 3 long-running operation until completion using Vertex AI SDK
+ * This uses the same approach as the Python implementation
  * @private
  */
 async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWaitMs = 3600000) {
@@ -622,90 +632,85 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
   const pollIntervalMs = 15000; // Poll every 15 seconds
   let pollCount = 0;
 
-  // Use the full operation name for polling
-  // Veo3 API returns: projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{operationId}
-  // Polling endpoint expects the full path: /v1/{name}
-  const pollingPath = operationName;
-  console.log(`   📡 Polling URL: https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`);
+  console.log(`   📡 Using Vertex AI SDK to poll operation: ${operationName}`);
+
+  // Initialize OperationsClient with the service account credentials
+  const keyFilePath = process.env.VEO3_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+  let operationsClient;
+  try {
+    operationsClient = new OperationsClient({
+      apiEndpoint: `${gcpLocation}-aiplatform.googleapis.com`,
+      keyFilename: keyFilePath,
+    });
+  } catch (error) {
+    console.error(`   ❌ Failed to initialize OperationsClient:`, error.message);
+    throw new Error(`Failed to initialize Vertex AI OperationsClient: ${error.message}`);
+  }
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`;
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+      // Use SDK method to get operation status
+      const [operation] = await operationsClient.getOperation({
+        name: operationName,
       });
-
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        let errorMessage = `HTTP ${response.status}`;
-
-        // Try to parse error response
-        try {
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData?.error?.message || JSON.stringify(errorData);
-          } else if (contentType && contentType.includes('text/html')) {
-            // HTML error response (401, 403, 500, etc.)
-            const htmlText = await response.text();
-            errorMessage = `HTTP ${response.status}: Received HTML response. Possible auth or server error. First 200 chars: ${htmlText.substring(0, 200)}`;
-          } else {
-            const text = await response.text();
-            errorMessage = `HTTP ${response.status}: ${text.substring(0, 200)}`;
-          }
-        } catch (parseError) {
-          errorMessage = `HTTP ${response.status}: Could not parse error response`;
-        }
-
-        console.error(`   ❌ Polling failed at URL: ${url}`);
-
-        // Provide specific guidance for 404 errors
-        if (response.status === 404) {
-          console.error(`   💡 HTTP 404 during polling typically means:`);
-          console.error(`      - Service account lacks 'aiplatform.operations.get' permission`);
-          console.error(`      - Service account needs 'Vertex AI User' role or equivalent permissions`);
-          console.error(`      - Check IAM roles at: https://console.cloud.google.com/iam-admin/iam`);
-        }
-
-        throw new Error(`Poll error: ${errorMessage}`);
-      }
-
-      // Parse JSON response
-      let operation;
-      try {
-        operation = await response.json();
-      } catch (jsonError) {
-        const contentType = response.headers.get('content-type');
-        throw new Error(
-          `Failed to parse operation response as JSON. Content-Type: ${contentType}. Error: ${jsonError.message}`
-        );
-      }
 
       pollCount++;
 
       // Log progress
-      if (pollCount % 4 === 0) {
+      if (pollCount % 4 === 0 || operation.done) {
         console.log(`   [Poll #${pollCount}] Status: ${operation.done ? '✅ COMPLETED' : '⏳ IN_PROGRESS'}`);
       }
 
       if (operation.done) {
         if (operation.error) {
-          throw new Error(
-            `Operation failed: ${operation.error.message || JSON.stringify(operation.error)}`
-          );
+          const errorMsg = operation.error.message || JSON.stringify(operation.error);
+          throw new Error(`Operation failed: ${errorMsg}`);
         }
         console.log(`   ✓ Operation completed after ${pollCount} polls`);
-        return operation.response || operation.result;
+
+        // Extract result - Veo3 returns response in operation.response
+        const result = operation.response || operation.result;
+        return result;
       }
 
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     } catch (error) {
-      if (error.message.includes('Poll error')) throw error;
+      // Handle specific error cases
+      if (error.message.includes('Operation failed')) {
+        throw error; // Re-throw operation failures
+      }
+
+      if (error.code === 5 || error.message?.includes('NOT_FOUND')) {
+        console.error(`   ❌ Operation not found (404 Not Found)`);
+        console.error(`\n   💡 Troubleshooting:\n`);
+        console.error(`   ✓ The operation WAS created successfully (initial API call succeeded)`);
+        console.error(`   ✓ But cannot access it - this is a PERMISSION issue\n`);
+        console.error(`   Required IAM roles for Veo3 service account:`);
+        console.error(`   1. "Vertex AI User" (roles/aiplatform.user)`);
+        console.error(`   2. "AI Platform Admin" (roles/aiplatform.admin) - recommended`);
+        console.error(`   3. OR at minimum: "Cloud AI Operations Manager" (roles/aiplatform.operationsAdmin)\n`);
+        console.error(`   Also verify:`);
+        console.error(`   - Service account credentials file exists: ${keyFilePath}`);
+        console.error(`   - Service account has roles assigned in GCP project`);
+        console.error(`   - Region is correct (${gcpLocation})\n`);
+        console.error(`   Fix IAM roles: https://console.cloud.google.com/iam-admin/iam`);
+        throw new Error(`Poll error: Operation not found (permission issue)`);
+      }
+
+      if (error.code === 7 || error.message?.includes('PERMISSION_DENIED')) {
+        console.error(`   ❌ Permission Denied (403)`);
+        console.error(`   Service account lacks required permissions to poll operations`);
+        throw new Error(`Poll error: Permission denied - service account needs 'Vertex AI User' role`);
+      }
+
+      if (error.code === 16 || error.message?.includes('UNAUTHENTICATED')) {
+        console.error(`   ❌ Authentication Failed`);
+        console.error(`   Invalid or expired service account credentials`);
+        throw new Error(`Poll error: Authentication failed`);
+      }
+
       console.warn(`   ⚠️ Poll attempt #${pollCount} failed: ${error.message}`);
       await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     }
