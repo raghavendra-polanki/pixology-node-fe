@@ -574,14 +574,14 @@ export function Stage6GenerateVideo({
                     <div
                       key={scene.sceneNumber}
                       onClick={() => setSelectedScene(scene.sceneNumber)}
-                      className={`cursor-pointer rounded-lg overflow-hidden border transition-all ${
+                      className={`scene-card cursor-pointer rounded-lg overflow-hidden border ${
                         isSelected
                           ? 'border-blue-500 ring-2 ring-blue-500/50'
-                          : 'border-gray-700 hover:border-gray-600'
+                          : 'border-gray-700'
                       }`}
                     >
                       {/* Thumbnail */}
-                      <div className="relative aspect-video bg-black">
+                      <div className="scene-thumbnail relative aspect-video bg-black">
                         {imageUrl ? (
                           <img src={imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
                         ) : (

@@ -112,4 +112,18 @@
     scrollbar-color: #3f3f3f transparent;
     scrollbar-width: thin;
   }
+
+  /* Scene card hover animation */
+  .scene-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scene-card:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .scene-card:hover .scene-thumbnail {
+    filter: brightness(1.1);
+  }
 }
