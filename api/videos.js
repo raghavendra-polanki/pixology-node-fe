@@ -6,6 +6,11 @@ const router = express.Router();
 /**
  * POST /api/videos/generate-veo3
  * Generate video using Vertex AI Veo 3 Direct API
+ *
+ * Veo 3.1 Constraints:
+ * - Duration: 4, 6, or 8 seconds (default: 6)
+ * - Resolution: 720p or 1080p format (default: 720p)
+ * - Aspect ratio: 16:9 recommended
  */
 router.post('/generate-veo3', async (req, res) => {
   try {
@@ -14,9 +19,9 @@ router.post('/generate-veo3', async (req, res) => {
       prompt,
       sceneData = {},
       screenplayEntry = {},
-      durationSeconds = 5,
+      durationSeconds = 6,
       aspectRatio = '16:9',
-      resolution = '1280x720',
+      resolution = '720p',
       projectId,
       sceneNumber,
     } = req.body;

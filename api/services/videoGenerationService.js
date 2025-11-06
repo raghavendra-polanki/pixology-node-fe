@@ -437,15 +437,15 @@ export async function generateVideoFromPrompt(prompt, durationSeconds = 5, quali
 
 /**
  * Generate video using Vertex AI Veo 3 API (Direct HTTP Endpoint)
- * Uses the Google Cloud Vertex AI predictLongRunning endpoint
+ * Uses the Google Cloud Vertex AI Veo 3.1 predictLongRunning endpoint
  *
  * @param {object} params - Video generation parameters
  * @param {string} params.sceneImageGcsUri - GCS URI of storyboard image (e.g., gs://bucket/image.jpg)
  * @param {string} params.prompt - Text prompt for video generation
  * @param {object} params.sceneData - Scene data object
- * @param {number} params.durationSeconds - Duration in seconds (1-30)
+ * @param {number} params.durationSeconds - Duration in seconds (Veo3 supports: 4, 6, 8 only) (default: 6)
  * @param {string} params.aspectRatio - Aspect ratio (default: '16:9')
- * @param {string} params.resolution - Resolution (default: '1280x720')
+ * @param {string} params.resolution - Resolution format (Veo3 supports: '720p' or '1080p') (default: '720p')
  * @param {string} params.storageUri - GCS storage location for output (e.g., gs://bucket/videos/)
  * @returns {Promise<object>} Generated video info with GCS URL
  */
@@ -453,15 +453,15 @@ export async function generateVideoWithVeo3DirectAPI({
   sceneImageGcsUri,
   prompt,
   sceneData = {},
-  durationSeconds = 5,
+  durationSeconds = 6,
   aspectRatio = '16:9',
-  resolution = '1280x720',
+  resolution = '720p',
   storageUri = null,
 }) {
   try {
     const gcpProjectId = process.env.GCP_PROJECT_ID;
     const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
-    const veoModelId = 'veo-3.1-generate-preview'; // or 'veo-2.0-generate-exp'
+    const veoModelId = 'veo-3.1-generate-preview';
 
     if (!gcpProjectId) {
       throw new Error('GCP_PROJECT_ID environment variable not set');
@@ -469,6 +469,18 @@ export async function generateVideoWithVeo3DirectAPI({
 
     if (!sceneImageGcsUri) {
       throw new Error('sceneImageGcsUri is required (GCS URI format: gs://bucket/path/image.jpg)');
+    }
+
+    // Validate Veo 3 constraints
+    const ALLOWED_DURATIONS = [4, 6, 8];
+    if (!ALLOWED_DURATIONS.includes(durationSeconds)) {
+      throw new Error(`Invalid duration: ${durationSeconds}s. Veo 3 only supports: ${ALLOWED_DURATIONS.join(', ')}s`);
+    }
+
+    // Validate resolution format
+    const ALLOWED_RESOLUTIONS = ['720p', '1080p'];
+    if (!ALLOWED_RESOLUTIONS.includes(resolution)) {
+      throw new Error(`Invalid resolution: ${resolution}. Veo 3 only supports: ${ALLOWED_RESOLUTIONS.join(', ')}`);
     }
 
     console.log(`🎬 Generating video with Veo 3 Direct API for scene ${sceneData.sceneNumber || 1}`);

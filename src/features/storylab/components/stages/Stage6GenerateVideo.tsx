@@ -116,8 +116,8 @@ ${description}
 - Authentic lighting and atmosphere
 - Include the script/dialogue delivery
 - Background music should enhance the scene
-- Duration: ${screenplayEntry.timeEnd || '5s'}
-- High quality 1280x720 resolution
+- Duration: 6 seconds (Veo3 supports 4s, 6s, or 8s durations)
+- High quality 720p resolution
 - 24 fps
 
 Generate a high-quality, professional marketing video that brings this scene to life.`;
@@ -224,9 +224,9 @@ Generate a high-quality, professional marketing video that brings this scene to 
           prompt: prompt,
           sceneData: sceneData,
           screenplayEntry: screenplayEntry,
-          durationSeconds: 5,
+          durationSeconds: 6,
           aspectRatio: '16:9',
-          resolution: '1280x720',
+          resolution: '720p',
           projectId: project?.id,
           sceneNumber: sceneNumber,
         }),
