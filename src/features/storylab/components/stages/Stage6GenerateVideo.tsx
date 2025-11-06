@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Download, ThumbsUp, ThumbsDown, AlertCircle, Play, Volume2, RefreshCw, SettingsIcon } from 'lucide-react';
+import { Sparkles, Download, AlertCircle, Play, RefreshCw, SettingsIcon, CheckCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
-import { Separator } from '../ui/separator';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
@@ -25,6 +24,15 @@ interface VideoData {
   generatedAt: string;
 }
 
+interface SceneVideoStatus {
+  [sceneNumber: number]: {
+    status: 'idle' | 'generating' | 'complete';
+    progress: number;
+    videoData?: VideoData;
+    error?: string;
+  };
+}
+
 export function Stage6GenerateVideo({
   project: propProject,
   projectId: propProjectId,
@@ -42,31 +50,37 @@ export function Stage6GenerateVideo({
   const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
   const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
 
-  const [status, setStatus] = useState<'idle' | 'generating' | 'complete'>('idle');
-  const [progress, setProgress] = useState(0);
-  const [feedback, setFeedback] = useState<'good' | 'needs-edit' | null>(null);
-  const [videoData, setVideoData] = useState<VideoData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [sceneVideos, setSceneVideos] = useState<SceneVideoStatus>({});
+  const [selectedScene, setSelectedScene] = useState<number | null>(null);
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
 
-  // Sync video status with project data when loaded
+  // Initialize scene video statuses when project loads
   useEffect(() => {
-    if (project?.videoProduction?.status) {
-      setStatus(project.videoProduction.status as any);
-      setProgress(100);
-      if (project.videoProduction.videoUrl) {
-        setVideoData(project.videoProduction as VideoData);
+    if (project?.aiGeneratedStoryboard?.scenes) {
+      const initialStatuses: SceneVideoStatus = {};
+      project.aiGeneratedStoryboard.scenes.forEach((scene: any) => {
+        initialStatuses[scene.sceneNumber] = {
+          status: 'idle',
+          progress: 0,
+        };
+      });
+      setSceneVideos(initialStatuses);
+
+      // Set first scene as selected
+      if (project.aiGeneratedStoryboard.scenes.length > 0 && selectedScene === null) {
+        setSelectedScene(project.aiGeneratedStoryboard.scenes[0].sceneNumber);
       }
     }
-  }, [project?.videoProduction]);
+  }, [project?.aiGeneratedStoryboard?.scenes]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (sceneNumber: number) => {
     try {
-      setStatus('generating');
-      setProgress(0);
-      setError(null);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], status: 'generating', progress: 0, error: undefined }
+      }));
 
       // Get authentication token
       const token = sessionStorage.getItem('authToken');
@@ -83,25 +97,28 @@ export function Stage6GenerateVideo({
         throw new Error('No screenplay found. Please generate screenplay first.');
       }
 
-      // Get first scene (Scene 1) data
-      const sceneData = project.aiGeneratedStoryboard.scenes[0];
-      const screenplayEntry = project.aiGeneratedScreenplay.screenplay[0];
+      // Find the scene and screenplay entry by sceneNumber
+      const sceneData = project.aiGeneratedStoryboard.scenes.find((s: any) => s.sceneNumber === sceneNumber);
+      const screenplayEntry = project.aiGeneratedScreenplay.screenplay.find((s: any) => s.sceneNumber === sceneNumber);
       const sceneImage = sceneData?.image?.url || null;
 
       if (!sceneData) {
-        throw new Error('No scene data found for Scene 1');
+        throw new Error(`No scene data found for Scene ${sceneNumber}`);
       }
 
       if (!screenplayEntry) {
-        throw new Error('No screenplay entry found for Scene 1');
+        throw new Error(`No screenplay entry found for Scene ${sceneNumber}`);
       }
 
       if (!sceneImage) {
-        throw new Error('No image available for Scene 1. Please generate storyboard images first.');
+        throw new Error(`No image available for Scene ${sceneNumber}. Please generate storyboard images first.`);
       }
 
-      console.log('Starting video generation for Scene 1...');
-      setProgress(10);
+      console.log(`Starting video generation for Scene ${sceneNumber}...`);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 10 }
+      }));
 
       // Step 1: Fetch the recipe
       const recipeResponse = await fetch('/api/recipes?stageType=stage_6_video');
@@ -113,7 +130,10 @@ export function Stage6GenerateVideo({
 
       const recipe = recipeData.recipes[0];
       const recipeId = recipe.id;
-      setProgress(20);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 20 }
+      }));
 
       // Prepare execution input
       const executionInput = {
@@ -121,7 +141,7 @@ export function Stage6GenerateVideo({
         sceneData,
         screenplayEntry,
         projectId: project?.id,
-        sceneIndex: 0,
+        sceneIndex: sceneNumber - 1,
       };
 
       // Step 2: Execute the video generation recipe
@@ -135,6 +155,7 @@ export function Stage6GenerateVideo({
           input: executionInput,
           projectId: project?.id,
           stageId: 'stage_6',
+          sceneNumber,
         }),
       });
 
@@ -146,8 +167,11 @@ export function Stage6GenerateVideo({
       const executionData = await executeResponse.json();
       const executionId = executionData.executionId;
 
-      console.log('Video generation started, execution ID:', executionId);
-      setProgress(30);
+      console.log(`Video generation started for Scene ${sceneNumber}, execution ID:`, executionId);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 30 }
+      }));
 
       // Step 3: Poll for execution results
       let execution: any = null;
@@ -160,13 +184,6 @@ export function Stage6GenerateVideo({
         const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
         execution = await statusResponse.json();
 
-        console.log(`Execution status check (attempt ${attempts + 1}):`, {
-          hasExecution: !!execution,
-          hasExecutionNested: !!execution.execution,
-          status: execution?.execution?.status,
-          result: execution?.execution?.result,
-        });
-
         if (execution.execution?.status === 'completed') {
           break;
         }
@@ -177,7 +194,10 @@ export function Stage6GenerateVideo({
 
         // Update progress based on attempts (30% -> 90%)
         const newProgress = Math.min(30 + (attempts * 0.5), 90);
-        setProgress(newProgress);
+        setSceneVideos(prev => ({
+          ...prev,
+          [sceneNumber]: { ...prev[sceneNumber], progress: newProgress }
+        }));
         attempts++;
       }
 
@@ -185,14 +205,14 @@ export function Stage6GenerateVideo({
         throw new Error('Recipe execution timed out after 10 minutes');
       }
 
-      console.log('Video generation completed');
-      console.log('Full execution object:', JSON.stringify(execution, null, 2));
-      setProgress(95);
+      console.log(`Video generation completed for Scene ${sceneNumber}`);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 95 }
+      }));
 
       // Step 4: Extract video data from result
-      // The final node's output key is 'uploadedVideos', but for single scene it returns an array
       const uploadedVideos = execution.execution?.result?.uploadedVideos || [];
-      console.log('Extracted uploadedVideos:', uploadedVideos);
 
       if (uploadedVideos.length === 0) {
         throw new Error('No video data in result. Uploaded videos array is empty.');
@@ -204,52 +224,62 @@ export function Stage6GenerateVideo({
         throw new Error('Generated video object is undefined. uploadedVideos structure may be incorrect.');
       }
 
-      console.log('Generated video object:', generatedVideo);
-
-      // Step 5: Update video state
-      setVideoData({
-        sceneNumber: generatedVideo.sceneNumber || 1,
-        sceneTitle: generatedVideo.sceneTitle || 'Scene 1',
+      // Step 5: Update video state for this scene
+      const videoData: VideoData = {
+        sceneNumber: generatedVideo.sceneNumber || sceneNumber,
+        sceneTitle: generatedVideo.sceneTitle || `Scene ${sceneNumber}`,
         videoUrl: generatedVideo.videoUrl || '',
         videoFormat: generatedVideo.videoFormat || 'mp4',
         duration: generatedVideo.duration || '8s',
         generatedAt: new Date().toISOString(),
-      });
+      };
+
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: {
+          status: 'complete',
+          progress: 100,
+          videoData,
+        }
+      }));
 
       // Step 6: Save to project
       await updateVideoProduction(
         {
           videoUrl: generatedVideo.videoUrl,
           status: 'complete',
-          title: generatedVideo.sceneTitle || project?.campaignDetails?.campaignName || 'Generated Video',
+          title: generatedVideo.sceneTitle || `Scene ${sceneNumber}`,
           videoData: generatedVideo,
+          sceneNumber,
         },
         project?.id || projectId || ''
       );
 
-      console.log('Video saved successfully');
-      setProgress(100);
-      setStatus('complete');
+      console.log(`Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Error generating video:', err);
-      setError(errorMsg);
-      setStatus('idle');
+      console.error(`Error generating video for Scene ${sceneNumber}:`, err);
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], status: 'idle', progress: 0, error: errorMsg }
+      }));
     }
   };
 
-  const handleFeedback = (type: 'good' | 'needs-edit') => {
-    setFeedback(type);
-  };
-
   const handleDownload = () => {
-    // Simulate download
-    console.log('Downloading video...');
+    const selectedSceneVideo = selectedScene ? sceneVideos[selectedScene]?.videoData : null;
+    if (selectedSceneVideo?.videoUrl) {
+      const link = document.createElement('a');
+      link.href = selectedSceneVideo.videoUrl;
+      link.download = `scene-${selectedScene}-video.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleComplete = async () => {
     try {
-      // Mark stage as completed
       await markStageCompleted('video');
     } catch (error) {
       console.error('Failed to mark video stage complete:', error);
@@ -358,8 +388,12 @@ export function Stage6GenerateVideo({
     );
   }
 
+  const allScenesGenerated = project?.aiGeneratedStoryboard?.scenes?.every((scene: any) =>
+    sceneVideos[scene.sceneNumber]?.status === 'complete'
+  );
+
   return (
-    <div className="max-w-5xl mx-auto p-8 lg:p-12">
+    <div className="max-w-7xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
@@ -368,9 +402,9 @@ export function Stage6GenerateVideo({
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-white">Generate Video</h2>
+              <h2 className="text-white">Generate Videos</h2>
               <p className="text-gray-400">
-                Initiate final video assembly and review the result
+                Generate video for each scene and review results
               </p>
             </div>
           </div>
@@ -386,248 +420,213 @@ export function Stage6GenerateVideo({
         </div>
       </div>
 
-      {/* Idle State - Generate Button */}
-      {status === 'idle' && (
-        <div className="space-y-6">
-          {error && (
-            <Alert className="bg-red-950/20 border-red-900/50 rounded-xl">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              <AlertDescription className="text-red-200">
-                <strong>Error:</strong> {error}
-              </AlertDescription>
-            </Alert>
-          )}
+      {/* Scene Selection Grid */}
+      <div className="mb-8">
+        <h3 className="text-white mb-4">Select Scenes to Generate Videos</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
+            const sceneStatus = sceneVideos[scene.sceneNumber];
+            const isSelected = selectedScene === scene.sceneNumber;
+            const getImageUrl = (image: any): string | null => {
+              if (!image) return null;
+              if (typeof image === 'string') return image;
+              if (image.url) return image.url;
+              return null;
+            };
+            const imageUrl = getImageUrl(scene?.image);
 
-          <Alert className="bg-blue-950/20 border-blue-900/50 rounded-xl">
-            <AlertCircle className="h-5 w-5 text-blue-500" />
-            <AlertDescription className="text-blue-200">
-              <strong>Important:</strong> Video generation typically takes 5-10 minutes depending on complexity.
-              You'll be notified when it's ready. Make sure all previous steps are finalized before proceeding.
-            </AlertDescription>
-          </Alert>
-
-          <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
-            <div className="text-center space-y-6">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
-                <Sparkles className="w-10 h-10 text-white" />
-              </div>
-              <div>
-                <h3 className="text-white mb-2">Ready to Generate Your Video</h3>
-                <p className="text-gray-400 max-w-md mx-auto">
-                  Our AI will combine your campaign details, personas, narrative, storyboard, and screenplay 
-                  into a professional marketing video.
-                </p>
-              </div>
-              <Button
-                onClick={handleGenerate}
-                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
-                size="lg"
+            return (
+              <div
+                key={scene.sceneNumber}
+                onClick={() => setSelectedScene(scene.sceneNumber)}
+                className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
+                  isSelected
+                    ? 'border-blue-500 ring-2 ring-blue-500/50'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
               >
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate Video
-              </Button>
-            </div>
-          </Card>
-
-          {/* Summary */}
-          <Card className="bg-[#151515] border-gray-800 rounded-xl p-6">
-            <h3 className="text-white mb-4">Campaign Summary</h3>
-            {project ? (
-              <div className="space-y-3 text-gray-400">
-                <div className="flex items-center justify-between">
-                  <span>Campaign Name:</span>
-                  <span className="text-gray-300">{project.campaignDetails?.campaignName || 'Not set'}</span>
-                </div>
-                <Separator className="bg-gray-800" />
-                <div className="flex items-center justify-between">
-                  <span>Video Length:</span>
-                  <span className="text-gray-300">{project.campaignDetails?.videoLength || 'Not set'}</span>
-                </div>
-                <Separator className="bg-gray-800" />
-                <div className="flex items-center justify-between">
-                  <span>Selected Personas:</span>
-                  <span className="text-gray-300">{project.aiGeneratedPersonas?.personas?.length || 0} personas</span>
-                </div>
-                <Separator className="bg-gray-800" />
-                <div className="flex items-center justify-between">
-                  <span>Storyboard Scenes:</span>
-                  <span className="text-gray-300">{project.aiGeneratedStoryboard?.scenes?.length || 0} scenes</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-gray-400">Loading project data...</div>
-            )}
-          </Card>
-        </div>
-      )}
-
-      {/* Generating State */}
-      {status === 'generating' && (
-        <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
-          <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
-              <Sparkles className="w-10 h-10 text-white animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-white mb-2">Generating Your Video</h3>
-              <p className="text-gray-400">
-                AI is assembling your campaign video. This may take a few minutes...
-              </p>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="max-w-md mx-auto space-y-3">
-              <Progress value={progress} className="h-3 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-500" />
-              <div className="flex items-center justify-between text-gray-400">
-                <span>Progress</span>
-                <span>{progress}%</span>
-              </div>
-            </div>
-
-            {/* Status Messages */}
-            <div className="text-gray-500 space-y-2">
-              {progress < 30 && <p>Analyzing screenplay and storyboard...</p>}
-              {progress >= 30 && progress < 60 && <p>Rendering scenes and transitions...</p>}
-              {progress >= 60 && progress < 90 && <p>Adding audio and voiceover...</p>}
-              {progress >= 90 && <p>Finalizing video...</p>}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Complete State */}
-      {status === 'complete' && (
-        <div className="space-y-6">
-          {/* Video Player */}
-          <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
-            {videoData?.videoUrl ? (
-              <div className="bg-[#0a0a0a] aspect-video relative group">
-                {/* HTML5 Video Player */}
-                <video
-                  controls
-                  className="w-full h-full bg-black"
-                  controlsList="nodownload"
-                >
-                  <source src={videoData.videoUrl} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-
-                {/* StoryLab Watermark */}
-                <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <p className="text-white text-xs">
-                    Story<span className="text-blue-500">Lab</span>
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center relative group">
-                {/* Placeholder for video player */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-950 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-blue-600/20 backdrop-blur flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-600/30 transition-all cursor-pointer">
-                      <Play className="w-8 h-8 text-blue-500" />
+                {/* Scene Thumbnail */}
+                <div className="relative aspect-video bg-black">
+                  {imageUrl ? (
+                    <img src={imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                      <span className="text-gray-500">No image</span>
                     </div>
-                    <p className="text-gray-400">Video Preview</p>
-                    <p className="text-gray-600">Click to play</p>
+                  )}
+
+                  {/* Status Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-between p-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-white font-semibold text-sm">Scene {scene.sceneNumber}</span>
+                      {sceneStatus?.status === 'complete' && (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                    </div>
+
+                    {/* Bottom Status */}
+                    <div>
+                      {sceneStatus?.status === 'idle' && (
+                        <p className="text-gray-300 text-xs">Not generated</p>
+                      )}
+                      {sceneStatus?.status === 'generating' && (
+                        <div className="space-y-1">
+                          <Progress value={sceneStatus.progress} className="h-1 bg-gray-700 [&>div]:bg-blue-500" />
+                          <p className="text-blue-400 text-xs">{sceneStatus.progress}%</p>
+                        </div>
+                      )}
+                      {sceneStatus?.status === 'complete' && (
+                        <p className="text-green-400 text-xs">Generated</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* StoryLab Watermark */}
-                <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-                  <p className="text-white text-xs">
-                    Story<span className="text-blue-500">Lab</span>
+                {/* Scene Info */}
+                <div className="bg-[#151515] p-3 border-t border-gray-800">
+                  {scene.title && <p className="text-white text-xs font-medium line-clamp-1">{scene.title}</p>}
+                  <p className="text-gray-400 text-xs mt-1">{scene.duration || '5s'}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Video Player and Controls */}
+      {selectedScene ? (
+        <div className="space-y-6">
+          {sceneVideos[selectedScene]?.status === 'generating' ? (
+            // Generating State
+            <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
+              <div className="text-center space-y-6">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
+                  <Sparkles className="w-10 h-10 text-white animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-white mb-2">Generating Video for Scene {selectedScene}</h3>
+                  <p className="text-gray-400">
+                    AI is generating your scene video. This may take a few minutes...
                   </p>
                 </div>
-              </div>
-            )}
 
-            {/* Video Info */}
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-white mb-1">{videoData?.sceneTitle || project?.campaignDetails?.campaignName || 'Generated Video'}</h3>
-                  <p className="text-gray-400">Duration: {videoData?.duration || project?.campaignDetails?.videoLength || '8s'}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleGenerate()}
-                    variant="outline"
-                    className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Regenerate
-                  </Button>
-                  <Button
-                    onClick={handleDownload}
-                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </Button>
+                {/* Progress Bar */}
+                <div className="max-w-md mx-auto space-y-3">
+                  <Progress
+                    value={sceneVideos[selectedScene]?.progress || 0}
+                    className="h-3 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-500"
+                  />
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span>Progress</span>
+                    <span>{sceneVideos[selectedScene]?.progress || 0}%</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          ) : sceneVideos[selectedScene]?.status === 'complete' ? (
+            // Complete State
+            <>
+              {/* Video Player */}
+              <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
+                  <div className="bg-[#0a0a0a] aspect-video relative group">
+                    <video
+                      controls
+                      className="w-full h-full bg-black"
+                      controlsList="nodownload"
+                    >
+                      <source src={sceneVideos[selectedScene]?.videoData?.videoUrl} type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
 
-          {/* Feedback Section */}
-          <Card className="bg-[#151515] border-gray-800 rounded-xl p-6">
-            <h3 className="text-white mb-4">How does it look?</h3>
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={() => handleFeedback('good')}
-                variant={feedback === 'good' ? 'default' : 'outline'}
-                className={`rounded-lg flex-1 ${
-                  feedback === 'good'
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'border-gray-700 text-gray-300 hover:bg-gray-800'
-                }`}
-              >
-                <ThumbsUp className="w-5 h-5 mr-2" />
-                Looks Great!
-              </Button>
-              <Button
-                onClick={() => handleFeedback('needs-edit')}
-                variant={feedback === 'needs-edit' ? 'default' : 'outline'}
-                className={`rounded-lg flex-1 ${
-                  feedback === 'needs-edit'
-                    ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                    : 'border-gray-700 text-gray-300 hover:bg-gray-800'
-                }`}
-              >
-                <ThumbsDown className="w-5 h-5 mr-2" />
-                Needs Edits
-              </Button>
-            </div>
-            {feedback === 'needs-edit' && (
-              <p className="text-gray-400 mt-4">
-                You can go back to previous stages to make adjustments and regenerate the video.
-              </p>
-            )}
-          </Card>
-
-          {/* Complete Project */}
-          {status === 'complete' && feedback === 'good' && (
-            <div className="flex justify-end mt-8">
-              <Button
-                onClick={handleComplete}
-                disabled={isSaving}
-                className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8"
-                size="lg"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="animate-spin mr-2">⏳</div>
-                    Completing...
-                  </>
+                    {/* StoryLab Watermark */}
+                    <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                      <p className="text-white text-xs">
+                        Story<span className="text-blue-500">Lab</span>
+                      </p>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    Complete Project
-                    <Sparkles className="w-5 h-5 ml-2" />
-                  </>
+                  <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
+                    <p className="text-gray-400">No video data</p>
+                  </div>
                 )}
-              </Button>
-            </div>
+
+                {/* Video Info */}
+                <div className="p-6 border-t border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white mb-1">Scene {selectedScene}</h3>
+                      <p className="text-gray-400">Duration: {sceneVideos[selectedScene]?.videoData?.duration || '8s'}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleGenerate(selectedScene)}
+                        variant="outline"
+                        className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Regenerate
+                      </Button>
+                      <Button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </>
+          ) : (
+            // Idle State - Show placeholder
+            <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+              <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-20 h-20 rounded-full bg-blue-600/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
+                    <Play className="w-10 h-10 text-blue-500" />
+                  </div>
+                  <p className="text-gray-400 mb-1">Scene {selectedScene} - Not Generated Yet</p>
+                  <p className="text-gray-500 text-sm">Click "Generate Video" button below to create video for this scene</p>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="p-6 border-t border-gray-800 flex justify-center">
+                <Button
+                  onClick={() => handleGenerate(selectedScene)}
+                  className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
+                  size="lg"
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Generate Video
+                </Button>
+              </div>
+            </Card>
           )}
+        </div>
+      ) : null}
+
+      {/* Complete Project Button */}
+      {allScenesGenerated && (
+        <div className="flex justify-end mt-8">
+          <Button
+            onClick={handleComplete}
+            disabled={isSaving}
+            className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-8"
+            size="lg"
+          >
+            {isSaving ? (
+              <>
+                <div className="animate-spin mr-2">⏳</div>
+                Completing...
+              </>
+            ) : (
+              <>
+                Complete Project
+                <Sparkles className="w-5 h-5 ml-2" />
+              </>
+            )}
+          </Button>
         </div>
       )}
     </div>
