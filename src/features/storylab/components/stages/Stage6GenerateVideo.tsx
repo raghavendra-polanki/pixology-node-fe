@@ -420,15 +420,16 @@ export function Stage6GenerateVideo({
         </div>
       </div>
 
-      {/* Main Layout: Video Player + Scene Navigation */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-        {/* Video Player - Takes 3 columns */}
-        <div className="lg:col-span-3 space-y-6">
+      {/* Main Layout: Video Player + Scene Navigation as Single Card */}
+      <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 h-full">
+          {/* Video Player - Takes 3 columns */}
+          <div className="lg:col-span-3 space-y-0">
           {selectedScene ? (
             <>
               {sceneVideos[selectedScene]?.status === 'generating' ? (
                 // Generating State
-                <Card className="bg-[#151515] border-gray-800 rounded-xl p-8">
+                <div className="p-8">
                   <div className="text-center space-y-6">
                     <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
                       <Sparkles className="w-10 h-10 text-white animate-pulse" />
@@ -452,12 +453,12 @@ export function Stage6GenerateVideo({
                       </div>
                     </div>
                   </div>
-                </Card>
+                </div>
               ) : sceneVideos[selectedScene]?.status === 'complete' ? (
                 // Complete State
                 <>
                   {/* Video Player */}
-                  <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                  <div className="overflow-hidden">
                     {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
                       <div className="bg-[#0a0a0a] aspect-video relative group">
                         <video
@@ -483,7 +484,7 @@ export function Stage6GenerateVideo({
                     )}
 
                     {/* Video Info */}
-                    <div className="p-6 border-t border-gray-800">
+                    <div className="p-6 border-t border-gray-800 bg-[#0a0a0a]">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-white mb-1">Scene {selectedScene}</h3>
@@ -505,11 +506,11 @@ export function Stage6GenerateVideo({
                         </div>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 </>
               ) : (
                 // Idle State - Show placeholder
-                <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                <div className="overflow-hidden">
                   <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
                     <div className="text-center">
                       <div className="w-20 h-20 rounded-full bg-blue-600/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
@@ -521,7 +522,7 @@ export function Stage6GenerateVideo({
                   </div>
 
                   {/* Controls */}
-                  <div className="p-6 border-t border-gray-800 flex justify-center">
+                  <div className="p-6 border-t border-gray-800 bg-[#0a0a0a] flex justify-center">
                     <Button
                       onClick={() => handleGenerate(selectedScene)}
                       className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
@@ -531,11 +532,11 @@ export function Stage6GenerateVideo({
                       Generate Video
                     </Button>
                   </div>
-                </Card>
+                </div>
               )}
             </>
           ) : (
-            <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+            <div className="overflow-hidden">
               <div className="bg-[#0a0a0a] aspect-video flex items-center justify-center">
                 <div className="text-center">
                   <div className="w-20 h-20 rounded-full bg-gray-700/30 backdrop-blur flex items-center justify-center mx-auto mb-4">
@@ -544,20 +545,19 @@ export function Stage6GenerateVideo({
                   <p className="text-gray-400">Select a scene to start</p>
                 </div>
               </div>
-            </Card>
+            </div>
           )}
         </div>
 
         {/* Scene Navigation Sidebar - Takes 1 column */}
-        <div className="lg:col-span-1">
-          <Card className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden h-fit max-h-[600px] flex flex-col">
-            <div className="p-4 border-b border-gray-800">
-              <h3 className="text-white font-semibold text-sm">Scenes</h3>
-              <p className="text-gray-400 text-xs mt-1">{Object.values(sceneVideos).filter(s => s.status === 'complete').length}/{project?.aiGeneratedStoryboard?.scenes?.length || 0} Generated</p>
-            </div>
+        <div className="lg:col-span-1 border-l border-gray-800 flex flex-col bg-[#0a0a0a]">
+          <div className="p-4 border-b border-gray-800">
+            <h3 className="text-white font-semibold text-sm">Scenes</h3>
+            <p className="text-gray-400 text-xs mt-1">{Object.values(sceneVideos).filter(s => s.status === 'complete').length}/{project?.aiGeneratedStoryboard?.scenes?.length || 0} Generated</p>
+          </div>
 
-            {/* Scrollable Scene List */}
-            <div className="overflow-y-auto flex-1">
+          {/* Scrollable Scene List */}
+          <div className="overflow-y-auto flex-1 scrollbar-hide">
               <div className="space-y-2 p-3">
                 {project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
                   const sceneStatus = sceneVideos[scene.sceneNumber];
@@ -591,22 +591,21 @@ export function Stage6GenerateVideo({
                         )}
 
                         {/* Status Indicator */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                          <div className="flex items-center gap-1">
-                            {sceneStatus?.status === 'complete' && (
-                              <>
-                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                <span className="text-green-400 text-xs font-medium">Done</span>
-                              </>
-                            )}
-                            {sceneStatus?.status === 'idle' && (
-                              <span className="text-gray-300 text-xs">Idle</span>
-                            )}
-                            {sceneStatus?.status === 'generating' && (
-                              <span className="text-blue-400 text-xs animate-pulse">Generating...</span>
-                            )}
+                        {(sceneStatus?.status === 'generating' || sceneStatus?.status === 'complete') && (
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
+                            <div className="flex items-center gap-1">
+                              {sceneStatus?.status === 'complete' && (
+                                <>
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                  <span className="text-green-400 text-xs font-medium">Done</span>
+                                </>
+                              )}
+                              {sceneStatus?.status === 'generating' && (
+                                <span className="text-blue-400 text-xs animate-pulse">Generating...</span>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Scene Number */}
@@ -621,9 +620,9 @@ export function Stage6GenerateVideo({
                 })}
               </div>
             </div>
-          </Card>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {/* Complete Project Button */}
       {allScenesGenerated && (

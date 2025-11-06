@@ -88,4 +88,28 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
   }
+
+  /* Custom scrollbar styling */
+  .scrollbar-hide::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar-thumb {
+    background: #3f3f3f;
+    border-radius: 3px;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar-thumb:hover {
+    background: #4f4f4f;
+  }
+
+  /* Firefox scrollbar */
+  .scrollbar-hide {
+    scrollbar-color: #3f3f3f transparent;
+    scrollbar-width: thin;
+  }
 }
