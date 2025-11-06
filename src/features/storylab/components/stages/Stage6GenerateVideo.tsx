@@ -198,7 +198,10 @@ Generate a high-quality, professional marketing video that brings this scene to 
       }
       console.log(`✓ Scene ${sceneNumber} image GCS URI: ${sceneImageGcsUri}`);
 
+      const gcsBucket = import.meta.env.VITE_GCS_BUCKET_NAME || 'pixology-personas';
+      const expectedOutputPath = `gs://${gcsBucket}/videos/${project?.id || 'unknown'}/scene_${sceneNumber}/`;
       console.log(`🎬 Starting video generation for Scene ${sceneNumber}...`);
+      console.log(`   Output will be stored in: ${expectedOutputPath}`);
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], progress: 10 }

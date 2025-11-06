@@ -7,6 +7,9 @@ const router = express.Router();
  * POST /api/videos/generate-veo3
  * Generate video using Vertex AI Veo 3 Direct API
  *
+ * Videos are stored in GCS with organized structure:
+ * gs://pixology-personas/videos/{projectId}/scene_{sceneNumber}/{video_filename}
+ *
  * Veo 3.1 Constraints:
  * - Duration: 4, 6, or 8 seconds (default: 6)
  * - Resolution: 720p or 1080p format (default: 720p)
@@ -47,6 +50,7 @@ router.post('/generate-veo3', async (req, res) => {
       durationSeconds,
       aspectRatio,
       resolution,
+      projectId,
     });
 
     console.log(`[Videos API] Successfully generated video for Scene ${sceneNumber}`);

@@ -439,14 +439,18 @@ export async function generateVideoFromPrompt(prompt, durationSeconds = 5, quali
  * Generate video using Vertex AI Veo 3 API (Direct HTTP Endpoint)
  * Uses the Google Cloud Vertex AI Veo 3.1 predictLongRunning endpoint
  *
+ * Videos are stored in GCS bucket with organized folder structure:
+ * gs://{bucket}/videos/{projectId}/scene_{sceneNumber}/{video_filename}
+ *
  * @param {object} params - Video generation parameters
  * @param {string} params.sceneImageGcsUri - GCS URI of storyboard image (e.g., gs://bucket/image.jpg)
  * @param {string} params.prompt - Text prompt for video generation
- * @param {object} params.sceneData - Scene data object
+ * @param {object} params.sceneData - Scene data object with sceneNumber
  * @param {number} params.durationSeconds - Duration in seconds (Veo3 supports: 4, 6, 8 only) (default: 6)
  * @param {string} params.aspectRatio - Aspect ratio (default: '16:9')
  * @param {string} params.resolution - Resolution format (Veo3 supports: '720p' or '1080p') (default: '720p')
- * @param {string} params.storageUri - GCS storage location for output (e.g., gs://bucket/videos/)
+ * @param {string} params.storageUri - Custom GCS storage location override (optional)
+ * @param {string} params.projectId - Project ID for organizing video output folder (optional)
  * @returns {Promise<object>} Generated video info with GCS URL
  */
 export async function generateVideoWithVeo3DirectAPI({
@@ -457,10 +461,12 @@ export async function generateVideoWithVeo3DirectAPI({
   aspectRatio = '16:9',
   resolution = '720p',
   storageUri = null,
+  projectId = null,
 }) {
   try {
     const gcpProjectId = process.env.GCP_PROJECT_ID;
     const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
+    const gcsBucket = process.env.GCS_BUCKET_NAME || 'pixology-personas';
     const veoModelId = 'veo-3.1-generate-preview';
 
     if (!gcpProjectId) {
@@ -491,6 +497,13 @@ export async function generateVideoWithVeo3DirectAPI({
     // Get access token
     const accessToken = await getAccessToken();
 
+    // Build GCS output path: gs://bucket/videos/{projectId}/scene_{sceneNumber}/
+    const sceneNumber = sceneData?.sceneNumber || 1;
+    const projectPath = projectId ? `${projectId}` : 'default';
+    const outputStorageUri = storageUri || `gs://${gcsBucket}/videos/${projectPath}/scene_${sceneNumber}/`;
+
+    console.log(`   Output location: ${outputStorageUri}`);
+
     // Build the request payload according to Veo 3 API specification
     const requestPayload = {
       instances: [
@@ -508,7 +521,7 @@ export async function generateVideoWithVeo3DirectAPI({
         resolution: resolution,
         enhancePrompt: true,
         generateAudio: true,
-        storageUri: storageUri || `gs://${gcpProjectId}-veo-outputs/videos/`,
+        storageUri: outputStorageUri,
       },
     };
 
