@@ -599,9 +599,11 @@ Generate a high-quality, professional marketing video that brings this scene to 
                     {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
                       <div className="bg-[#0a0a0a] aspect-video relative group">
                         <video
+                          key={`video-${selectedScene}`}
                           controls
                           className="w-full h-full bg-black"
                           controlsList="nodownload"
+                          autoPlay
                         >
                           <source src={sceneVideos[selectedScene]?.videoData?.videoUrl} type="video/mp4" />
                           Your browser does not support the video tag.
