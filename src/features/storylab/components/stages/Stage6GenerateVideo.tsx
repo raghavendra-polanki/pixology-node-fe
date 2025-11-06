@@ -550,14 +550,14 @@ export function Stage6GenerateVideo({
         </div>
 
         {/* Scene Navigation Sidebar - Takes 1 column */}
-        <div className="lg:col-span-1 border-l border-gray-800 flex flex-col bg-[#0a0a0a]">
-          <div className="p-4 border-b border-gray-800">
+        <div className="lg:col-span-1 border-l border-gray-800 flex flex-col bg-[#0a0a0a] max-h-screen lg:max-h-[600px]">
+          <div className="p-4 border-b border-gray-800 flex-shrink-0">
             <h3 className="text-white font-semibold text-sm">Scenes</h3>
             <p className="text-gray-400 text-xs mt-1">{Object.values(sceneVideos).filter(s => s.status === 'complete').length}/{project?.aiGeneratedStoryboard?.scenes?.length || 0} Generated</p>
           </div>
 
           {/* Scrollable Scene List */}
-          <div className="overflow-y-auto flex-1 scrollbar-hide">
+          <div className="overflow-y-auto flex-1 scrollbar-styled">
               <div className="space-y-2 p-3">
                 {project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
                   const sceneStatus = sceneVideos[scene.sceneNumber];
