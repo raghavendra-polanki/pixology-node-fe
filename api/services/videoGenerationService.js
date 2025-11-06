@@ -610,9 +610,24 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
   const pollIntervalMs = 15000; // Poll every 15 seconds
   let pollCount = 0;
 
+  // Extract project, location, and operation ID from operation name
+  // Full format: projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{operationId}
+  // Polling format: projects/{project}/locations/{location}/operations/{operationId}
+  const operationMatch = operationName.match(/^(projects\/[^\/]+\/locations\/[^\/]+)\/publishers\/google\/models\/[^\/]+\/operations\/(.+)$/);
+  let pollingPath = operationName; // Fallback to full name if regex doesn't match
+
+  if (operationMatch) {
+    const [, projectLocation, operationId] = operationMatch;
+    pollingPath = `${projectLocation}/operations/${operationId}`;
+    console.log(`   ✓ Extracted operation ID: ${operationId}`);
+    console.log(`   📡 Polling URL: https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`);
+  } else {
+    console.log(`   ⚠️ Could not extract operation ID, using full path for polling`);
+  }
+
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${operationName}`;
+      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -643,6 +658,7 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
           errorMessage = `HTTP ${response.status}: Could not parse error response`;
         }
 
+        console.error(`   ❌ Polling failed at URL: ${url}`);
         throw new Error(`Poll error: ${errorMessage}`);
       }
 
