@@ -55,6 +55,7 @@ export function Stage6GenerateVideo({
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [testVideoUrl, setTestVideoUrl] = useState('https://storage.googleapis.com/pixology-personas/videos/HIoCx9ZZb1YAwyg84n2t/scene_3/15754933715511817930/sample_0.mp4');
 
   // Initialize scene video statuses when project loads
   useEffect(() => {
@@ -450,15 +451,42 @@ Generate a high-quality, professional marketing video that brings this scene to 
               </p>
             </div>
           </div>
-          <Button
-            onClick={loadRecipe}
-            disabled={isLoadingRecipe}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-          >
-            <SettingsIcon className="w-4 h-4 mr-2" />
-            {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                if (selectedScene) {
+                  setSceneVideos(prev => ({
+                    ...prev,
+                    [selectedScene]: {
+                      status: 'complete',
+                      progress: 100,
+                      videoData: {
+                        sceneNumber: selectedScene,
+                        sceneTitle: `Scene ${selectedScene}`,
+                        videoUrl: testVideoUrl,
+                        videoFormat: 'mp4',
+                        duration: '6s',
+                        generatedAt: new Date().toISOString(),
+                      }
+                    }
+                  }));
+                }
+              }}
+              variant="outline"
+              className="border-yellow-700 text-yellow-300 hover:bg-yellow-900/20 rounded-lg"
+            >
+              Load Test Video
+            </Button>
+            <Button
+              onClick={loadRecipe}
+              disabled={isLoadingRecipe}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+            >
+              <SettingsIcon className="w-4 h-4 mr-2" />
+              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+            </Button>
+          </div>
         </div>
       </div>
 
