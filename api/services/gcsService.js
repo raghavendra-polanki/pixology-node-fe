@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 const storage = new Storage({
   projectId: process.env.GCP_PROJECT_ID,
-  keyFilename: process.env.GCP_KEY_FILE || undefined, // Or set via GOOGLE_APPLICATION_CREDENTIALS env var
+  // Uses GOOGLE_APPLICATION_CREDENTIALS environment variable automatically
+  // when keyFilename is not explicitly provided
 });
 
 const bucketName = process.env.GCS_BUCKET_NAME || 'pixology-personas';
