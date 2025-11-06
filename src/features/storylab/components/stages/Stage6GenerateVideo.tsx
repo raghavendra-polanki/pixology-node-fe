@@ -47,6 +47,7 @@ export function Stage6GenerateVideo({
   const project = propProject || hookResult.project;
   const isSaving = hookResult.isSaving;
   const updateVideoProduction = propUpdateVideoProduction || hookResult.updateVideoProduction;
+  const updateAIVideos = hookResult.updateAIVideos;
   const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
   const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
 
@@ -355,18 +356,14 @@ Generate a high-quality, professional marketing video that brings this scene to 
         model: 'veo-3.1-generate-preview',
       };
 
-      // Update project with aiGeneratedVideos
-      const authToken = sessionStorage.getItem('authToken');
-      await fetch(`/api/projects/${project?.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          aiGeneratedVideos,
-        }),
+      // Update project with aiGeneratedVideos using hook method
+      console.log(`📤 Saving aiGeneratedVideos for project ${project?.id}:`, {
+        videoCount: aiGeneratedVideos.videos.length,
+        completedCount: aiGeneratedVideos.completedCount,
+        failedCount: aiGeneratedVideos.failedCount,
       });
+
+      await updateAIVideos(aiGeneratedVideos, project?.id);
 
       console.log(`✅ Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {

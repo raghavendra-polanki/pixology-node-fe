@@ -51,6 +51,7 @@ interface UseStoryLabProjectResult {
   updateStoryboardCustomizations: (customizations: any, projectIdOverride?: string) => Promise<void>;
   updateAIScreenplay: (screenplay: AIGeneratedScreenplay) => Promise<void>;
   updateScreenplayCustomizations: (customizations: any, projectIdOverride?: string) => Promise<void>;
+  updateAIVideos: (videos: any, projectIdOverride?: string) => Promise<void>;
   updateVideoProduction: (video: VideoProductionData) => Promise<void>;
 
   // Stage operations
@@ -350,6 +351,19 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     [updateProject, project],
   );
 
+  // Update AI-generated videos
+  const updateAIVideos = useCallback(
+    async (videos: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
+      setHasUnsavedChanges(true);
+      console.log('updateAIVideos called with:', { projectId, videoCount: videos?.videos?.length });
+      await updateProject({ aiGeneratedVideos: videos }, projectId);
+      console.log('updateAIVideos completed');
+    },
+    [updateProject, project],
+  );
+
   // Update video production
   const updateVideoProduction = useCallback(
     async (video: VideoProductionData) => {
@@ -540,6 +554,7 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     updateStoryboardCustomizations,
     updateAIScreenplay,
     updateScreenplayCustomizations,
+    updateAIVideos,
     updateVideoProduction,
 
     // Stage operations

@@ -273,6 +273,15 @@ class StoryLabProjectService {
   }
 
   /**
+   * Update AI-generated videos
+   */
+  async updateAIVideos(projectId: string, videos: any): Promise<StoryLabProject> {
+    return this.updateProject(projectId, {
+      aiGeneratedVideos: videos,
+    });
+  }
+
+  /**
    * Update screenplay customizations
    */
   async updateScreenplayCustomizations(
