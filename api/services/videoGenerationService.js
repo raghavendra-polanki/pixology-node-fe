@@ -243,7 +243,7 @@ async function getAccessToken(serviceAccountType = 'default') {
 
     if (serviceAccountType === 'veo3') {
       // Use dedicated Veo3 service account if available
-      keyFilePath = process.env.VEO3_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      keyFilePath = process.env.VEO3_SERVICE_ACCOUNT_KEY;
       console.log(`   Using Veo3 service account: ${keyFilePath}`);
     } else {
       // Use default service account for Firestore and general operations
@@ -270,12 +270,21 @@ async function getAccessToken(serviceAccountType = 'default') {
       throw new Error(`Invalid access token format received: ${JSON.stringify(response).substring(0, 100)}`);
     }
 
-    // Log service account info for debugging
+    // Log service account info from credentials file for debugging
     try {
-      const projectId = auth.projectId;
-      console.log(`   ℹ️  Service account project: ${projectId}`);
+      const credentialsContent = fs.readFileSync(keyFilePath, 'utf8');
+      const credentials = JSON.parse(credentialsContent);
+      const serviceAccountEmail = credentials.client_email || 'unknown';
+      const projectId = credentials.project_id || 'unknown';
+
+      console.log(`   ℹ️  Service account: ${serviceAccountEmail}`);
+      console.log(`   ℹ️  Project ID: ${projectId}`);
+
+      if (projectId === 'unknown') {
+        console.warn(`   ⚠️  Warning: Could not find project_id in credentials file ${keyFilePath}`);
+      }
     } catch (e) {
-      // Silently ignore if we can't get project ID
+      console.warn(`   ⚠️  Could not read service account credentials for logging: ${e.message}`);
     }
 
     return token;
