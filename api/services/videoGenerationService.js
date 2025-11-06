@@ -436,6 +436,218 @@ export async function generateVideoFromPrompt(prompt, durationSeconds = 5, quali
 }
 
 /**
+ * Generate video using Vertex AI Veo 3 API (Direct HTTP Endpoint)
+ * Uses the Google Cloud Vertex AI predictLongRunning endpoint
+ *
+ * @param {object} params - Video generation parameters
+ * @param {string} params.sceneImageGcsUri - GCS URI of storyboard image (e.g., gs://bucket/image.jpg)
+ * @param {string} params.prompt - Text prompt for video generation
+ * @param {object} params.sceneData - Scene data object
+ * @param {number} params.durationSeconds - Duration in seconds (1-30)
+ * @param {string} params.aspectRatio - Aspect ratio (default: '16:9')
+ * @param {string} params.resolution - Resolution (default: '1280x720')
+ * @param {string} params.storageUri - GCS storage location for output (e.g., gs://bucket/videos/)
+ * @returns {Promise<object>} Generated video info with GCS URL
+ */
+export async function generateVideoWithVeo3DirectAPI({
+  sceneImageGcsUri,
+  prompt,
+  sceneData = {},
+  durationSeconds = 5,
+  aspectRatio = '16:9',
+  resolution = '1280x720',
+  storageUri = null,
+}) {
+  try {
+    const gcpProjectId = process.env.GCP_PROJECT_ID;
+    const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
+    const veoModelId = 'veo-3.1-generate-preview'; // or 'veo-2.0-generate-exp'
+
+    if (!gcpProjectId) {
+      throw new Error('GCP_PROJECT_ID environment variable not set');
+    }
+
+    if (!sceneImageGcsUri) {
+      throw new Error('sceneImageGcsUri is required (GCS URI format: gs://bucket/path/image.jpg)');
+    }
+
+    console.log(`🎬 Generating video with Veo 3 Direct API for scene ${sceneData.sceneNumber || 1}`);
+    console.log(`   Image: ${sceneImageGcsUri}`);
+    console.log(`   Duration: ${durationSeconds}s`);
+    console.log(`   Resolution: ${resolution}`);
+
+    // Get access token
+    const accessToken = await getAccessToken();
+
+    // Build the request payload according to Veo 3 API specification
+    const requestPayload = {
+      instances: [
+        {
+          prompt: prompt,
+          image: {
+            gcsUri: sceneImageGcsUri,
+            mimeType: 'image/jpeg', // or image/png
+          },
+        },
+      ],
+      parameters: {
+        durationSeconds: durationSeconds,
+        aspectRatio: aspectRatio,
+        resolution: resolution,
+        enhancePrompt: true,
+        generateAudio: true,
+        storageUri: storageUri || `gs://${gcpProjectId}-veo-outputs/videos/`,
+      },
+    };
+
+    // Call Veo 3 API
+    const apiEndpoint = `https://${gcpLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${gcpLocation}/publishers/google/models/${veoModelId}:predictLongRunning`;
+
+    console.log(`📡 Calling Veo 3 API: ${apiEndpoint}`);
+
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        `Veo 3 API error: ${response.status} - ${errorData?.error?.message || JSON.stringify(errorData)}`
+      );
+    }
+
+    const operationData = await response.json();
+    const operationName = operationData.name;
+
+    console.log(`⏳ Operation started: ${operationName}`);
+    console.log(`   Polling for completion...`);
+
+    // Poll for operation completion
+    const result = await pollVeo3Operation(operationName, accessToken, gcpLocation);
+
+    // Extract video URL from result
+    const videoUrl = extractVideoUrl(result);
+    console.log(`✅ Video generation completed!`);
+    console.log(`   Video URL: ${videoUrl}`);
+
+    return {
+      sceneNumber: sceneData.sceneNumber || 1,
+      sceneTitle: sceneData.title || `Scene ${sceneData.sceneNumber || 1}`,
+      videoUrl: videoUrl,
+      videoFormat: 'mp4',
+      duration: `${durationSeconds}s`,
+      resolution: resolution,
+      aspectRatio: aspectRatio,
+      generatedAt: new Date(),
+      uploadedToGCS: true,
+      operationName: operationName,
+      metadata: {
+        prompt: prompt,
+        durationSeconds: durationSeconds,
+        resolution: resolution,
+        aspectRatio: aspectRatio,
+        sceneTitle: sceneData.title,
+        sceneNumber: sceneData.sceneNumber,
+      },
+    };
+  } catch (error) {
+    console.error(`❌ Error generating video with Veo 3 API:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Poll Veo 3 long-running operation until completion
+ * @private
+ */
+async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWaitMs = 3600000) {
+  const startTime = Date.now();
+  const pollIntervalMs = 15000; // Poll every 15 seconds
+  let pollCount = 0;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${operationName}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          `Poll error: ${response.status} - ${errorData?.error?.message || 'Unknown error'}`
+        );
+      }
+
+      const operation = await response.json();
+      pollCount++;
+
+      // Log progress
+      if (pollCount % 4 === 0) {
+        console.log(`   [Poll #${pollCount}] Status: ${operation.done ? '✅ COMPLETED' : '⏳ IN_PROGRESS'}`);
+      }
+
+      if (operation.done) {
+        if (operation.error) {
+          throw new Error(
+            `Operation failed: ${operation.error.message || JSON.stringify(operation.error)}`
+          );
+        }
+        console.log(`   ✓ Operation completed after ${pollCount} polls`);
+        return operation.response || operation.result;
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    } catch (error) {
+      if (error.message.includes('Poll error')) throw error;
+      console.warn(`   ⚠️ Poll attempt #${pollCount} failed: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  throw new Error(`Operation timed out after ${maxWaitMs / 1000} seconds`);
+}
+
+/**
+ * Extract video URL from Veo 3 operation result
+ * @private
+ */
+function extractVideoUrl(result) {
+  // Veo 3 returns video in various possible formats
+  // Try multiple paths to find the video URL
+  if (result?.predictions?.[0]?.videoUri) {
+    return result.predictions[0].videoUri;
+  }
+  if (result?.predictions?.[0]?.gcsUri) {
+    return result.predictions[0].gcsUri;
+  }
+  if (result?.videoUri) {
+    return result.videoUri;
+  }
+  if (result?.gcsUri) {
+    return result.gcsUri;
+  }
+  if (typeof result === 'string' && result.startsWith('gs://')) {
+    return result;
+  }
+
+  throw new Error(
+    `Unable to extract video URL from result. Result structure: ${JSON.stringify(result).substring(0, 200)}`
+  );
+}
+
+/**
  * Get video streaming URL
  * GCS URLs are directly streamable in HTML5 video players
  *
@@ -448,6 +660,7 @@ export function getVideoStreamUrl(videoUrl) {
 
 export default {
   generateVideoWithVeo,
+  generateVideoWithVeo3DirectAPI,
   generateMultipleSceneVideos,
   generateVideoFromPrompt,
   callPythonVideoGenerationAPI,
