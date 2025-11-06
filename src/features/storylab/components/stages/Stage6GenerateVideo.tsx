@@ -56,7 +56,6 @@ export function Stage6GenerateVideo({
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
-  const [testVideoUrl, setTestVideoUrl] = useState('https://storage.googleapis.com/pixology-personas/videos/HIoCx9ZZb1YAwyg84n2t/scene_3/15754933715511817930/sample_0.mp4');
 
   // Initialize scene video statuses when project loads
   useEffect(() => {
@@ -228,12 +227,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
           : 'No image data found in scene';
         throw new Error(`No GCS image URI available for Scene ${sceneNumber}. ${imageInfo}`);
       }
-      console.log(`✓ Scene ${sceneNumber} image GCS URI: ${sceneImageGcsUri}`);
 
-      const gcsBucket = import.meta.env.VITE_GCS_BUCKET_NAME || 'pixology-personas';
-      const expectedOutputPath = `gs://${gcsBucket}/videos/${project?.id || 'unknown'}/scene_${sceneNumber}/`;
-      console.log(`🎬 Starting video generation for Scene ${sceneNumber}...`);
-      console.log(`   Output will be stored in: ${expectedOutputPath}`);
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], progress: 10 }
@@ -241,7 +235,6 @@ Generate a high-quality, professional marketing video that brings this scene to 
 
       // Build prompt from screenplay data
       const prompt = buildVideoPrompt(sceneData, screenplayEntry);
-      console.log(`📝 Prompt generated for Scene ${sceneNumber}`);
 
       setSceneVideos(prev => ({
         ...prev,
@@ -290,7 +283,6 @@ Generate a high-quality, professional marketing video that brings this scene to 
       } catch (parseError) {
         throw new Error(`Failed to parse video generation response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
-      console.log(`✅ Video generation response received for Scene ${sceneNumber}`);
 
       setSceneVideos(prev => ({
         ...prev,
@@ -357,15 +349,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
       };
 
       // Update project with aiGeneratedVideos using hook method
-      console.log(`📤 Saving aiGeneratedVideos for project ${project?.id}:`, {
-        videoCount: aiGeneratedVideos.videos.length,
-        completedCount: aiGeneratedVideos.completedCount,
-        failedCount: aiGeneratedVideos.failedCount,
-      });
-
       await updateAIVideos(aiGeneratedVideos, project?.id);
-
-      console.log(`✅ Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       console.error(`❌ Error generating video for Scene ${sceneNumber}:`, err);
@@ -413,9 +397,6 @@ Generate a high-quality, professional marketing video that brings this scene to 
       const data = await response.json();
 
       if (data.recipes && data.recipes.length > 0) {
-        console.log('Loaded recipe from database:', {
-          id: data.recipes[0].id,
-        });
         setCurrentRecipe(data.recipes[0]);
         setShowRecipeEditor(true);
       } else {
@@ -461,9 +442,6 @@ Generate a high-quality, professional marketing video that brings this scene to 
 
       if (verifyData.recipes && verifyData.recipes.length > 0) {
         const savedRecipe = verifyData.recipes[0];
-        console.log('Verified recipe from database:', {
-          id: savedRecipe.id,
-        });
         setCurrentRecipe(savedRecipe);
       }
 
@@ -519,31 +497,6 @@ Generate a high-quality, professional marketing video that brings this scene to 
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              onClick={() => {
-                if (selectedScene) {
-                  setSceneVideos(prev => ({
-                    ...prev,
-                    [selectedScene]: {
-                      status: 'complete',
-                      progress: 100,
-                      videoData: {
-                        sceneNumber: selectedScene,
-                        sceneTitle: `Scene ${selectedScene}`,
-                        videoUrl: testVideoUrl,
-                        videoFormat: 'mp4',
-                        duration: '6s',
-                        generatedAt: new Date().toISOString(),
-                      }
-                    }
-                  }));
-                }
-              }}
-              variant="outline"
-              className="border-yellow-700 text-yellow-300 hover:bg-yellow-900/20 rounded-lg"
-            >
-              Load Test Video
-            </Button>
             <Button
               onClick={loadRecipe}
               disabled={isLoadingRecipe}
