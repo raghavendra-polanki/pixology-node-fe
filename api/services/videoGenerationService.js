@@ -657,27 +657,41 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
   const pollIntervalMs = 15000; // Poll every 15 seconds
   let pollCount = 0;
 
-  console.log(`   📡 Polling operation via REST API: ${operationName}`);
+  console.log(`   📡 Polling operation via fetchPredictOperation endpoint`);
+  console.log(`   📋 Operation name: ${operationName}`);
 
   // Get fresh access token using Veo3 service account for polling
   const pollingToken = await getAccessToken('veo3');
 
+  // Parse operation name to extract project, location, and model
+  // Format: projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{id}
+  const operationMatch = operationName.match(/projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/([^/]+)\/operations\//);
+  if (!operationMatch) {
+    throw new Error(`Invalid operation name format: ${operationName}`);
+  }
+
+  const gcpProjectId = operationMatch[1];
+  const veoModelId = 'veo-3.1-generate-preview';
+
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${operationName}`;
+      // Use fetchPredictOperation endpoint as documented
+      const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${gcpLocation}/publishers/google/models/${veoModelId}:fetchPredictOperation`;
 
       if (pollCount === 0) {
         console.log(`   📡 First poll attempt:`);
-        console.log(`      URL: ${url}`);
-        console.log(`      Operation name: ${operationName}`);
+        console.log(`      Endpoint: ${url}`);
       }
 
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${pollingToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          operationName: operationName,
+        }),
       });
 
       if (!response.ok) {
@@ -702,20 +716,7 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
 
         console.error(`   ❌ Polling failed: ${errorMessage}`);
 
-        // Special handling for 404 - operation might have already completed
-        if (response.status === 404) {
-          console.warn(`   ⚠️  HTTP 404: Operation not found`);
-          console.warn(`      This happened on poll attempt #${pollCount + 1}`);
-          console.warn(`      URL was: ${url}`);
-          console.warn(`      Time elapsed: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-          console.warn(`   💡 Possible causes:`);
-          console.warn(`      1. Operation already completed and removed from system`);
-          console.warn(`      2. Operation name/URL format is incorrect`);
-          console.warn(`      3. Permission issue (can't query but can create)`);
-
-          // Don't return yet - let's keep trying or throw to see full error
-          throw new Error(`Poll error: HTTP 404 - Operation not found after ${pollCount + 1} attempts`);
-        } else if (response.status === 403) {
+        if (response.status === 403) {
           console.error(`\n   💡 Permission Denied (403):`);
           console.error(`   - Service account lacks 'aiplatform.operations.get' permission`);
           console.error(`   - Assign 'Vertex AI User' or 'AI Platform Admin' role`);
