@@ -6,11 +6,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin SDK
-// Read service account path from environment variable, fallback to default
-const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-  path.join(__dirname, '../../serviceAccountKey.json');
+// Require service account path from environment variable
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-console.log(`Firebase using service account: ${serviceAccountPath}`);
+if (!serviceAccountPath) {
+  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
+  console.error('   Required for Firestore authentication');
+  process.exit(1);
+}
+
+console.log(`✓ Firebase using service account: ${serviceAccountPath}`);
 
 // Check if service account key exists
 try {
@@ -22,9 +27,9 @@ try {
 } catch (error) {
   if (error.code === 'app/duplicate-app') {
     // App already initialized, continue
-    console.log('Firebase app already initialized');
+    console.log('✓ Firebase app already initialized');
   } else {
-    console.error('Error initializing Firebase:', error.message);
+    console.error('❌ Error initializing Firebase:', error.message);
     process.exit(1);
   }
 }
