@@ -426,107 +426,176 @@ export function Stage5Screenplay({
           </div>
 
           <div className="space-y-4 mb-8">
-            {screenplay.map((entry) => (
-              <Card key={entry.sceneNumber} className="bg-[#151515] border-gray-800 rounded-xl p-6">
-                {/* Scene Header */}
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">Scene {entry.sceneNumber}</h3>
-                    <p className="text-sm text-gray-400">
-                      {entry.timeStart} - {entry.timeEnd}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() =>
-                      setEditingId(editingId === entry.sceneNumber.toString() ? null : entry.sceneNumber.toString())
-                    }
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white rounded-lg"
-                  >
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Save className="w-4 h-4" />
-                    ) : (
-                      <Edit2 className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
+            {screenplay.map((entry) => {
+              // Find corresponding storyboard scene
+              const storyboardScene = project?.aiGeneratedStoryboard?.scenes?.find(
+                (scene: any) => scene.sceneNumber === entry.sceneNumber
+              );
 
-                {/* Scene Fields */}
-                <div className="space-y-4">
-                  {/* Visual Description */}
-                  <div>
-                    <Label className="text-xs font-medium text-gray-400 mb-2 block">Visual Description</Label>
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Textarea
-                        value={typeof entry.visual === 'string' ? entry.visual : formatScriptContent(entry.visual)}
-                        onChange={(e) => handleEdit(entry.sceneNumber, 'visual', e.target.value)}
-                        className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-20"
-                      />
-                    ) : (
-                      <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.visual)}</p>
-                    )}
-                  </div>
+              // Helper to get image URL
+              const getImageUrl = (image: any): string | null => {
+                if (!image) return null;
+                if (typeof image === 'string') return image;
+                if (image.url) return image.url;
+                return null;
+              };
 
-                  {/* Camera Flow */}
-                  <div>
-                    <Label className="text-xs font-medium text-gray-400 mb-2 block">Camera Flow</Label>
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Textarea
-                        value={typeof entry.cameraFlow === 'string' ? entry.cameraFlow : formatScriptContent(entry.cameraFlow)}
-                        onChange={(e) => handleEdit(entry.sceneNumber, 'cameraFlow', e.target.value)}
-                        className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-16"
-                      />
-                    ) : (
-                      <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.cameraFlow)}</p>
-                    )}
-                  </div>
+              const storyboardImageUrl = getImageUrl(storyboardScene?.image);
 
-                  {/* Script / Dialogue */}
-                  <div>
-                    <Label className="text-xs font-medium text-gray-400 mb-2 block">Script / Dialogue</Label>
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Textarea
-                        value={typeof entry.script === 'string' ? entry.script : formatScriptContent(entry.script)}
-                        onChange={(e) => handleEdit(entry.sceneNumber, 'script', e.target.value)}
-                        className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-16"
-                      />
-                    ) : (
-                      <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.script)}</p>
-                    )}
-                  </div>
+              return (
+                <Card key={entry.sceneNumber} className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
+                  <div className="grid grid-cols-2 gap-0">
+                    {/* Left Column - Storyboard Reference */}
+                    <div className="border-r border-gray-800 p-6 flex flex-col">
+                      <div className="mb-4 pb-4 border-b border-gray-800">
+                        <h4 className="text-sm font-medium text-gray-400 mb-1">STORYBOARD REFERENCE</h4>
+                        <h3 className="text-lg font-semibold text-white">Scene {entry.sceneNumber}</h3>
+                        {storyboardScene?.title && (
+                          <p className="text-sm text-gray-400 mt-1">{storyboardScene.title}</p>
+                        )}
+                        {storyboardScene?.duration && (
+                          <p className="text-xs text-gray-500 mt-1">Duration: {storyboardScene.duration}</p>
+                        )}
+                      </div>
 
-                  {/* Background Music */}
-                  <div>
-                    <Label className="text-xs font-medium text-gray-400 mb-2 block">Background Music</Label>
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Textarea
-                        value={typeof entry.backgroundMusic === 'string' ? entry.backgroundMusic : formatScriptContent(entry.backgroundMusic)}
-                        onChange={(e) => handleEdit(entry.sceneNumber, 'backgroundMusic', e.target.value)}
-                        className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-16"
-                      />
-                    ) : (
-                      <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.backgroundMusic)}</p>
-                    )}
-                  </div>
+                      {/* Storyboard Image */}
+                      {storyboardImageUrl && (
+                        <div className="mb-4 rounded-lg overflow-hidden bg-black/50 flex-1 flex items-center justify-center min-h-48">
+                          <img
+                            src={storyboardImageUrl}
+                            alt={`Scene ${entry.sceneNumber}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
 
-                  {/* Transition */}
-                  <div>
-                    <Label className="text-xs font-medium text-gray-400 mb-2 block">Transition to Next Scene</Label>
-                    {editingId === entry.sceneNumber.toString() ? (
-                      <Input
-                        value={typeof entry.transition === 'string' ? entry.transition : formatScriptContent(entry.transition)}
-                        onChange={(e) => handleEdit(entry.sceneNumber, 'transition', e.target.value)}
-                        className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg"
-                        placeholder="e.g., Cut, Fade, Dissolve"
-                      />
-                    ) : (
-                      <p className="text-gray-300 text-sm">{formatScriptContent(entry.transition)}</p>
-                    )}
+                      {/* Storyboard Description */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-400 mb-2">Visual Description</p>
+                        <p className="text-sm text-gray-300 leading-relaxed">
+                          {storyboardScene?.description || 'No description available'}
+                        </p>
+                      </div>
+
+                      {/* Additional Storyboard Details */}
+                      {storyboardScene?.visualElements && (
+                        <div className="mt-4 pt-4 border-t border-gray-800">
+                          <p className="text-xs font-medium text-gray-400 mb-2">Visual Elements</p>
+                          <p className="text-sm text-gray-300 leading-relaxed">{storyboardScene.visualElements}</p>
+                        </div>
+                      )}
+
+                      {storyboardScene?.cameraWork && (
+                        <div className="mt-3">
+                          <p className="text-xs font-medium text-gray-400 mb-2">Camera Work</p>
+                          <p className="text-sm text-gray-300 leading-relaxed">{storyboardScene.cameraWork}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column - Screenplay Details */}
+                    <div className="p-6 flex flex-col">
+                      <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-400 mb-1">SCREENPLAY</h4>
+                          <p className="text-sm text-gray-400">
+                            {entry.timeStart} - {entry.timeEnd}
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() =>
+                            setEditingId(editingId === entry.sceneNumber.toString() ? null : entry.sceneNumber.toString())
+                          }
+                          variant="ghost"
+                          size="sm"
+                          className="text-gray-400 hover:text-white rounded-lg"
+                        >
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Save className="w-4 h-4" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Scene Fields */}
+                      <div className="space-y-4 flex-1 overflow-y-auto max-h-96">
+                        {/* Visual Description */}
+                        <div>
+                          <Label className="text-xs font-medium text-gray-400 mb-2 block">Visual Description</Label>
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Textarea
+                              value={typeof entry.visual === 'string' ? entry.visual : formatScriptContent(entry.visual)}
+                              onChange={(e) => handleEdit(entry.sceneNumber, 'visual', e.target.value)}
+                              className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-16 text-sm"
+                            />
+                          ) : (
+                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.visual)}</p>
+                          )}
+                        </div>
+
+                        {/* Camera Flow */}
+                        <div>
+                          <Label className="text-xs font-medium text-gray-400 mb-2 block">Camera Flow</Label>
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Textarea
+                              value={typeof entry.cameraFlow === 'string' ? entry.cameraFlow : formatScriptContent(entry.cameraFlow)}
+                              onChange={(e) => handleEdit(entry.sceneNumber, 'cameraFlow', e.target.value)}
+                              className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-12 text-sm"
+                            />
+                          ) : (
+                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.cameraFlow)}</p>
+                          )}
+                        </div>
+
+                        {/* Script / Dialogue */}
+                        <div>
+                          <Label className="text-xs font-medium text-gray-400 mb-2 block">Script / Dialogue</Label>
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Textarea
+                              value={typeof entry.script === 'string' ? entry.script : formatScriptContent(entry.script)}
+                              onChange={(e) => handleEdit(entry.sceneNumber, 'script', e.target.value)}
+                              className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-12 text-sm"
+                            />
+                          ) : (
+                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.script)}</p>
+                          )}
+                        </div>
+
+                        {/* Background Music */}
+                        <div>
+                          <Label className="text-xs font-medium text-gray-400 mb-2 block">Background Music</Label>
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Textarea
+                              value={typeof entry.backgroundMusic === 'string' ? entry.backgroundMusic : formatScriptContent(entry.backgroundMusic)}
+                              onChange={(e) => handleEdit(entry.sceneNumber, 'backgroundMusic', e.target.value)}
+                              className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-12 text-sm"
+                            />
+                          ) : (
+                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.backgroundMusic)}</p>
+                          )}
+                        </div>
+
+                        {/* Transition */}
+                        <div>
+                          <Label className="text-xs font-medium text-gray-400 mb-2 block">Transition to Next Scene</Label>
+                          {editingId === entry.sceneNumber.toString() ? (
+                            <Input
+                              value={typeof entry.transition === 'string' ? entry.transition : formatScriptContent(entry.transition)}
+                              onChange={(e) => handleEdit(entry.sceneNumber, 'transition', e.target.value)}
+                              className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg text-sm"
+                              placeholder="e.g., Cut, Fade, Dissolve"
+                            />
+                          ) : (
+                            <p className="text-gray-300 text-sm">{formatScriptContent(entry.transition)}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
 
           {/* Actions */}
