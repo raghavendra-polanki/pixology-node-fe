@@ -607,17 +607,8 @@ export async function generateVideoWithVeo3DirectAPI({
     // Poll for operation completion (polling function will get its own fresh token)
     const result = await pollVeo3Operation(operationName, accessToken, gcpLocation);
 
-    // Extract video URL from result
-    let videoUrl;
-    try {
-      videoUrl = extractVideoUrl(result);
-    } catch (extractError) {
-      // If we can't extract URL from operation result (e.g., 404), construct GCS path directly
-      console.warn(`   ⚠️  Could not extract video URL from operation result: ${extractError.message}`);
-      console.log(`   📺 Video should be in GCS output folder: ${outputStorageUri}`);
-      // Assume video was created at the storage location we specified
-      videoUrl = `${outputStorageUri}generated_video.mp4`;
-    }
+    // Extract video URL from operation result
+    const videoUrl = extractVideoUrl(result);
 
     console.log(`✅ Video generation completed!`);
     console.log(`   Video URL: ${videoUrl}`);
@@ -770,6 +761,15 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
 function extractVideoUrl(result) {
   // Veo 3 returns video in various possible formats
   // Try multiple paths to find the video URL
+
+  // Format from fetchPredictOperation response
+  if (result?.videos?.[0]?.gcsUri) {
+    const gcsUri = result.videos[0].gcsUri;
+    // Convert gs:// to https:// URL
+    return `https://storage.googleapis.com/${gcsUri.substring(5)}`; // Remove 'gs://'
+  }
+
+  // Other possible formats
   if (result?.predictions?.[0]?.videoUri) {
     return result.predictions[0].videoUri;
   }
