@@ -610,20 +610,11 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
   const pollIntervalMs = 15000; // Poll every 15 seconds
   let pollCount = 0;
 
-  // Extract project, location, and operation ID from operation name
-  // Full format: projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{operationId}
-  // Polling format: projects/{project}/locations/{location}/operations/{operationId}
-  const operationMatch = operationName.match(/^(projects\/[^\/]+\/locations\/[^\/]+)\/publishers\/google\/models\/[^\/]+\/operations\/(.+)$/);
-  let pollingPath = operationName; // Fallback to full name if regex doesn't match
-
-  if (operationMatch) {
-    const [, projectLocation, operationId] = operationMatch;
-    pollingPath = `${projectLocation}/operations/${operationId}`;
-    console.log(`   ✓ Extracted operation ID: ${operationId}`);
-    console.log(`   📡 Polling URL: https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`);
-  } else {
-    console.log(`   ⚠️ Could not extract operation ID, using full path for polling`);
-  }
+  // Use the full operation name for polling
+  // Veo3 API returns: projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{operationId}
+  // Polling endpoint expects the full path: /v1/{name}
+  const pollingPath = operationName;
+  console.log(`   📡 Polling URL: https://${gcpLocation}-aiplatform.googleapis.com/v1/${pollingPath}`);
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
