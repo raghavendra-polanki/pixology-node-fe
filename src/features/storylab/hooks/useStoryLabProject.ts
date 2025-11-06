@@ -50,6 +50,7 @@ interface UseStoryLabProjectResult {
   updateAIStoryboard: (storyboard: AIGeneratedStoryboard, projectIdOverride?: string) => Promise<StoryLabProject | void>;
   updateStoryboardCustomizations: (customizations: any, projectIdOverride?: string) => Promise<void>;
   updateAIScreenplay: (screenplay: AIGeneratedScreenplay) => Promise<void>;
+  updateScreenplayCustomizations: (customizations: any, projectIdOverride?: string) => Promise<void>;
   updateVideoProduction: (video: VideoProductionData) => Promise<void>;
 
   // Stage operations
@@ -338,6 +339,17 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     [updateProject, project],
   );
 
+  // Update screenplay customizations (screenplay edits)
+  const updateScreenplayCustomizations = useCallback(
+    async (customizations: any, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
+      setHasUnsavedChanges(true);
+      await updateProject({ screenplayCustomizations: customizations }, projectId);
+    },
+    [updateProject, project],
+  );
+
   // Update video production
   const updateVideoProduction = useCallback(
     async (video: VideoProductionData) => {
@@ -365,10 +377,74 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
 
   // Mark stage as completed
   const markStageCompleted = useCallback(
-    async (stageName: string, data?: any) => {
-      await updateStageStatus(stageName, 'completed', data);
+    async (stageName: string, data?: any): Promise<StoryLabProject | null> => {
+      // First, find the index of the stage being completed
+      const stageIndex = DEFAULT_WORKFLOW_STAGES.findIndex(s => s.name === stageName);
+
+      // Update stage status
+      const updatedAfterStatus = await updateStageStatus(stageName, 'completed', data);
+
+      // Find the highest stage the user has reached
+      if (stageIndex !== -1 && project) {
+        console.log(`markStageCompleted: Completed stage '${stageName}' (index=${stageIndex}), current=${project.currentStageIndex}`);
+
+        // Only advance currentStageIndex if completing a stage AT or PAST current position
+        // This handles two cases:
+        // 1. Normal progression: completing current stage moves to next
+        // 2. Re-editing: completing a previous stage doesn't change currentStageIndex
+
+        let shouldAdvance = false;
+
+        // If we just completed a stage that's at the current index, we can advance
+        if (stageIndex === project.currentStageIndex) {
+          shouldAdvance = true;
+          console.log(`markStageCompleted: Stage ${stageIndex} is current, advancing to next`);
+        } else if (stageIndex > project.currentStageIndex) {
+          // Completing a future stage (shouldn't happen normally)
+          shouldAdvance = true;
+          console.log(`markStageCompleted: Stage ${stageIndex} is ahead of current, advancing`);
+        } else {
+          // Editing a PREVIOUS stage - mark all downstream stages as "pending" (need regeneration)
+          console.log(`markStageCompleted: Editing previous stage ${stageIndex}, marking downstream stages as pending for regeneration`);
+
+          // Mark all stages AFTER this one as pending since upstream data changed
+          for (let i = stageIndex + 1; i < DEFAULT_WORKFLOW_STAGES.length; i++) {
+            const downstreamStageName = DEFAULT_WORKFLOW_STAGES[i].name;
+            console.log(`markStageCompleted: Marking stage ${i} (${downstreamStageName}) as pending`);
+
+            try {
+              await projectService.current.updateStageExecution(project.id, {
+                stageName: downstreamStageName,
+                status: 'pending',
+              });
+            } catch (error) {
+              console.error(`Error marking stage ${downstreamStageName} as pending:`, error);
+            }
+          }
+
+          // When re-editing a previous stage, we should advance from THIS stage, not the original position
+          // So set shouldAdvance = true and set currentStageIndex to this stage
+          shouldAdvance = true;
+          console.log(`markStageCompleted: Re-editing previous stage, will advance from stage ${stageIndex}`);
+        }
+
+        if (shouldAdvance) {
+          const updatedProject = await updateProject(
+            {
+              currentStageIndex: stageIndex,
+            },
+            project.id
+          );
+          console.log(`markStageCompleted: Advanced currentStageIndex to ${stageIndex}`);
+          return updatedProject;
+        } else {
+          // Return the project after status update but without advancing
+          return project;
+        }
+      }
+      return null;
     },
-    [updateStageStatus],
+    [updateStageStatus, updateProject, project],
   );
 
   // Mark stage as failed
@@ -387,8 +463,15 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     const projectData = projectToAdvance || project;
     if (!projectData) throw new Error('No project loaded');
 
+    console.log(`advanceToNextStage: Using currentStageIndex=${projectData.currentStageIndex}`);
+
     const next = projectService.current.getNextStage(projectData.currentStageIndex);
-    if (!next) throw new Error('No next stage available');
+    if (!next) {
+      console.error(`advanceToNextStage: No next stage available for index ${projectData.currentStageIndex}`);
+      throw new Error(`No next stage available (currentStageIndex=${projectData.currentStageIndex})`);
+    }
+
+    console.log(`advanceToNextStage: Advancing from stage index ${projectData.currentStageIndex} to ${next.index}`);
 
     // Update currentStageIndex and preserve campaign details
     // Pass projectId explicitly to avoid closure issues
@@ -399,6 +482,8 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
       },
       projectData.id  // Pass project ID explicitly
     );
+
+    console.log(`advanceToNextStage: Successfully advanced to stage index ${next.index}`);
   }, [project, updateProject]);
 
   // Get current stage
@@ -454,6 +539,7 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     updateAIStoryboard,
     updateStoryboardCustomizations,
     updateAIScreenplay,
+    updateScreenplayCustomizations,
     updateVideoProduction,
 
     // Stage operations

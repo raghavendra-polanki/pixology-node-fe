@@ -215,19 +215,34 @@ export function Stage5Screenplay({
 
   const handleSubmit = async () => {
     try {
+      console.log('handleSubmit: Starting screenplay finalization');
+
       // Save screenplay customizations
       if (screenplay.length > 0) {
+        console.log('handleSubmit: Saving screenplay customizations...');
         await updateScreenplayCustomizations({
           editedText: screenplay,
           lastEditedAt: new Date(),
         });
+        console.log('handleSubmit: Screenplay customizations saved');
       }
-      // Mark stage as completed
-      await markStageCompleted('screenplay');
-      // Advance to next stage
-      await advanceToNextStage();
+
+      // Mark stage as completed and get updated project
+      console.log('handleSubmit: Marking screenplay stage as completed...');
+      const updatedProject = await markStageCompleted('screenplay');
+      console.log('handleSubmit: Stage marked as completed, updated project:', {
+        currentStageIndex: updatedProject?.currentStageIndex,
+      });
+
+      // Advance to next stage using the updated project
+      // This ensures we're using the latest state
+      console.log('handleSubmit: Advancing to next stage...');
+      await advanceToNextStage(updatedProject || undefined);
+      console.log('handleSubmit: Successfully advanced to next stage');
     } catch (error) {
       console.error('Failed to save screenplay:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Error finalizing screenplay: ${errorMessage}`);
     }
   };
 

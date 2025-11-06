@@ -1,283 +1,102 @@
-import { generateTextFromGemini } from './geminiService.js';
-import { uploadVideoToGCS } from './gcsService.js';
-import { GoogleGenAI } from '@google/genai';
+import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEBUG_IMAGE_DIR = path.join(__dirname, '../../.debug_images');
 
 /**
  * Video Generation Service
- * Handles video generation using Gemini API with Veo 3.1 model
+ * Handles video generation using Vertex AI Veo 3.1 API with direct GCS upload
  */
 
-const USE_MOCK_VIDEOS = process.env.USE_MOCK_VIDEOS !== 'false'; // Set to false to use real Veo API, true for mock videos in testing
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+const ENABLE_DEBUG_IMAGES = process.env.ENABLE_DEBUG_IMAGES === 'true';
 
 /**
- * Generate a video for a scene
- * Uses Gemini to enhance descriptions, with storyboard image for Veo 3.1 video generation
- *
- * @param {string} imageBase64 - Base64 encoded storyboard image
- * @param {object} sceneData - Scene data from screenplay
- * @param {string} sceneIndex - Index of the scene (0-based)
- * @returns {Promise<object>} Generated video info with URL and metadata
+ * DEBUGGING UTILITY: Save image for inspection
  */
-export async function generateVideoWithVeo(imageBase64, sceneData, sceneIndex = 0) {
+function debugSaveImage(imageBase64, sceneIndex, stage = 'original') {
+  if (!ENABLE_DEBUG_IMAGES) return;
+
   try {
-    console.log(`Generating video for scene ${sceneIndex + 1}...`);
-
-    // Prepare the prompt from screenplay data
-    const prompt = buildVideoPrompt(sceneData, sceneIndex);
-
-    console.log(`Scene ${sceneIndex + 1} Video Prompt:`, prompt.substring(0, 200) + '...');
-
-    // Use Gemini to enhance video description
-    const enhancedDescription = prompt;//await enhanceVideoDescriptionWithGemini(prompt);
-
-    console.log(`Enhanced video description for scene ${sceneIndex + 1}`);
-
-    // Generate video (mock for now, ready for real implementation)
-    let videoBuffer;
-    if (USE_MOCK_VIDEOS) {
-      videoBuffer = await generateMockVideo(enhancedDescription, sceneIndex);
-      console.log(`Generated mock video for scene ${sceneIndex + 1}`);
-    } else {
-      videoBuffer = await callVeoAPIRealImplementation(imageBase64, enhancedDescription);
-      console.log(`Generated real video with Veo 3.1 for scene ${sceneIndex + 1}`);
+    if (!fs.existsSync(DEBUG_IMAGE_DIR)) {
+      fs.mkdirSync(DEBUG_IMAGE_DIR, { recursive: true });
     }
 
-    // Return video metadata
-    return {
-      sceneNumber: sceneIndex + 1,
-      videoBuffer: videoBuffer,
-      videoFormat: 'mp4',
-      duration: sceneData.timeEnd || '8s',
-      generatedAt: new Date(),
-      metadata: {
-        sceneTitle: sceneData.title || `Scene ${sceneIndex + 1}`,
-        duration: sceneData.timeEnd,
-        visual: sceneData.visual,
-        cameraFlow: sceneData.cameraFlow,
-        description: enhancedDescription,
-      },
-    };
-  } catch (error) {
-    console.error(`Error generating video for scene ${sceneIndex + 1}:`, error);
-    throw error;
+    let imageData;
+    let imageType = 'png';
+    let base64String = imageBase64;
+
+    const dataURIMatch = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (dataURIMatch) {
+      imageType = dataURIMatch[1];
+      base64String = dataURIMatch[2];
+    }
+
+    imageData = Buffer.from(base64String, 'base64');
+    const filename = `scene_${sceneIndex}_${stage}.${imageType}`;
+    const filepath = path.join(DEBUG_IMAGE_DIR, filename);
+    fs.writeFileSync(filepath, imageData);
+
+    console.log(`DEBUG: Saved image to ${filepath} (${imageData.length} bytes)`);
+  } catch (err) {
+    console.error('DEBUG: Failed to save image:', err.message);
   }
 }
 
 /**
- * Use Gemini to enhance video description
- * @private
+ * DEBUGGING UTILITY: Validate and analyze image data
  */
-async function enhanceVideoDescriptionWithGemini(prompt) {
+function debugAnalyzeImage(imageBase64) {
   try {
-    const enhancementPrompt = `
-You are a professional video production expert. Based on this video scene description, provide technical video production specifications:
+    console.log('\n=== DEBUG: IMAGE ANALYSIS ===');
 
-${prompt}
+    const isString = typeof imageBase64 === 'string';
+    const isBuffer = Buffer.isBuffer(imageBase64);
+    console.log(`DEBUG: Image input type: ${isString ? 'string' : isBuffer ? 'Buffer' : 'unknown'}`);
 
-Return ONLY a JSON object with these fields:
-{
-  "shotTypes": ["array of shot types like 'wide shot', 'close-up', etc"],
-  "transitions": ["array of recommended transitions"],
-  "lighting": "lighting recommendations",
-  "colorGrade": "color grading suggestions",
-  "pacing": "scene pacing description"
-}
-    `.trim();
+    let base64String = isString ? imageBase64 : isBuffer ? imageBase64.toString('base64') : null;
+    if (!base64String) {
+      console.log(`DEBUG: WARNING - Unexpected image type: ${typeof imageBase64}`);
+      return;
+    }
 
-    const response = await generateTextFromGemini(enhancementPrompt, {
-      temperature: 0.5,
-      maxTokens: 1000,
-    });
+    console.log(`DEBUG: Base64 string length: ${base64String.length} characters`);
+    console.log(`DEBUG: Estimated image size: ~${Math.round(base64String.length * 0.75 / 1024)} KB`);
+
+    if (base64String.includes('data:image')) {
+      const prefixMatch = base64String.match(/^data:image\/([^;]+);base64,/);
+      if (prefixMatch) {
+        console.log(`DEBUG: Has data URI prefix - Image type: ${prefixMatch[1]}`);
+      }
+    }
 
     try {
-      return JSON.parse(response);
-    } catch (e) {
-      console.warn('Could not parse Gemini response as JSON, using raw text');
-      return { description: response };
-    }
-  } catch (error) {
-    console.warn('Failed to enhance description with Gemini:', error.message);
-    return { description: prompt };
-  }
-}
+      const decoded = Buffer.from(base64String.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      console.log(`DEBUG: Base64 is valid, decoded size: ${decoded.length} bytes`);
 
-/**
- * Generate a mock video for development/testing
- * Creates a minimal valid MP4 file structure for testing without real video generation
- * @private
- */
-async function generateMockVideo(_description, sceneIndex) {
-  try {
-    // Create a minimal but valid MP4 file structure
-    // This includes: ftyp (file type), mdat (media data), and moov (movie metadata)
-
-    // MP4 ftyp box (file type)
-    const ftypBox = Buffer.concat([
-      Buffer.from([0x00, 0x00, 0x00, 0x20]), // Size (32 bytes)
-      Buffer.from('ftyp', 'ascii'),
-      Buffer.from([0x69, 0x73, 0x6f, 0x6d]), // Major brand (isom)
-      Buffer.from([0x00, 0x00, 0x00, 0x00]), // Minor version
-      Buffer.from('isomiso2avc1mp41', 'ascii') // Compatible brands
-    ]);
-
-    // MP4 mdat box (media data) - minimal placeholder
-    const mdatContent = Buffer.from(
-      `Video for scene ${sceneIndex + 1} generated at ${new Date().toISOString()}`
-    );
-    const mdatSize = mdatContent.length + 8;
-    const mdatBox = Buffer.concat([
-      Buffer.from([(mdatSize >> 24) & 0xFF, (mdatSize >> 16) & 0xFF, (mdatSize >> 8) & 0xFF, mdatSize & 0xFF]),
-      Buffer.from('mdat', 'ascii'),
-      mdatContent
-    ]);
-
-    // MP4 moov box (movie metadata) - minimal structure
-    const moovContent = Buffer.from([
-      // mvhd (movie header) - minimal
-      0x00, 0x00, 0x00, 0x6C, // Size
-      0x6D, 0x76, 0x68, 0x64, // 'mvhd'
-      0x00, 0x00, 0x00, 0x00, // Version and flags
-      0x00, 0x00, 0x00, 0x00, // Creation time
-      0x00, 0x00, 0x00, 0x00, // Modification time
-      0x00, 0x00, 0x03, 0xE8, // Timescale (1000)
-      0x00, 0x00, 0x03, 0xE8, // Duration (1000ms = 1 second)
-      0x00, 0x01, 0x00, 0x00, // Playback speed (1x)
-      0x01, 0x00, 0x00, 0x00, // Volume
-      ...Array(6).fill(0x00), // Reserved
-      0x00, 0x01, 0x00, 0x00, // Matrix A
-      0x00, 0x00, 0x00, 0x00, // Matrix B
-      0x00, 0x00, 0x00, 0x00, // Matrix C
-      0x00, 0x00, 0x00, 0x00, // Matrix D
-      0x00, 0x01, 0x00, 0x00, // Matrix E
-      0x00, 0x00, 0x00, 0x00, // Matrix F
-      0x40, 0x00, 0x00, 0x00, // Matrix G
-      0x00, 0x00, 0x00, 0x00, // Matrix H
-      0x40, 0x00, 0x00, 0x00, // Matrix I
-      0x00, 0x00, 0x00, 0x00, // Matrix J
-      0x00, 0x00, 0x00, 0x02  // Next track ID
-    ]);
-
-    const moovSize = moovContent.length + 8;
-    const moovBox = Buffer.concat([
-      Buffer.from([(moovSize >> 24) & 0xFF, (moovSize >> 16) & 0xFF, (moovSize >> 8) & 0xFF, moovSize & 0xFF]),
-      Buffer.from('moov', 'ascii'),
-      moovContent
-    ]);
-
-    // Combine all boxes
-    const mockVideoData = Buffer.concat([ftypBox, mdatBox, moovBox]);
-
-    console.log(`Created mock MP4 video buffer for scene ${sceneIndex + 1} (${mockVideoData.length} bytes)`);
-    return mockVideoData;
-  } catch (error) {
-    console.error('Error generating mock video:', error);
-    throw error;
-  }
-}
-
-/**
- * Call real Veo 3.1 API using Google GenAI
- * Generates video using Veo 3.1 model with image input
- * @private
- */
-async function callVeoAPIRealImplementation(imageBase64, description) {
-  try {
-    console.log('Calling Veo 3.1 API via GoogleGenAI...');
-
-    // Convert description to string (it may be an object from Gemini enhancement)
-    let promptString;
-    if (typeof description === 'string') {
-      promptString = description;
-    } else if (typeof description === 'object' && description !== null) {
-      // If it's an object, create a text representation
-      promptString = typeof description.description === 'string'
-        ? description.description
-        : JSON.stringify(description);
-    } else {
-      promptString = String(description);
-    }
-    // Step 1: Prepare storyboard image for Veo 3.1
-    // The API expects imageBytes as base64 string
-    console.log('Preparing storyboard image for Veo 3.1...');
-
-    let imageBase64String = typeof imageBase64 === 'string'
-      ? imageBase64
-      : imageBase64.toString('base64');
-
-    // **FIX:** The API requires raw base64 data. We must remove the data URI prefix if it exists.
-    imageBase64String = imageBase64String.replace(/^data:image\/\w+;base64,/, '');
-
-    const imageForVeo = {
-      imageBytes: imageBase64String, // Now guaranteed to be raw base64
-      mimeType: 'image/png',
-    };
-    console.log('Storyboard image prepared for Veo 3.1 API');
-
-    // Step 2: Generate video with Veo 3.1 using the storyboard image
-    console.log('Starting Veo 3.1 video generation...');
-
-    console.log('Prompt for Veo 3.1:', promptString.substring(0, 200) + '...');
-
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-generate-preview',
-      prompt: promptString,
-      image: imageForVeo,
-    });
-
-    console.log('Video generation operation started, polling for completion...');
-
-    // Step 3: Poll the operation status until the video is ready
-    let pollAttempts = 0;
-    const maxPolls = 120; // Max 2 hours with 60 second intervals
-    const pollInterval = 60000; // 60 seconds
-
-    while (!operation.done && pollAttempts < maxPolls) {
-      pollAttempts++;
-      console.log(`Waiting for video generation to complete... (attempt ${pollAttempts}/${maxPolls})`);
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-      operation = await ai.operations.getVideosOperation({
-        operation: operation,
-      });
+      const magicBytes = decoded.subarray(0, 12).toString('hex');
+      if (magicBytes.startsWith('89504e47')) {
+        console.log('DEBUG: ✓ Detected PNG format');
+      } else if (magicBytes.startsWith('ffd8ff')) {
+        console.log('DEBUG: ✓ Detected JPEG format');
+      } else {
+        console.log(`DEBUG: ⚠ Unknown image format with magic bytes: ${magicBytes}`);
+      }
+    } catch (decodeErr) {
+      console.log(`DEBUG: ✗ Base64 decode failed: ${decodeErr.message}`);
     }
 
-    if (!operation.done) {
-      throw new Error(`Video generation timed out after ${maxPolls} attempts`);
-    }
-
-    console.log('Video generation completed successfully');
-
-    // Step 4: Get the generated video and convert to buffer
-    const generatedVideo = operation.response.generatedVideos[0].video;
-
-    // Download the video file and convert to buffer
-    const videoBuffer = await ai.files.download({
-      file: generatedVideo,
-    });
-
-    console.log(`Received video buffer from Veo 3.1 API (${videoBuffer.length} bytes)`);
-    return videoBuffer;
-
-  } catch (error) {
-    console.error('Error calling Veo 3.1 API:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-      details: error.details,
-      stack: error.stack,
-    });
-    // Throw error instead of falling back - we need to see what's wrong with Veo 3.1
-    throw new Error(`Veo 3.1 API Error: ${error.message}`);
+    console.log('=== END DEBUG ===\n');
+  } catch (err) {
+    console.error('DEBUG: Error analyzing image:', err.message);
   }
 }
 
 /**
  * Build video generation prompt from screenplay data
- * @private
  */
 function buildVideoPrompt(sceneData, sceneIndex) {
   const {
@@ -326,15 +145,228 @@ Generate a high-quality, professional marketing video that brings this scene to 
 }
 
 /**
- * Generate videos for multiple scenes
- * Infrastructure for batch processing
- * @param {array} sceneDataArray - Array of scene data from screenplay
- * @param {string} imageBase64 - Storyboard image (same for all scenes in initial implementation)
- * @returns {Promise<array>} Array of generated videos
+ * Generate video using Vertex AI Veo 3.1 API and save directly to GCS
+ *
+ * @param {string} imageBase64 - Base64 encoded storyboard image
+ * @param {object} sceneData - Scene data from screenplay
+ * @param {string} projectId - Project ID for GCS storage
+ * @param {number} sceneIndex - Index of the scene (0-based)
+ * @returns {Promise<object>} Generated video info with GCS URL
  */
-export async function generateMultipleSceneVideos(sceneDataArray, imageBase64) {
+export async function generateVideoWithVeo(imageBase64, sceneData, projectId, sceneIndex = 0) {
   try {
-    console.log(`Generating videos for ${sceneDataArray.length} scenes...`);
+    console.log(`Generating video for scene ${sceneIndex + 1}...`);
+
+    const prompt = buildVideoPrompt(sceneData, sceneIndex);
+    console.log(`Scene ${sceneIndex + 1} Video Prompt:`, prompt.substring(0, 150) + '...');
+
+    // Call Veo API and upload directly to GCS
+    const videoUrl = await callVeoAPIAndUploadToGCS(imageBase64, prompt, projectId, sceneIndex);
+
+    console.log(`Video generated and uploaded for scene ${sceneIndex + 1}: ${videoUrl}`);
+
+    return {
+      sceneNumber: sceneIndex + 1,
+      videoUrl: videoUrl,
+      videoFormat: 'mp4',
+      duration: sceneData.timeEnd || '6s',
+      generatedAt: new Date(),
+      uploadedToGCS: true,
+      metadata: {
+        sceneTitle: sceneData.title || `Scene ${sceneIndex + 1}`,
+        duration: sceneData.timeEnd,
+        visual: sceneData.visual,
+        cameraFlow: sceneData.cameraFlow,
+        description: prompt,
+      },
+    };
+  } catch (error) {
+    console.error(`Error generating video for scene ${sceneIndex + 1}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Call Python FastAPI backend for video generation
+ * @private
+ */
+async function callPythonVideoGenerationAPI(prompt, duration_seconds = 5, quality = 'fast') {
+  try {
+    const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:8000';
+    const endpoint = `${pythonApiUrl}/api/videos/generate`;
+
+    console.log(`Calling Python FastAPI backend at: ${endpoint}`);
+    console.log(`Request: prompt="${prompt.substring(0, 100)}...", duration=${duration_seconds}s, quality=${quality}`);
+
+    const requestBody = {
+      prompt: prompt,
+      duration_seconds: duration_seconds,
+      quality: quality,
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log(`Python API response status: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Python API error response:', errorData);
+      throw new Error(
+        `Python API error: ${response.status} - ${errorData.error || errorData.detail || 'Unknown error'}`
+      );
+    }
+
+    const videoData = await response.json();
+    console.log(`Python API response: video_id=${videoData.video_id}, url=${videoData.video_url}`);
+
+    return videoData;
+  } catch (error) {
+    console.error('Error calling Python FastAPI backend:', error.message);
+    throw new Error(`Python Video Generation API Error: ${error.message}`);
+  }
+}
+
+/**
+ * Get authenticated access token for Google API
+ * @private
+ */
+async function getAccessToken() {
+  try {
+    const keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (!keyFilePath) {
+      throw new Error('GOOGLE_APPLICATION_CREDENTIALS environment variable not set');
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      keyFile: keyFilePath,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+
+    const client = await auth.getClient();
+    const response = await client.getAccessToken();
+
+    // Handle different response formats
+    const token = response?.token || response?.access_token || response;
+
+    if (!token || typeof token !== 'string') {
+      console.error('Unexpected response format from getAccessToken:', response);
+      throw new Error(`Invalid access token format received: ${JSON.stringify(response).substring(0, 100)}`);
+    }
+
+    return token;
+  } catch (error) {
+    console.error('Error getting access token:', error.message);
+    throw new Error(`Failed to get access token: ${error.message}`);
+  }
+}
+
+/**
+ * Poll operation status until completion
+ * @private
+ */
+async function pollOperationStatus(operationName, accessToken, gcpRegion, maxWaitMs = 7200000) {
+  const startTime = Date.now();
+  const pollIntervalMs = 10000; // Poll every 10 seconds
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const url = `https://${gcpRegion}-aiplatform.googleapis.com/v1/${operationName}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const operation = await response.json();
+      console.log(`Operation status: ${operation.done ? 'DONE' : 'IN_PROGRESS'}`);
+
+      if (operation.done) {
+        if (operation.error) {
+          throw new Error(`Operation failed: ${operation.error.message}`);
+        }
+        return operation.result;
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    } catch (error) {
+      if (error.message.includes('API error')) throw error;
+      console.warn(`Poll attempt failed: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  throw new Error('Operation timed out after 2 hours');
+}
+
+/**
+ * Call Python FastAPI backend for video generation (replaces Veo 3.1 API)
+ * @private
+ */
+async function callVeoAPIAndUploadToGCS(imageBase64, description, projectId, sceneIndex) {
+  try {
+    console.log('Calling Python FastAPI backend for video generation...');
+
+    // Debug image data (for reference, though we're not using the image with Python API for now)
+    debugAnalyzeImage(imageBase64);
+    debugSaveImage(imageBase64, sceneIndex, 'original');
+
+    // Extract duration from description if available
+    // Default to 5 seconds, can be adjusted based on scene data
+    let duration_seconds = 5;
+    let quality = 'fast';
+
+    // Try to extract duration from description if it mentions seconds
+    const durationMatch = description.match(/(\d+)\s*seconds?\s*duration/i);
+    if (durationMatch) {
+      const extractedDuration = parseInt(durationMatch[1]);
+      if (extractedDuration >= 1 && extractedDuration <= 30) {
+        duration_seconds = extractedDuration;
+      }
+    }
+
+    console.log(`Using duration: ${duration_seconds}s, quality: ${quality}`);
+
+    // Call Python FastAPI backend
+    const pythonApiResponse = await callPythonVideoGenerationAPI(description, duration_seconds, quality);
+
+    console.log('✅ Video generation completed successfully via Python FastAPI');
+    console.log(`📺 Video URL: ${pythonApiResponse.video_url}`);
+    console.log(`📺 Video ID: ${pythonApiResponse.video_id}`);
+    console.log(`📺 GCS Path: ${pythonApiResponse.gcs_path}`);
+
+    return pythonApiResponse.video_url;
+
+  } catch (error) {
+    console.error('Error in video generation:', error);
+    throw new Error(`Video Generation Error: ${error.message}`);
+  }
+}
+
+/**
+ * Generate videos for multiple scenes with direct GCS upload
+ *
+ * @param {array} sceneDataArray - Array of scene data from screenplay
+ * @param {string} imageBase64 - Storyboard image (same for all scenes)
+ * @param {string} projectId - Project ID for GCS storage
+ * @returns {Promise<array>} Array of generated videos with GCS URLs
+ */
+export async function generateMultipleSceneVideos(sceneDataArray, imageBase64, projectId) {
+  try {
+    console.log(`Generating videos for ${sceneDataArray.length} scenes with direct GCS upload...`);
 
     const generatedVideos = [];
 
@@ -343,20 +375,19 @@ export async function generateMultipleSceneVideos(sceneDataArray, imageBase64) {
       try {
         console.log(`Processing scene ${i + 1}/${sceneDataArray.length}...`);
 
-        const videoData = await generateVideoWithVeo(imageBase64, sceneDataArray[i], i);
+        const videoData = await generateVideoWithVeo(imageBase64, sceneDataArray[i], projectId, i);
         generatedVideos.push(videoData);
 
-        // Add delay between API calls to avoid rate limiting
+        // Add delay between API calls
         if (i < sceneDataArray.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 2000)); // 2-second delay
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (error) {
         console.error(`Failed to generate video for scene ${i + 1}:`, error.message);
-        // Continue with next scene instead of failing entire operation
         generatedVideos.push({
           sceneNumber: i + 1,
           error: error.message,
-          videoBuffer: null,
+          videoUrl: null,
         });
       }
     }
@@ -369,46 +400,56 @@ export async function generateMultipleSceneVideos(sceneDataArray, imageBase64) {
 }
 
 /**
- * Upload generated video to GCS and return URL
- * @param {Buffer} videoBuffer - Video file buffer
- * @param {string} projectId - Project identifier for organizing videos
- * @param {number} sceneNumber - Scene number for naming
- * @returns {Promise<string>} URL to the uploaded video
+ * Generate video directly from a text prompt using Python FastAPI backend
+ * This is a simplified interface for direct prompt-based generation
+ *
+ * @param {string} prompt - Text prompt for video generation
+ * @param {number} durationSeconds - Duration in seconds (1-30, default 5)
+ * @param {string} quality - Quality setting: 'fast' or 'quality' (default 'fast')
+ * @returns {Promise<object>} Generated video info with URL and metadata
  */
-export async function uploadVideoToGCSStorage(videoBuffer, projectId, sceneNumber) {
+export async function generateVideoFromPrompt(prompt, durationSeconds = 5, quality = 'fast') {
   try {
-    if (!videoBuffer || videoBuffer.length === 0) {
-      throw new Error('Video buffer is empty');
-    }
+    console.log('Generating video from prompt using Python FastAPI backend...');
+    const videoData = await callPythonVideoGenerationAPI(prompt, durationSeconds, quality);
 
-    console.log(`Uploading video to GCS for scene ${sceneNumber}...`);
-
-    const url = await uploadVideoToGCS(videoBuffer, projectId, `scene_${sceneNumber}`);
-
-    console.log(`Video uploaded successfully: ${url}`);
-
-    return url;
+    return {
+      success: true,
+      videoUrl: videoData.video_url,
+      videoId: videoData.video_id,
+      prompt: videoData.prompt,
+      duration: videoData.duration_seconds,
+      quality: videoData.quality,
+      generatedAt: videoData.generation_time,
+      gcsPath: videoData.gcs_path,
+      metadata: {
+        videoUrl: videoData.video_url,
+        videoId: videoData.video_id,
+        duration: videoData.duration_seconds,
+        quality: videoData.quality,
+      },
+    };
   } catch (error) {
-    console.error('Error uploading video to GCS:', error);
+    console.error('Error generating video from prompt:', error);
     throw error;
   }
 }
 
 /**
- * Stream video from GCS URL to client
- * Returns streaming URL that can be used in video player
+ * Get video streaming URL
+ * GCS URLs are directly streamable in HTML5 video players
+ *
  * @param {string} videoUrl - GCS video URL
- * @returns {string} Video URL suitable for HTML5 video player
+ * @returns {string} Video URL for playback
  */
 export function getVideoStreamUrl(videoUrl) {
-  // GCS URLs are directly streamable in HTML5 video players
-  // Ensure CORS headers are properly configured on the bucket
   return videoUrl;
 }
 
 export default {
   generateVideoWithVeo,
   generateMultipleSceneVideos,
-  uploadVideoToGCSStorage,
+  generateVideoFromPrompt,
+  callPythonVideoGenerationAPI,
   getVideoStreamUrl,
 };

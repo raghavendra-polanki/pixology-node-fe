@@ -473,15 +473,15 @@ export function Stage3Narratives({
         }, project.id);
       }
 
-      // Mark stage as completed
+      // Mark stage as completed and get updated project
       console.log('Marking narrative stage as completed...');
-      await markStageCompleted('narrative');
+      const updatedProject = await markStageCompleted('narrative');
 
       console.log('Stage completed successfully. Advancing to next stage...');
       alert('Narrative preferences saved! Moving to next stage...');
 
-      // Advance to the next stage (Stage 4 - Storyboard)
-      await advanceToNextStage();
+      // Advance to the next stage (Stage 4 - Storyboard) with updated project
+      await advanceToNextStage(updatedProject || undefined);
     } catch (error) {
       console.error('Failed to save narrative preferences:', error);
       alert(`Failed to save narrative preferences: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -34,21 +34,56 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
     isLoading,
     createProject,
     loadProject,
+    updateProject,
     updateCampaignDetails,
     updateAIPersonas,
     updatePersonaSelection,
+    updateAIScreenplay,
+    updateScreenplayCustomizations,
     markStageCompleted,
     advanceToNextStage,
   } = useStoryLabProject({ autoLoad: true, projectId });
 
   const [currentStage, setCurrentStage] = useState(1);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Sync current stage with project data when loaded
+  // Track if initial sync from backend has happened
+  const hasInitializedRef = useRef(false);
+
+  // On initial load: sync frontend currentStage to backend's last completed stage
+  // This ensures if user refreshes, they see the last stage they reached
   useEffect(() => {
-    if (project) {
+    if (project && !hasInitializedRef.current) {
+      console.log(`WorkflowView: Initial sync - Setting currentStage to ${project.currentStageIndex + 1}`);
       setCurrentStage(project.currentStageIndex + 1);
+      hasInitializedRef.current = true;
     }
-  }, [project?.currentStageIndex, project]);
+  }, [project?.id]); // Only run once per project
+
+  // When backend currentStageIndex changes (from completing a stage), sync to UI
+  // This is different from sidebar navigation - this is actual stage progression
+  useEffect(() => {
+    if (hasInitializedRef.current && project) {
+      // After initial load, if backend currentStageIndex changes, update UI
+      // But only update if we're not already there (avoid unnecessary state updates)
+      const backendStage = project.currentStageIndex + 1;
+      if (backendStage !== currentStage) {
+        console.log(`WorkflowView: Backend currentStageIndex changed to ${project.currentStageIndex}, syncing currentStage to ${backendStage}`);
+        setCurrentStage(backendStage);
+      }
+      setIsTransitioning(false);
+    }
+  }, [project?.currentStageIndex]);
+
+  // Clear transitioning state after component renders with new stage
+  useEffect(() => {
+    if (isTransitioning) {
+      const timer = setTimeout(() => {
+        setIsTransitioning(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStage, isTransitioning]);
 
   const isStageCompleted = (stageIndex: number) => {
     const stageName = STAGE_NAMES[stageIndex - 1];
@@ -63,6 +98,28 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
       if (!isStageCompleted(i)) return false;
     }
     return true;
+  };
+
+  // Check if a stage is stale (needs regeneration due to upstream edit)
+  const isStageStale = (stageIndex: number) => {
+    const stageName = STAGE_NAMES[stageIndex - 1];
+    const stageExecution = project?.stageExecutions[stageName];
+
+    // A stage is stale if it's now pending BUT was previously completed (has completedAt)
+    // This indicates upstream data changed and this stage needs regeneration
+    const isPendingNow = stageExecution?.status === 'pending';
+    const wasCompletedBefore = !!stageExecution?.completedAt;
+
+    return isPendingNow && wasCompletedBefore;
+  };
+
+  // Handle sidebar navigation - purely local, no backend calls, no animation needed
+  const handleStageNavigation = (stageId: number) => {
+    if (isStageAccessible(stageId)) {
+      // Just update the stage immediately - no transition spinner for local nav
+      setCurrentStage(stageId);
+      console.log(`WorkflowView: Navigating to stage ${stageId} (local only)`);
+    }
   };
 
   const CurrentStageComponent = stages[currentStage - 1].component;
@@ -92,17 +149,19 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
             {stages.map((stage) => {
               const isActive = stage.id === currentStage;
               const isCompleted = isStageCompleted(stage.id);
+              const stale = isStageStale(stage.id);
               const isAccessible = isStageAccessible(stage.id);
 
               return (
                 <button
                   key={stage.id}
-                  onClick={() => isAccessible && setCurrentStage(stage.id)}
+                  onClick={() => handleStageNavigation(stage.id)}
                   disabled={!isAccessible}
                   className={`
                     w-full text-left px-4 py-3 rounded-lg transition-all
                     ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800/50'}
-                    ${isCompleted && !isActive ? 'bg-gray-800/30' : ''}
+                    ${stale && !isActive ? 'bg-orange-500/20' : ''}
+                    ${isCompleted && !stale && !isActive ? 'bg-gray-800/30' : ''}
                     ${!isAccessible ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
                   `}
                 >
@@ -111,8 +170,9 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
                       className={`
                         w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm
                         ${isActive ? 'bg-white text-blue-600' : ''}
-                        ${isCompleted ? 'bg-green-500/20 text-green-400' : ''}
-                        ${!isActive && !isCompleted ? 'bg-gray-700 text-gray-300' : ''}
+                        ${stale ? 'bg-orange-500/30 text-orange-400' : ''}
+                        ${isCompleted && !stale ? 'bg-green-500/20 text-green-400' : ''}
+                        ${!isActive && !isCompleted && !stale ? 'bg-gray-700 text-gray-300' : ''}
                       `}
                     >
                       {isCompleted ? (
@@ -122,10 +182,13 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-gray-400' : 'text-gray-300'}`}>
+                      <div className={`text-sm font-medium ${isActive ? 'text-white' : stale ? 'text-orange-400' : isCompleted ? 'text-gray-400' : 'text-gray-300'}`}>
                         {stage.name}
                       </div>
-                      {isCompleted && (
+                      {stale && (
+                        <div className="text-xs text-orange-400 mt-0.5">⚠ Needs Regeneration</div>
+                      )}
+                      {isCompleted && !stale && (
                         <div className="text-xs text-green-500 mt-0.5">Completed</div>
                       )}
                     </div>
@@ -138,24 +201,39 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative">
         {isLoading && !project ? (
           // Only show loading if we're actually loading an existing project
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-400">Loading project...</p>
           </div>
+        ) : isTransitioning ? (
+          // Show a loading state during stage transitions
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-pulse">
+                <p className="text-gray-400 mb-4">Moving to next stage...</p>
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            </div>
+          </div>
         ) : (
           // Render the stage component - pass shared project state and functions
-          <CurrentStageComponent
-            project={project}
-            createProject={createProject}
-            loadProject={loadProject}
-            updateCampaignDetails={updateCampaignDetails}
-            updateAIPersonas={updateAIPersonas}
-            updatePersonaSelection={updatePersonaSelection}
-            markStageCompleted={markStageCompleted}
-            advanceToNextStage={advanceToNextStage}
-          />
+          // Use key to force React to unmount and remount component on stage change
+          <div key={`stage-${currentStage}`} className="transition-opacity duration-300">
+            <CurrentStageComponent
+              project={project}
+              createProject={createProject}
+              loadProject={loadProject}
+              updateCampaignDetails={updateCampaignDetails}
+              updateAIPersonas={updateAIPersonas}
+              updatePersonaSelection={updatePersonaSelection}
+              updateAIScreenplay={updateAIScreenplay}
+              updateScreenplayCustomizations={updateScreenplayCustomizations}
+              markStageCompleted={markStageCompleted}
+              advanceToNextStage={advanceToNextStage}
+            />
+          </div>
         )}
       </div>
     </div>

@@ -79,10 +79,10 @@ export function Stage1CampaignDetails({
       } else {
         // Update campaign details for existing projects
         await updateCampaignDetails(formData);
-        // Mark stage as completed for existing projects
-        await markStageCompleted('campaign-details');
-        // Advance to next stage
-        await advanceToNextStage(project);
+        // Mark stage as completed for existing projects and get updated project
+        const updatedProject = await markStageCompleted('campaign-details');
+        // Advance to next stage with updated project to avoid stale state
+        await advanceToNextStage(updatedProject || undefined);
       }
     } catch (error) {
       console.error('Failed to save campaign details:', error);

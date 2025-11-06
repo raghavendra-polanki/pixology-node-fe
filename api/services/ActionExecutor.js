@@ -6,7 +6,7 @@ import {
 } from './geminiService.js';
 import { generatePersonaImage, generateMultipleSceneImages } from './imageGenerationService.js';
 import { uploadImageToGCS } from './gcsService.js';
-import { generateVideoWithVeo, uploadVideoToGCSStorage } from './videoGenerationService.js';
+import { generateVideoWithVeo } from './videoGenerationService.js';
 
 /**
  * ActionExecutor - Executes individual recipe actions (nodes)
@@ -304,7 +304,7 @@ export class ActionExecutor {
 
       // Validate required inputs
       if (!sceneImage) {
-        throw new Error('Missing required input: sceneImage (base64 encoded image from storyboard)');
+        throw new Error('Missing required input: sceneImage (URL or base64 encoded image from storyboard)');
       }
 
       if (!sceneData) {
@@ -321,6 +321,19 @@ export class ActionExecutor {
 
       console.log(`Generating video for scene ${sceneIndex + 1}...`);
 
+      // Convert image URL to base64 if needed
+      let imageBase64 = sceneImage;
+      if (sceneImage.startsWith('http://') || sceneImage.startsWith('https://')) {
+        console.log(`Converting image URL to base64: ${sceneImage}`);
+        const imageResponse = await fetch(sceneImage);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch image from URL: ${sceneImage} (${imageResponse.status})`);
+        }
+        const imageBuffer = await imageResponse.arrayBuffer();
+        imageBase64 = Buffer.from(imageBuffer).toString('base64');
+        console.log(`Image downloaded and converted to base64. Size: ${imageBase64.length} characters`);
+      }
+
       // Combine scene and screenplay data for video generation
       const combinedSceneData = {
         title: sceneData.title || screenplayEntry.title || `Scene ${sceneIndex + 1}`,
@@ -333,42 +346,23 @@ export class ActionExecutor {
       };
 
       // Generate video using Veo 3.1 with storyboard image
-      const videoData = await generateVideoWithVeo(sceneImage, combinedSceneData, sceneIndex);
+      // Video is generated and uploaded directly to GCS (no server buffering)
+      const videoData = await generateVideoWithVeo(imageBase64, combinedSceneData, projectId, sceneIndex);
 
-      console.log(`Video generated for scene ${sceneIndex + 1}`);
+      console.log(`Video generated and uploaded for scene ${sceneIndex + 1}: ${videoData.videoUrl}`);
 
-      // Upload video to GCS
-      let videoUrl = null;
-      try {
-        if (videoData.videoBuffer && videoData.videoBuffer.length > 0) {
-          videoUrl = await uploadVideoToGCSStorage(
-            videoData.videoBuffer,
-            projectId,
-            sceneIndex + 1
-          );
-
-          console.log(`Video uploaded to GCS: ${videoUrl}`);
-        }
-      } catch (uploadError) {
-        console.warn(`Failed to upload video to GCS: ${uploadError.message}`);
-        // Continue without upload if it fails - video generation was still successful
-      }
-
-      // Return combined video data with upload URL
+      // Return video data with GCS URL
       // Return as array - executeAction will wrap it in { output: ... }
       const videoArray = [
         {
           sceneNumber: sceneIndex + 1,
           sceneTitle: combinedSceneData.title,
-          videoBuffer: videoData.videoBuffer,
-          videoUrl: videoUrl,
+          videoUrl: videoData.videoUrl,
           videoFormat: videoData.videoFormat || 'mp4',
           duration: combinedSceneData.timeEnd,
           generatedAt: videoData.generatedAt,
-          metadata: {
-            ...videoData.metadata,
-            uploadedToGCS: !!videoUrl,
-          },
+          uploadedToGCS: videoData.uploadedToGCS,
+          metadata: videoData.metadata,
         }
       ];
 

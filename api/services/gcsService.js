@@ -156,6 +156,64 @@ export async function imageExistsInGCS(imageUrl) {
 }
 
 /**
+ * Upload video stream directly to GCS from a readable stream
+ * Useful for streaming large files without buffering in memory
+ */
+export async function uploadVideoStreamToGCS(readableStream, projectId, sceneName) {
+  const videoBucketName = bucketName;
+
+  try {
+    // Validate inputs
+    if (!readableStream || !projectId || !sceneName) {
+      throw new Error('Missing required parameters: readableStream, projectId, sceneName');
+    }
+
+    const bucket = storage.bucket(videoBucketName);
+
+    // Create unique filename with scene name and timestamp
+    const sanitizedName = sceneName.toString().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const timestamp = Date.now();
+    const uniqueId = uuidv4().substring(0, 8);
+    const filename = `videos/${projectId}/${sanitizedName}-${timestamp}-${uniqueId}.mp4`;
+
+    // Create file object
+    const file = bucket.file(filename);
+
+    // Create write stream and pipe the readable stream to it
+    const writeStream = file.createWriteStream({
+      metadata: {
+        contentType: 'video/mp4',
+        cacheControl: 'public, max-age=604800', // Cache for 7 days
+      },
+    });
+
+    return new Promise((resolve, reject) => {
+      readableStream.pipe(writeStream);
+
+      writeStream.on('finish', () => {
+        // Generate the public URL
+        const publicUrl = `https://storage.googleapis.com/${videoBucketName}/${filename}`;
+        console.log(`Successfully uploaded video stream to GCS: ${publicUrl}`);
+        resolve(publicUrl);
+      });
+
+      writeStream.on('error', (error) => {
+        console.error('Error uploading video stream to GCS:', error);
+        reject(new Error(`Failed to upload video stream to GCS: ${error.message}`));
+      });
+
+      readableStream.on('error', (error) => {
+        console.error('Error reading video stream:', error);
+        reject(new Error(`Error reading video stream: ${error.message}`));
+      });
+    });
+  } catch (error) {
+    console.error('Error in uploadVideoStreamToGCS:', error.message || error);
+    throw new Error(`Failed to upload video stream to GCS: ${error.message}`);
+  }
+}
+
+/**
  * Upload video buffer to Google Cloud Storage
  * Returns the public URL of the uploaded video
  */

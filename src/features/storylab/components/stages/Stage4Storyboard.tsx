@@ -382,10 +382,10 @@ export function Stage4Storyboard({
           lastEditedAt: new Date(),
         });
       }
-      // Mark stage as completed
-      await markStageCompleted('storyboard');
-      // Advance to next stage
-      await advanceToNextStage();
+      // Mark stage as completed and get updated project
+      const updatedProject = await markStageCompleted('storyboard');
+      // Advance to next stage with updated project
+      await advanceToNextStage(updatedProject || undefined);
     } catch (error) {
       console.error('Failed to save storyboard:', error);
     }

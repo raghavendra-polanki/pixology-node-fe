@@ -273,10 +273,10 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           selectedPersonaIds: selectedPersonas.map(p => p.id),
           primaryPersonaId: selectedPersonas[0]?.id,
         });
-        // Mark stage as completed
-        await markStageCompleted('personas');
-        // Advance to next stage
-        await advanceToNextStage(project);
+        // Mark stage as completed and get updated project
+        const updatedProject = await markStageCompleted('personas');
+        // Advance to next stage with updated project
+        await advanceToNextStage(updatedProject || undefined);
       } catch (error) {
         console.error('Failed to save persona selection:', error);
       } finally {
