@@ -546,7 +546,7 @@ export function Stage5Screenplay({
                     </div>
 
                     {/* Left Column - Storyboard Reference (1 column - 33% width) */}
-                    <div className="border-l border-gray-800 p-4 flex flex-col bg-gray-900/50">
+                    <div className="border-l border-gray-800 p-4 flex flex-col">
                       <div className="pb-3 border-b border-gray-800 mb-3">
                         <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Storyboard</h4>
                         <p className="text-xs text-gray-400">
@@ -559,11 +559,11 @@ export function Stage5Screenplay({
 
                       {/* Storyboard Image */}
                       {storyboardImageUrl && (
-                        <div className="mb-3 rounded-lg overflow-hidden bg-black flex-shrink-0">
+                        <div className="mb-3 rounded-lg overflow-hidden bg-black flex-shrink-0 aspect-auto">
                           <img
                             src={storyboardImageUrl}
                             alt={`Scene ${entry.sceneNumber}`}
-                            className="w-full h-32 object-cover"
+                            className="w-full h-auto object-contain"
                           />
                         </div>
                       )}
