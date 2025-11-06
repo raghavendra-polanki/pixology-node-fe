@@ -127,10 +127,36 @@ Generate a high-quality, professional marketing video that brings this scene to 
   const getSceneImageGcsUri = (sceneData: any): string | null => {
     const image = sceneData?.image;
     if (!image) return null;
-    // If it's already a GCS URI string
-    if (typeof image === 'string' && image.startsWith('gs://')) return image;
-    // If it's an object with url property
-    if (typeof image === 'object' && image.url && image.url.startsWith('gs://')) return image.url;
+
+    let imageUrl: string | null = null;
+
+    // Handle string format (direct URL)
+    if (typeof image === 'string') {
+      imageUrl = image;
+    }
+    // Handle object with url property
+    else if (typeof image === 'object' && image.url) {
+      imageUrl = image.url;
+    }
+
+    if (!imageUrl) return null;
+
+    // If already a GCS URI, return as-is
+    if (imageUrl.startsWith('gs://')) {
+      return imageUrl;
+    }
+
+    // Convert HTTPS public URL back to GCS URI format
+    // Example: https://storage.googleapis.com/pixology-personas/personas/...
+    // becomes: gs://pixology-personas/personas/...
+    if (imageUrl.startsWith('https://storage.googleapis.com/')) {
+      // Parse bucket name from URL: https://storage.googleapis.com/{bucket}/{path}
+      const urlParts = imageUrl.replace('https://storage.googleapis.com/', '').split('/');
+      const bucketName = urlParts[0];
+      const gcsPath = urlParts.slice(1).join('/');
+      return `gs://${bucketName}/${gcsPath}`;
+    }
+
     return null;
   };
 
@@ -165,8 +191,12 @@ Generate a high-quality, professional marketing video that brings this scene to 
       // Get GCS URI for storyboard image
       const sceneImageGcsUri = getSceneImageGcsUri(sceneData);
       if (!sceneImageGcsUri) {
-        throw new Error(`No GCS image URI available for Scene ${sceneNumber}. Make sure storyboard images are properly uploaded to GCS.`);
+        const imageInfo = sceneData?.image
+          ? `Image exists but not in expected format: ${JSON.stringify(sceneData.image).substring(0, 100)}`
+          : 'No image data found in scene';
+        throw new Error(`No GCS image URI available for Scene ${sceneNumber}. ${imageInfo}`);
       }
+      console.log(`✓ Scene ${sceneNumber} image GCS URI: ${sceneImageGcsUri}`);
 
       console.log(`🎬 Starting video generation for Scene ${sceneNumber}...`);
       setSceneVideos(prev => ({
