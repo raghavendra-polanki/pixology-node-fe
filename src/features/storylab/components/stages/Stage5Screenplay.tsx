@@ -444,60 +444,12 @@ export function Stage5Screenplay({
 
               return (
                 <Card key={entry.sceneNumber} className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-2 gap-0">
-                    {/* Left Column - Storyboard Reference */}
-                    <div className="border-r border-gray-800 p-6 flex flex-col">
-                      <div className="mb-4 pb-4 border-b border-gray-800">
-                        <h4 className="text-sm font-medium text-gray-400 mb-1">STORYBOARD REFERENCE</h4>
-                        <h3 className="text-lg font-semibold text-white">Scene {entry.sceneNumber}</h3>
-                        {storyboardScene?.title && (
-                          <p className="text-sm text-gray-400 mt-1">{storyboardScene.title}</p>
-                        )}
-                        {storyboardScene?.duration && (
-                          <p className="text-xs text-gray-500 mt-1">Duration: {storyboardScene.duration}</p>
-                        )}
-                      </div>
-
-                      {/* Storyboard Image */}
-                      {storyboardImageUrl && (
-                        <div className="mb-4 rounded-lg overflow-hidden bg-black/50 flex-1 flex items-center justify-center min-h-48">
-                          <img
-                            src={storyboardImageUrl}
-                            alt={`Scene ${entry.sceneNumber}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-
-                      {/* Storyboard Description */}
-                      <div>
-                        <p className="text-xs font-medium text-gray-400 mb-2">Visual Description</p>
-                        <p className="text-sm text-gray-300 leading-relaxed">
-                          {storyboardScene?.description || 'No description available'}
-                        </p>
-                      </div>
-
-                      {/* Additional Storyboard Details */}
-                      {storyboardScene?.visualElements && (
-                        <div className="mt-4 pt-4 border-t border-gray-800">
-                          <p className="text-xs font-medium text-gray-400 mb-2">Visual Elements</p>
-                          <p className="text-sm text-gray-300 leading-relaxed">{storyboardScene.visualElements}</p>
-                        </div>
-                      )}
-
-                      {storyboardScene?.cameraWork && (
-                        <div className="mt-3">
-                          <p className="text-xs font-medium text-gray-400 mb-2">Camera Work</p>
-                          <p className="text-sm text-gray-300 leading-relaxed">{storyboardScene.cameraWork}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right Column - Screenplay Details */}
-                    <div className="p-6 flex flex-col">
+                  <div className="grid grid-cols-3 gap-0">
+                    {/* Right Column - Screenplay Details (2 columns - 66% width) */}
+                    <div className="col-span-2 p-6 flex flex-col">
                       <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-800">
                         <div>
-                          <h4 className="text-sm font-medium text-gray-400 mb-1">SCREENPLAY</h4>
+                          <h3 className="text-lg font-semibold text-white">Scene {entry.sceneNumber}</h3>
                           <p className="text-sm text-gray-400">
                             {entry.timeStart} - {entry.timeEnd}
                           </p>
@@ -519,7 +471,7 @@ export function Stage5Screenplay({
                       </div>
 
                       {/* Scene Fields */}
-                      <div className="space-y-4 flex-1 overflow-y-auto max-h-96">
+                      <div className="space-y-4 flex-1 overflow-y-auto">
                         {/* Visual Description */}
                         <div>
                           <Label className="text-xs font-medium text-gray-400 mb-2 block">Visual Description</Label>
@@ -590,6 +542,57 @@ export function Stage5Screenplay({
                             <p className="text-gray-300 text-sm">{formatScriptContent(entry.transition)}</p>
                           )}
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Left Column - Storyboard Reference (1 column - 33% width) */}
+                    <div className="border-l border-gray-800 p-4 flex flex-col bg-gray-900/50">
+                      <div className="pb-3 border-b border-gray-800 mb-3">
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Storyboard</h4>
+                        <p className="text-xs text-gray-400">
+                          Scene {entry.sceneNumber}
+                        </p>
+                        {storyboardScene?.title && (
+                          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{storyboardScene.title}</p>
+                        )}
+                      </div>
+
+                      {/* Storyboard Image */}
+                      {storyboardImageUrl && (
+                        <div className="mb-3 rounded-lg overflow-hidden bg-black flex-shrink-0">
+                          <img
+                            src={storyboardImageUrl}
+                            alt={`Scene ${entry.sceneNumber}`}
+                            className="w-full h-32 object-cover"
+                          />
+                        </div>
+                      )}
+
+                      {/* Storyboard Description */}
+                      <div className="flex-1 overflow-y-auto">
+                        <p className="text-xs font-medium text-gray-500 mb-1">Description</p>
+                        <p className="text-xs text-gray-400 leading-relaxed line-clamp-4">
+                          {storyboardScene?.description || 'No description'}
+                        </p>
+
+                        {/* Additional Storyboard Details */}
+                        {storyboardScene?.visualElements && (
+                          <div className="mt-3 pt-3 border-t border-gray-800">
+                            <p className="text-xs font-medium text-gray-500 mb-1">Visual Elements</p>
+                            <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">
+                              {storyboardScene.visualElements}
+                            </p>
+                          </div>
+                        )}
+
+                        {storyboardScene?.cameraWork && (
+                          <div className="mt-2 pt-2 border-t border-gray-800">
+                            <p className="text-xs font-medium text-gray-500 mb-1">Camera</p>
+                            <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">
+                              {storyboardScene.cameraWork}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
