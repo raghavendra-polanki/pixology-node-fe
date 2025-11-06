@@ -236,11 +236,22 @@ async function callPythonVideoGenerationAPI(prompt, duration_seconds = 5, qualit
  * Get authenticated access token for Google API
  * @private
  */
-async function getAccessToken() {
+async function getAccessToken(serviceAccountType = 'default') {
   try {
-    const keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    // Select appropriate service account based on type
+    let keyFilePath;
+
+    if (serviceAccountType === 'veo3') {
+      // Use dedicated Veo3 service account if available
+      keyFilePath = process.env.VEO3_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      console.log(`   Using Veo3 service account: ${keyFilePath}`);
+    } else {
+      // Use default service account for Firestore and general operations
+      keyFilePath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    }
+
     if (!keyFilePath) {
-      throw new Error('GOOGLE_APPLICATION_CREDENTIALS environment variable not set');
+      throw new Error('No service account key file configured. Set GOOGLE_APPLICATION_CREDENTIALS or VEO3_SERVICE_ACCOUNT_KEY environment variable.');
     }
 
     const auth = new google.auth.GoogleAuth({
@@ -494,8 +505,8 @@ export async function generateVideoWithVeo3DirectAPI({
     console.log(`   Duration: ${durationSeconds}s`);
     console.log(`   Resolution: ${resolution}`);
 
-    // Get access token
-    const accessToken = await getAccessToken();
+    // Get access token using Veo3-specific service account
+    const accessToken = await getAccessToken('veo3');
 
     // Build GCS output path: gs://bucket/videos/{projectId}/scene_{sceneNumber}/
     const sceneNumber = sceneData?.sceneNumber || 1;
@@ -565,6 +576,7 @@ export async function generateVideoWithVeo3DirectAPI({
     const operationName = operationData.name;
 
     console.log(`⏳ Operation started: ${operationName}`);
+    console.log(`   ✓ Initial API call succeeded - operation created`);
     console.log(`   Polling for completion...`);
 
     // Poll for operation completion
@@ -650,6 +662,15 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
         }
 
         console.error(`   ❌ Polling failed at URL: ${url}`);
+
+        // Provide specific guidance for 404 errors
+        if (response.status === 404) {
+          console.error(`   💡 HTTP 404 during polling typically means:`);
+          console.error(`      - Service account lacks 'aiplatform.operations.get' permission`);
+          console.error(`      - Service account needs 'Vertex AI User' role or equivalent permissions`);
+          console.error(`      - Check IAM roles at: https://console.cloud.google.com/iam-admin/iam`);
+        }
+
         throw new Error(`Poll error: ${errorMessage}`);
       }
 
