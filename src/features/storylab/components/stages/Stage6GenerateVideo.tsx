@@ -61,22 +61,31 @@ export function Stage6GenerateVideo({
   useEffect(() => {
     if (project?.aiGeneratedStoryboard?.scenes) {
       const initialStatuses: SceneVideoStatus = {};
-      project.aiGeneratedStoryboard.scenes.forEach((scene: any) => {
-        // Check if video URL is stored in the scene object itself
-        const sceneVideoUrl = scene.videoUrl || scene.video?.videoUrl;
 
-        if (sceneVideoUrl) {
+      // Create a map of generated videos for quick lookup
+      const generatedVideoMap = new Map();
+      if (project?.aiGeneratedVideos?.videos) {
+        project.aiGeneratedVideos.videos.forEach((video: any) => {
+          generatedVideoMap.set(video.sceneNumber, video);
+        });
+      }
+
+      project.aiGeneratedStoryboard.scenes.forEach((scene: any) => {
+        // Check if video has been generated and saved in aiGeneratedVideos
+        const generatedVideo = generatedVideoMap.get(scene.sceneNumber);
+
+        if (generatedVideo && generatedVideo.videoUrl) {
           // Video has been generated and saved
           initialStatuses[scene.sceneNumber] = {
             status: 'complete',
             progress: 100,
             videoData: {
               sceneNumber: scene.sceneNumber,
-              sceneTitle: scene.title || `Scene ${scene.sceneNumber}`,
-              videoUrl: sceneVideoUrl,
-              videoFormat: 'mp4',
-              duration: scene.duration || '6s',
-              generatedAt: scene.generatedAt || new Date().toISOString(),
+              sceneTitle: generatedVideo.sceneTitle || scene.title || `Scene ${scene.sceneNumber}`,
+              videoUrl: generatedVideo.videoUrl,
+              videoFormat: generatedVideo.format || 'mp4',
+              duration: generatedVideo.duration || scene.duration || '6s',
+              generatedAt: new Date(generatedVideo.generatedAt).toISOString(),
             }
           };
         } else {
@@ -94,7 +103,7 @@ export function Stage6GenerateVideo({
         setSelectedScene(project.aiGeneratedStoryboard.scenes[0].sceneNumber);
       }
     }
-  }, [project?.aiGeneratedStoryboard?.scenes]);
+  }, [project?.aiGeneratedStoryboard?.scenes, project?.aiGeneratedVideos?.videos]);
 
   // Helper: Build video prompt from screenplay data
   const buildVideoPrompt = (sceneData: any, screenplayEntry: any): string => {
@@ -306,54 +315,58 @@ Generate a high-quality, professional marketing video that brings this scene to 
         }
       }));
 
-      // Update the scene object in the project with the video URL
-      // This ensures the video URL is saved per-scene so it loads when project is reopened
-      const updatedScenes = project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
-        if (scene.sceneNumber === sceneNumber) {
-          return {
-            ...scene,
-            videoUrl: result.videoUrl,
-            generatedAt: new Date().toISOString(),
-            video: {
-              videoUrl: result.videoUrl,
-              duration: result.duration || '6s',
-              status: 'complete',
-              generatedAt: new Date().toISOString(),
-            }
-          };
-        }
-        return scene;
-      });
+      // Save to aiGeneratedVideos structure in project
+      const existingVideos = project?.aiGeneratedVideos?.videos || [];
+      const videoIndex = existingVideos.findIndex(v => v.sceneNumber === sceneNumber);
 
-      // Save to project - update the storyboard with video URLs
-      await updateVideoProduction(
-        {
-          videoUrl: result.videoUrl,
-          status: 'complete',
-          title: result.sceneTitle || `Scene ${sceneNumber}`,
-          videoData: result,
-          sceneNumber,
-        },
-        project?.id || projectId || ''
-      );
+      // Create AIGeneratedVideo entry
+      const newVideoEntry = {
+        videoId: `video_${sceneNumber}_${Date.now()}`,
+        sceneNumber,
+        sceneTitle: result.sceneTitle || `Scene ${sceneNumber}`,
+        videoUrl: result.videoUrl,
+        gcsUri: result.gcsUri,
+        duration: result.duration || '6s',
+        resolution: result.resolution || '720p',
+        format: 'mp4',
+        status: 'complete' as const,
+        generatedAt: new Date(),
+        model: 'veo-3.1-generate-preview',
+        prompt: result.prompt,
+      };
 
-      // Also update the project storyboard to include the video URL
-      if (updatedScenes) {
-        const projectUpdates = {
-          aiGeneratedStoryboard: {
-            ...project?.aiGeneratedStoryboard,
-            scenes: updatedScenes,
-          }
-        };
-        // Update the project with the new scenes containing video URLs
-        await fetch(`/api/projects/${project?.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(projectUpdates),
-        });
+      // Update or add the video entry
+      const updatedVideos = [...existingVideos];
+      if (videoIndex >= 0) {
+        updatedVideos[videoIndex] = newVideoEntry;
+      } else {
+        updatedVideos.push(newVideoEntry);
       }
+
+      // Create or update AIGeneratedVideos collection
+      const aiGeneratedVideos = {
+        videoCollectionId: project?.id || `videos_${Date.now()}`,
+        title: `Video Generation for ${project?.name || 'Project'}`,
+        videos: updatedVideos,
+        completedCount: updatedVideos.filter(v => v.status === 'complete').length,
+        failedCount: updatedVideos.filter(v => v.status === 'error').length,
+        totalCount: updatedVideos.length,
+        generatedAt: new Date(),
+        model: 'veo-3.1-generate-preview',
+      };
+
+      // Update project with aiGeneratedVideos
+      const authToken = sessionStorage.getItem('authToken');
+      await fetch(`/api/projects/${project?.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          aiGeneratedVideos,
+        }),
+      });
 
       console.log(`✅ Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {

@@ -228,7 +228,52 @@ export interface AIGeneratedScreenplay {
 }
 
 /**
- * Stage 6: Video Production Data
+ * Stage 6: AI-Generated Video (individual scene video)
+ */
+export interface AIGeneratedVideo {
+  videoId: string;
+  sceneNumber: number;
+  sceneTitle: string;
+  videoUrl: string;
+  gcsUri?: string;
+  duration: string;
+  resolution: string;
+  format: string;
+  fileSize?: string;
+  aspectRatio?: string;
+  status: 'complete' | 'error';
+  generatedAt: Date;
+  generationRecipeId?: string;
+  generationExecutionId?: string;
+  model: string;
+  temperature?: number;
+  prompt?: string;
+  errorMessage?: string;
+}
+
+/**
+ * Stage 6: AI-Generated Videos (collection of scene videos)
+ */
+export interface AIGeneratedVideos {
+  videoCollectionId: string;
+  title: string;
+  synopsis?: string;
+  videos: AIGeneratedVideo[];
+  totalDuration?: string;
+  completionNotes?: string;
+  qualityNotes?: string;
+  generatedAt: Date;
+  generationRecipeId?: string;
+  generationExecutionId?: string;
+  model: string;
+  totalCount: number;
+  completedCount: number;
+  failedCount: number;
+  temperature?: number;
+}
+
+/**
+ * Stage 6: Video Production Data (legacy - for backward compatibility)
  */
 export interface VideoProductionData {
   videoId: string;
@@ -324,8 +369,9 @@ export interface StoryLabProject {
     lastEditedAt?: Date;
   };
 
-  // STAGE 6: VIDEO PRODUCTION
-  videoProduction?: VideoProductionData;
+  // STAGE 6: VIDEO GENERATION
+  aiGeneratedVideos?: AIGeneratedVideos;
+  videoProduction?: VideoProductionData; // Legacy field for backward compatibility
 
   // METADATA & TRACKING
   metadata?: {
@@ -386,6 +432,7 @@ export interface UpdateProjectInput {
   aiGeneratedNarratives?: AIGeneratedNarratives;
   aiGeneratedStoryboard?: AIGeneratedStoryboard;
   aiGeneratedScreenplay?: AIGeneratedScreenplay;
+  aiGeneratedVideos?: AIGeneratedVideos;
   videoProduction?: VideoProductionData;
   storyboardCustomizations?: StoryLabProject['storyboardCustomizations'];
   screenplayCustomizations?: StoryLabProject['screenplayCustomizations'];
