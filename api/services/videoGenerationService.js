@@ -594,6 +594,14 @@ export async function generateVideoWithVeo3DirectAPI({
 
     console.log(`⏳ Operation started: ${operationName}`);
     console.log(`   ✓ Initial API call succeeded - operation created`);
+    console.log(`   📋 Operation response keys: ${Object.keys(operationData).join(', ')}`);
+
+    // Log if operation is already done in the initial response
+    if (operationData.done) {
+      console.log(`   ⚡ Operation completed immediately in initial response!`);
+      console.log(`   📋 Response structure: ${JSON.stringify(operationData, null, 2).substring(0, 500)}`);
+    }
+
     console.log(`   Polling for completion...`);
 
     // Poll for operation completion (polling function will get its own fresh token)
@@ -658,6 +666,12 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
     try {
       const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/${operationName}`;
 
+      if (pollCount === 0) {
+        console.log(`   📡 First poll attempt:`);
+        console.log(`      URL: ${url}`);
+        console.log(`      Operation name: ${operationName}`);
+      }
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -690,10 +704,17 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
 
         // Special handling for 404 - operation might have already completed
         if (response.status === 404) {
-          console.warn(`   ⚠️  HTTP 404: Operation not found (may have already completed)`);
-          console.log(`   ℹ️  Videos may already be in GCS. Returning empty result.`);
-          // Return an empty/null result - caller will need to check GCS for actual video
-          return { completed: true, status: '404' };
+          console.warn(`   ⚠️  HTTP 404: Operation not found`);
+          console.warn(`      This happened on poll attempt #${pollCount + 1}`);
+          console.warn(`      URL was: ${url}`);
+          console.warn(`      Time elapsed: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+          console.warn(`   💡 Possible causes:`);
+          console.warn(`      1. Operation already completed and removed from system`);
+          console.warn(`      2. Operation name/URL format is incorrect`);
+          console.warn(`      3. Permission issue (can't query but can create)`);
+
+          // Don't return yet - let's keep trying or throw to see full error
+          throw new Error(`Poll error: HTTP 404 - Operation not found after ${pollCount + 1} attempts`);
         } else if (response.status === 403) {
           console.error(`\n   💡 Permission Denied (403):`);
           console.error(`   - Service account lacks 'aiplatform.operations.get' permission`);
