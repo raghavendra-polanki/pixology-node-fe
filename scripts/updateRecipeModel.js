@@ -7,7 +7,11 @@ import admin from 'firebase-admin';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const serviceAccountPath = path.join(__dirname, '../serviceAccountKey.json');
+// Read service account path from environment variable, fallback to default
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+  path.join(__dirname, '../serviceAccountKey.json');
+
+console.log(`Using service account: ${serviceAccountPath}`);
 
 try {
   admin.initializeApp({

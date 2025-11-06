@@ -17,13 +17,20 @@ dotenv.config({ path: envPath });
 console.log(`✅ Attempting to load environment variables from: ${envPath}`);
 // --- End of Environment Variable Loading ---
 
-// --- Start of Firestore Credentials Fix ---
+// --- Start of Firestore Credentials Configuration ---
 // Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to the service account key.
+// Priority:
+// 1. Use environment variable if already set (from .env or process)
+// 2. Fall back to default serviceAccountKey.json in project root
 // This ensures the Firebase Admin SDK can authenticate correctly.
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(__dirname, 'serviceAccountKey.json');
+  const defaultKeyPath = path.join(__dirname, 'serviceAccountKey.json');
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultKeyPath;
+  console.log(`✓ Set GOOGLE_APPLICATION_CREDENTIALS to default: ${defaultKeyPath}`);
+} else {
+  console.log(`✓ Using GOOGLE_APPLICATION_CREDENTIALS from environment: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
 }
-// --- End of Firestore Credentials Fix ---
+// --- End of Firestore Credentials Configuration ---
 
 import express from 'express';
 import compression from 'compression';
