@@ -62,10 +62,30 @@ export function Stage6GenerateVideo({
     if (project?.aiGeneratedStoryboard?.scenes) {
       const initialStatuses: SceneVideoStatus = {};
       project.aiGeneratedStoryboard.scenes.forEach((scene: any) => {
-        initialStatuses[scene.sceneNumber] = {
-          status: 'idle',
-          progress: 0,
-        };
+        // Check if video URL is stored in the scene object itself
+        const sceneVideoUrl = scene.videoUrl || scene.video?.videoUrl;
+
+        if (sceneVideoUrl) {
+          // Video has been generated and saved
+          initialStatuses[scene.sceneNumber] = {
+            status: 'complete',
+            progress: 100,
+            videoData: {
+              sceneNumber: scene.sceneNumber,
+              sceneTitle: scene.title || `Scene ${scene.sceneNumber}`,
+              videoUrl: sceneVideoUrl,
+              videoFormat: 'mp4',
+              duration: scene.duration || '6s',
+              generatedAt: scene.generatedAt || new Date().toISOString(),
+            }
+          };
+        } else {
+          // No video generated yet
+          initialStatuses[scene.sceneNumber] = {
+            status: 'idle',
+            progress: 0,
+          };
+        }
       });
       setSceneVideos(initialStatuses);
 
@@ -286,7 +306,26 @@ Generate a high-quality, professional marketing video that brings this scene to 
         }
       }));
 
-      // Save to project
+      // Update the scene object in the project with the video URL
+      // This ensures the video URL is saved per-scene so it loads when project is reopened
+      const updatedScenes = project?.aiGeneratedStoryboard?.scenes?.map((scene: any) => {
+        if (scene.sceneNumber === sceneNumber) {
+          return {
+            ...scene,
+            videoUrl: result.videoUrl,
+            generatedAt: new Date().toISOString(),
+            video: {
+              videoUrl: result.videoUrl,
+              duration: result.duration || '6s',
+              status: 'complete',
+              generatedAt: new Date().toISOString(),
+            }
+          };
+        }
+        return scene;
+      });
+
+      // Save to project - update the storyboard with video URLs
       await updateVideoProduction(
         {
           videoUrl: result.videoUrl,
@@ -297,6 +336,24 @@ Generate a high-quality, professional marketing video that brings this scene to 
         },
         project?.id || projectId || ''
       );
+
+      // Also update the project storyboard to include the video URL
+      if (updatedScenes) {
+        const projectUpdates = {
+          aiGeneratedStoryboard: {
+            ...project?.aiGeneratedStoryboard,
+            scenes: updatedScenes,
+          }
+        };
+        // Update the project with the new scenes containing video URLs
+        await fetch(`/api/projects/${project?.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(projectUpdates),
+        });
+      }
 
       console.log(`✅ Video saved successfully for Scene ${sceneNumber}`);
     } catch (err) {
