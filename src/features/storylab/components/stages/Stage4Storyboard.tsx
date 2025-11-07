@@ -7,7 +7,9 @@ import {
   Plus,
   Trash2,
   Image as ImageIcon,
-  SettingsIcon
+  SettingsIcon,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -17,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import RecipeEditorPage from '../recipe/RecipeEditorPage';
 
@@ -69,6 +72,7 @@ export function Stage4Storyboard({
   const [showRecipeEditor, setShowRecipeEditor] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
 
   // Sync scenes with project data when loaded
   useEffect(() => {
@@ -542,9 +546,35 @@ export function Stage4Storyboard({
 
                 {/* Scene Details */}
                 <div className="p-5 space-y-2">
-                  <h3 className="text-white">{scene.title}</h3>
-                  <p className="text-gray-400 line-clamp-2">{scene.description}</p>
-                  <p className="text-gray-600 italic line-clamp-2">{scene.visualNote}</p>
+                  <h3 className="text-white font-semibold">{scene.title}</h3>
+
+                  {/* Description with Expandable Option */}
+                  <Collapsible
+                    open={expandedSceneId === scene.id}
+                    onOpenChange={() => setExpandedSceneId(expandedSceneId === scene.id ? null : scene.id)}
+                  >
+                    <div className="space-y-2">
+                      <p className={`text-gray-400 text-sm ${expandedSceneId !== scene.id ? 'line-clamp-2' : ''}`}>
+                        {scene.description}
+                      </p>
+                      <CollapsibleTrigger
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 text-gray-500 hover:text-gray-300 text-xs font-medium transition-colors"
+                      >
+                        {expandedSceneId === scene.id ? (
+                          <>
+                            <ChevronUp className="w-3 h-3" />
+                            <span>Show less</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-3 h-3" />
+                            <span>Show more</span>
+                          </>
+                        )}
+                      </CollapsibleTrigger>
+                    </div>
+                  </Collapsible>
                 </div>
               </Card>
             ))}
