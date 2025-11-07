@@ -9,9 +9,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configuration
-const PROJECT_ID = 'HIoCx9ZZb1YAwyg84n2t';
+// Accept project ID from command line argument, otherwise use default
+const PROJECT_ID = process.argv[2] || 'HIoCx9ZZb1YAwyg84n2t';
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'pixology-personas';
-const SCENES = [2, 3, 4, 5, 6];
+const SCENES = [1, 2, 3, 4, 5, 6]; // Include scene 1
 const VIDEO_FILE = 'sample_0.mp4';
 
 // Require service account path from environment variable
