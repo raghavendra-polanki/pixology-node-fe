@@ -419,6 +419,8 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
           console.log(`markStageCompleted: Stage ${stageIndex} is ahead of current, advancing`);
         } else {
           // Editing a PREVIOUS stage - mark all downstream stages as "pending" (need regeneration)
+          // IMPORTANT: Previously generated data (videos, storyboards, etc.) are PRESERVED
+          // Only stage status is marked as pending - users don't lose their generated work
           console.log(`markStageCompleted: Editing previous stage ${stageIndex}, marking downstream stages as pending for regeneration`);
 
           // Mark all stages AFTER this one as pending since upstream data changed
@@ -430,6 +432,7 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
               await projectService.current.updateStageExecution(project.id, {
                 stageName: downstreamStageName,
                 status: 'pending',
+                // Generated data is preserved by backend - not cleared here
               });
             } catch (error) {
               console.error(`Error marking stage ${downstreamStageName} as pending:`, error);
