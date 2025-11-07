@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -6,21 +7,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin SDK
-// Require service account path from environment variable
+// Support two methods for service account authentication:
+// 1. GOOGLE_APPLICATION_CREDENTIALS environment variable (file path)
+// 2. Direct JSON service account (for containerized environments)
 const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-if (!serviceAccountPath) {
-  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
-  console.error('   Required for Firestore authentication');
+let credential;
+
+try {
+  if (serviceAccountJson) {
+    // Parse JSON string from environment variable
+    console.log('✓ Using GOOGLE_SERVICE_ACCOUNT_JSON from environment');
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    credential = admin.credential.cert(serviceAccount);
+  } else if (serviceAccountPath) {
+    // Read and parse service account from file path
+    console.log(`✓ Reading service account from: ${serviceAccountPath}`);
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    credential = admin.credential.cert(serviceAccount);
+  } else {
+    // Use application default credentials (for deployment environments with proper IAM roles)
+    console.log('✓ Using Application Default Credentials (ADC)');
+    credential = admin.credential.applicationDefault();
+  }
+} catch (error) {
+  console.error('❌ Error loading service account credentials:', error.message);
   process.exit(1);
 }
 
-console.log(`✓ Firebase using service account: ${serviceAccountPath}`);
-
-// Check if service account key exists
+// Initialize Firebase Admin SDK
 try {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountPath),
+    credential,
     projectId: process.env.FIREBASE_PROJECT_ID || 'core-silicon-476114-i0',
   });
   console.log('✓ Firebase Admin SDK initialized successfully');
