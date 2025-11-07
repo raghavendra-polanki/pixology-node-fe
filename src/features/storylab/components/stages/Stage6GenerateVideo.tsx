@@ -535,7 +535,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
                 <div className="p-8">
                   <div className="text-center space-y-6">
                     <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center mx-auto">
-                      <Sparkles className="w-10 h-10 text-white animate-pulse" />
+                      <Sparkles className="w-10 h-10 text-white animate-spark-intense" />
                     </div>
                     <div>
                       <h3 className="text-white mb-2">Generating Video for Scene {selectedScene}</h3>
@@ -658,12 +658,22 @@ Generate a high-quality, professional marketing video that brings this scene to 
                   <div className="p-6 border-t border-gray-800 bg-[#0a0a0a] flex justify-center">
                     <Button
                       onClick={() => handleGenerate(selectedScene)}
-                      className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8"
+                      disabled={sceneVideos[selectedScene]?.status === 'generating'}
+                      className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl px-8 disabled:opacity-50 disabled:cursor-not-allowed"
                       size="lg"
                     >
-                      <Sparkles className="w-5 h-5 mr-2" />
-                      Generate Video
+                      <Sparkles className={`w-5 h-5 mr-2 ${sceneVideos[selectedScene]?.status === 'generating' ? 'animate-spark-intense' : ''}`} />
+                      {sceneVideos[selectedScene]?.status === 'generating' ? 'Generating Video...' : 'Generate Video'}
                     </Button>
+                    <style>{`
+                      @keyframes sparkIntense {
+                        0%, 100% { opacity: 1; transform: scale(1); }
+                        50% { opacity: 0.4; transform: scale(1.2); }
+                      }
+                      .animate-spark-intense {
+                        animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                      }
+                    `}</style>
                   </div>
                 </div>
               )}

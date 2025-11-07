@@ -335,7 +335,7 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         >
           {isGenerating ? (
             <>
-              <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+              <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
               Generating Personas...
             </>
           ) : (
@@ -345,6 +345,15 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
             </>
           )}
         </Button>
+        <style>{`
+          @keyframes sparkIntense {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+          }
+          .animate-spark-intense {
+            animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        `}</style>
 
         <Button
           onClick={handleEditRecipe}

@@ -550,9 +550,18 @@ export function Stage3Narratives({
               className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
               size="lg"
             >
-              <Wand2 className="w-5 h-5 mr-2" />
-              {isGenerating ? 'Generating...' : 'Generate Narratives'}
+              <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
+              {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
             </Button>
+            <style>{`
+              @keyframes sparkIntense {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.4; transform: scale(1.2); }
+              }
+              .animate-spark-intense {
+                animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+              }
+            `}</style>
           </div>
         </div>
       </div>
