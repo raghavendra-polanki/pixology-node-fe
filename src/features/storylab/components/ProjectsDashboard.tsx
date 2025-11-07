@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2 } from 'lucide-react';
+import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -21,6 +21,7 @@ interface ProjectsDashboardProps {
   onCreateProject: () => void;
   onSelectProject: (project: Project) => void;
   onDeleteProject?: (projectId: string) => void;
+  onLogout?: () => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -31,6 +32,7 @@ export function ProjectsDashboard({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onLogout,
   isLoading = false,
   error = null,
   onRetry
@@ -76,12 +78,25 @@ export function ProjectsDashboard({
   return (
     <div className="min-h-screen bg-[#0a0a0a] px-6 md:px-8 lg:px-12 py-8">
       <div className="max-w-[1600px] mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <Logo size="lg" showTagline className="mb-4" />
-          <p className="text-gray-400">
-            Create professional marketing videos with AI-powered workflows
-          </p>
+        {/* Header with Logout */}
+        <div className="mb-12 flex items-start justify-between">
+          <div className="flex-1">
+            <Logo size="lg" showTagline className="mb-4" />
+            <p className="text-gray-400">
+              Create professional marketing videos with AI-powered workflows
+            </p>
+          </div>
+          {onLogout && (
+            <Button
+              onClick={onLogout}
+              variant="outline"
+              className="gap-2 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800/50"
+              size="sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
+          )}
         </div>
 
         {/* Error State */}

@@ -9,7 +9,7 @@ import type { StoryLabProject } from '../types/project.types';
 const storyLabProjectService = new StoryLabProjectService();
 
 export const StorylabPage = () => {
-  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +211,11 @@ export const StorylabPage = () => {
     );
   }
 
+  const handleLogout = async () => {
+    await logout();
+    // Router will handle redirect to login page
+  };
+
   return (
     <>
       {currentView === 'projects' ? (
@@ -219,6 +224,7 @@ export const StorylabPage = () => {
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}
           onDeleteProject={handleDeleteProject}
+          onLogout={handleLogout}
           isLoading={isLoading}
           error={error}
           onRetry={fetchProjects}
