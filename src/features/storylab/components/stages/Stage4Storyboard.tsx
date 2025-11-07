@@ -234,8 +234,6 @@ export function Stage4Storyboard({
       await new Promise(resolve => setTimeout(resolve, 1500));
       await loadProject(project.id);
 
-      alert(`Successfully generated ${finalStoryboard.length} storyboard scenes!`);
-
       // Scroll to the generated scenes section
       setTimeout(() => {
         if (generatedScenesRef.current) {

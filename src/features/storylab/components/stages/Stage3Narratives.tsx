@@ -381,8 +381,6 @@ export function Stage3Narratives({
         fullNarratives: reloadedProject?.aiGeneratedNarratives,
       });
 
-      alert(`Successfully generated ${finalNarratives.length} narrative themes!`);
-
       // Scroll to the generated narratives section
       setTimeout(() => {
         if (generatedNarrativesRef.current) {
