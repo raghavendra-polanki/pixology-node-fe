@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 import { StoryLabProject, CreateProjectInput, UserInputCampaignDetails } from '../../types/project.types';
-import { useAuth } from '@/shared/contexts/AuthContext';
+import { authService } from '@/shared/services/authService';
 
 interface Stage1Props {
   project: StoryLabProject | null;
@@ -27,7 +27,6 @@ export function Stage1CampaignDetails({
   markStageCompleted,
   advanceToNextStage,
 }: Stage1Props) {
-  const { idToken } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -132,13 +131,21 @@ export function Stage1CampaignDetails({
         // Only upload if project exists (not a temporary project)
         if (project && project.id && !project.id.startsWith('temp-')) {
           try {
+            const token = authService.getToken();
+
+            if (!token) {
+              setUploadError('Authentication token not found. Please log in again.');
+              setImagePreview(null);
+              return;
+            }
+
             const response = await fetch(
               `/api/projects/${project.id}/upload-product-image`,
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${idToken}`,
+                  'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                   imageBase64: base64Data,
