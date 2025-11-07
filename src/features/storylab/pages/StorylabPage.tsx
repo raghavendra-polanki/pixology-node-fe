@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
-import ProjectsService, { Project as ApiProject } from '@/shared/services/projectsService';
+import StoryLabProjectService from '@/shared/services/storyLabProjectService';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { WorkflowView } from '../components/WorkflowView';
 import type { Project } from '../types';
+import type { StoryLabProject } from '../types/project.types';
 
-const projectsService = new ProjectsService();
+const storyLabProjectService = new StoryLabProjectService();
 
 export const StorylabPage = () => {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -33,10 +34,11 @@ export const StorylabPage = () => {
       setIsLoading(true);
       setError(null);
 
-      const apiProjects = await projectsService.getProjects();
+      const response = await storyLabProjectService.getProjects();
+      const apiProjects = response.projects;
 
       // Transform API projects to match workflow project format
-      const formattedProjects: Project[] = apiProjects.map((apiProject: ApiProject) => {
+      const formattedProjects: Project[] = apiProjects.map((apiProject: StoryLabProject) => {
         // Handle date parsing - createdAt might be:
         // 1. A Date object
         // 2. An ISO string
@@ -78,10 +80,11 @@ export const StorylabPage = () => {
           id: apiProject.id,
           name: apiProject.title,
           status: apiProject.status === 'draft' ? 'draft' : apiProject.status === 'published' ? 'complete' : 'generating',
-          currentStage: 1,
+          // currentStageIndex is 0-based, so add 1 for display (Stage 1-6)
+          currentStage: (apiProject.currentStageIndex || 0) + 1,
           createdAt: createdAtStr,
           data: {
-            campaignDetails: undefined,
+            campaignDetails: apiProject.campaignDetails,
             personas: [],
             narrative: undefined,
             storyboard: [],
@@ -134,7 +137,7 @@ export const StorylabPage = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       setError(null);
-      await projectsService.deleteProject(projectId);
+      await storyLabProjectService.deleteProject(projectId);
 
       // Remove project from local state
       setProjects(projects.filter((p) => p.id !== projectId));
@@ -156,11 +159,9 @@ export const StorylabPage = () => {
 
       if (isNewProject) {
         // Save new project to database on first stage completion
-        const newApiProject = await projectsService.createProject({
-          title: updatedProject.name,
+        const newApiProject = await storyLabProjectService.createProject({
+          name: updatedProject.name,
           description: '',
-          thumbnail: '',
-          status: 'draft',
         });
 
         // Create the project with the real ID from the API
@@ -186,11 +187,9 @@ export const StorylabPage = () => {
         setSelectedProject(updatedProject);
 
         // Update via API
-        await projectsService.updateProject(updatedProject.id, {
+        await storyLabProjectService.updateProject(updatedProject.id, {
           title: updatedProject.name,
           description: '',
-          thumbnail: '',
-          status: updatedProject.status === 'draft' ? 'draft' : updatedProject.status === 'complete' ? 'published' : 'draft',
         });
       }
     } catch (err) {
