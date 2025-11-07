@@ -464,6 +464,8 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
     };
 
     // Update project with new stage execution
+    // IMPORTANT: Preserve generated data when marking a stage as pending for regeneration
+    // Only clear data if explicitly requested via the clearData parameter
     const updatedProjectData = {
       ...existingProject,
       stageExecutions: {
@@ -472,6 +474,33 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
       },
       updatedAt: new Date(),
     };
+
+    // Map of stage names to their generated data fields
+    // These fields are preserved unless explicitly cleared
+    const stageDataFields = {
+      'personas': 'aiGeneratedPersonas',
+      'narrative': ['aiGeneratedNarrative', 'aiGeneratedNarratives'],
+      'storyboard': 'aiGeneratedStoryboard',
+      'screenplay': 'aiGeneratedScreenplay',
+      'video': 'aiGeneratedVideos',
+    };
+
+    // When a stage is marked as pending, DO NOT clear its previously generated data
+    // The data should persist so users don't lose work if they need to regenerate
+    // Only clear if explicitly requested
+    if (status === 'pending' && !req.body.clearData) {
+      console.log(`[Projects API] Preserving generated data for stage '${stageName}' when marking as pending`);
+      // Keep all existing generated data fields
+      Object.keys(stageDataFields).forEach(stage => {
+        const fields = stageDataFields[stage];
+        const fieldsArray = Array.isArray(fields) ? fields : [fields];
+        fieldsArray.forEach(field => {
+          if (existingProject[field]) {
+            updatedProjectData[field] = existingProject[field];
+          }
+        });
+      });
+    }
 
     // Save to Firestore
     await saveProject(updatedProjectData, req.userId, projectId);
