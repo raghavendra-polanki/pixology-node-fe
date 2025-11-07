@@ -544,17 +544,32 @@ Generate a high-quality, professional marketing video that brings this scene to 
                       </p>
                     </div>
 
-                    {/* Progress Bar */}
+                    {/* Infinite Progress Bar */}
                     <div className="max-w-md mx-auto space-y-3">
-                      <Progress
-                        value={sceneVideos[selectedScene]?.progress || 0}
-                        className="h-3 bg-gray-800 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-500"
-                      />
-                      <div className="flex items-center justify-between text-gray-400">
-                        <span>Progress</span>
-                        <span>{sceneVideos[selectedScene]?.progress || 0}%</span>
+                      <div className="h-3 bg-gray-800 rounded overflow-hidden relative">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 animate-pulse"></div>
+                        <div
+                          className="absolute inset-y-0 left-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                          style={{
+                            animation: 'shimmer 2s infinite'
+                          }}
+                        ></div>
+                      </div>
+                      <div className="text-center text-gray-400 text-sm">
+                        <span>Processing... This may take a few minutes</span>
                       </div>
                     </div>
+
+                    <style>{`
+                      @keyframes shimmer {
+                        0% {
+                          transform: translateX(-100%);
+                        }
+                        100% {
+                          transform: translateX(100%);
+                        }
+                      }
+                    `}</style>
                   </div>
                 </div>
               ) : sceneVideos[selectedScene]?.status === 'complete' ? (
