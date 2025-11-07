@@ -54,8 +54,9 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
   // This ensures if user refreshes, they see the last stage they reached
   useEffect(() => {
     if (project && !hasInitializedRef.current) {
-      console.log(`WorkflowView: Initial sync - Setting currentStage to ${project.currentStageIndex + 1}`);
-      setCurrentStage(project.currentStageIndex + 1);
+      const stageIndex = project.currentStageIndex ?? 0;
+      console.log(`WorkflowView: Initial sync - Setting currentStage to ${stageIndex + 1}`);
+      setCurrentStage(Math.max(1, stageIndex + 1)); // Ensure at least stage 1
       hasInitializedRef.current = true;
     }
   }, [project?.id]); // Only run once per project
@@ -66,14 +67,15 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
     if (hasInitializedRef.current && project) {
       // After initial load, if backend currentStageIndex changes, update UI
       // But only update if we're not already there (avoid unnecessary state updates)
-      const backendStage = project.currentStageIndex + 1;
+      const stageIndex = project.currentStageIndex ?? 0;
+      const backendStage = Math.max(1, stageIndex + 1);
       if (backendStage !== currentStage) {
-        console.log(`WorkflowView: Backend currentStageIndex changed to ${project.currentStageIndex}, syncing currentStage to ${backendStage}`);
+        console.log(`WorkflowView: Backend currentStageIndex changed to ${stageIndex}, syncing currentStage to ${backendStage}`);
         setCurrentStage(backendStage);
       }
       setIsTransitioning(false);
     }
-  }, [project?.currentStageIndex]);
+  }, [project?.currentStageIndex, currentStage]);
 
   // Clear transitioning state after component renders with new stage
   useEffect(() => {
@@ -86,11 +88,13 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
   }, [currentStage, isTransitioning]);
 
   const isStageCompleted = (stageIndex: number) => {
+    if (!project) return false;
     const stageName = STAGE_NAMES[stageIndex - 1];
-    return project?.stageExecutions[stageName]?.status === 'completed';
+    return project.stageExecutions?.[stageName]?.status === 'completed';
   };
 
   const isStageAccessible = (stageIndex: number) => {
+    if (!project) return stageIndex === 1; // Only stage 1 accessible before project loads
     // Can access current stage and all completed stages before it
     if (stageIndex <= currentStage) return true;
     // Check if all previous stages are completed
@@ -102,8 +106,9 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
 
   // Check if a stage is stale (needs regeneration due to upstream edit)
   const isStageStale = (stageIndex: number) => {
+    if (!project) return false;
     const stageName = STAGE_NAMES[stageIndex - 1];
-    const stageExecution = project?.stageExecutions[stageName];
+    const stageExecution = project.stageExecutions?.[stageName];
 
     // A stage is stale if it's now pending BUT was previously completed (has completedAt)
     // This indicates upstream data changed and this stage needs regeneration
