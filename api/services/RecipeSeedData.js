@@ -139,6 +139,7 @@ Each persona should have a genuine connection to the product (not forced) and be
 
       inputMapping: {
         personaData: 'personaDetails',
+        productImageUrl: 'external_input.productImageUrl',
       },
       outputKey: 'personaImages',
 
@@ -168,19 +169,32 @@ Create a professional UGC-style portrait photo of a person with these characteri
 - Demeanor: {demeanor}
 - Energy: {energyLevel}
 
+**Product Context:**
+Product Image URL: {productImageUrl}
+
 **Context:**
 This person should look trustworthy, authentic, and relatable. They should appear like someone who would genuinely recommend products they believe in. The image should be suitable for User-Generated Content (UGC) style advertising.
 
+**PRODUCT INTEGRATION REQUIREMENT:**
+If a product image URL is provided, incorporate it into the portrait in one of these ways:
+- The person holding, using, or wearing the product
+- The product visible in the composition (hand, workspace, background)
+- The person's styling/appearance reflecting the product's visual aesthetic
+- The background or props subtly matching the product's design language and color scheme
+
+The persona should be photographed in a way that naturally contextualizes them with the product, creating a cohesive, authentic scene where they appear to have a genuine relationship with the product.
+
 **Style Requirements:**
 - Professional lighting
-- Clean, neutral background (white, grey, or soft colors)
+- Clean, neutral to contextual background (incorporating product aesthetic when applicable)
 - Natural, friendly expression
 - Direct eye contact with camera
 - Professional yet relatable appearance
 - High quality, 4K resolution
 - Suitable for social media and advertising
+- If product is included: positioned naturally within the frame (not forced or awkward)
 
-Please create a realistic, detailed portrait that captures this persona.
+Please create a realistic, detailed portrait that captures this persona while naturally integrating the product context.
       `.trim(),
 
       parameters: {
