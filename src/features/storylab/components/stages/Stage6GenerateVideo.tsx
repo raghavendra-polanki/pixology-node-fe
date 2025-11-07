@@ -366,28 +366,16 @@ Generate a high-quality, professional marketing video that brings this scene to 
     if (selectedSceneVideo?.videoUrl) {
       setIsDownloading(true);
       try {
-        // Fetch the video file from GCS
-        const response = await fetch(selectedSceneVideo.videoUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to download video: ${response.statusText}`);
-        }
+        // Use backend endpoint to download video (bypasses CORS)
+        const downloadUrl = `/api/videos/download?url=${encodeURIComponent(selectedSceneVideo.videoUrl)}&filename=scene-${selectedScene}-video.mp4`;
 
-        // Convert to blob
-        const blob = await response.blob();
-
-        // Create a local object URL
-        const blobUrl = window.URL.createObjectURL(blob);
-
-        // Create download link
+        // Create a download link that triggers the backend endpoint
         const link = document.createElement('a');
-        link.href = blobUrl;
+        link.href = downloadUrl;
         link.download = `scene-${selectedScene}-video.mp4`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
-        // Clean up the object URL
-        window.URL.revokeObjectURL(blobUrl);
       } catch (error) {
         console.error('Download failed:', error);
         alert(`Failed to download video: ${error instanceof Error ? error.message : 'Unknown error'}`);
