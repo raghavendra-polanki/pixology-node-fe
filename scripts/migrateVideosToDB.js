@@ -137,6 +137,7 @@ async function updateProjectWithVideos(videos) {
     }
 
     // Add/replace with new videos
+    const generatedAtString = new Date().toISOString();
     for (const video of videos) {
       const newVideoEntry = {
         videoId: `video_${video.sceneNumber}_${Date.now()}`,
@@ -148,7 +149,7 @@ async function updateProjectWithVideos(videos) {
         resolution: '720p',
         format: 'mp4',
         status: 'complete',
-        generatedAt: admin.firestore.Timestamp.now(),
+        generatedAt: generatedAtString,
         model: 'veo-3.1-generate-preview',
       };
       updatedVideos.push(newVideoEntry);
@@ -162,7 +163,7 @@ async function updateProjectWithVideos(videos) {
       completedCount: updatedVideos.filter(v => v.status === 'complete').length,
       failedCount: updatedVideos.filter(v => v.status === 'error').length,
       totalCount: updatedVideos.length,
-      generatedAt: admin.firestore.Timestamp.now(),
+      generatedAt: generatedAtString,
       model: 'veo-3.1-generate-preview',
     };
 
@@ -173,7 +174,7 @@ async function updateProjectWithVideos(videos) {
     // Update the project
     await db.collection('projects').doc(PROJECT_ID).update({
       aiGeneratedVideos,
-      updatedAt: admin.firestore.Timestamp.now(),
+      updatedAt: new Date(),
     });
 
     console.log(`\n✅ Project updated successfully!`);
