@@ -59,6 +59,7 @@ export function Stage6GenerateVideo({
   const [isDownloading, setIsDownloading] = useState(false);
   const [playingScenes, setPlayingScenes] = useState<Set<number>>(new Set());
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const handlePlayClick = () => {
     if (selectedScene !== null && videoRef.current) {
@@ -80,17 +81,33 @@ export function Stage6GenerateVideo({
 
   // Initialize scene video statuses when project loads
   useEffect(() => {
-    if (project?.aiGeneratedStoryboard?.scenes) {
+    try {
+      // Check if we have the required data
+      if (!project) {
+        setInitError('Project data not loaded');
+        console.warn('Stage6: Project data not yet loaded');
+        return;
+      }
+
+      if (!project.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
+        setInitError('No storyboard scenes found. Please complete the Storyboard stage first.');
+        console.warn('Stage6: No storyboard scenes available');
+        return;
+      }
+
+      setInitError(null); // Clear any previous errors
+
       const initialStatuses: SceneVideoStatus = {};
 
       // Create a map of generated videos for quick lookup
       const generatedVideoMap = new Map();
-      if (project?.aiGeneratedVideos?.videos) {
+      if (project.aiGeneratedVideos?.videos) {
         project.aiGeneratedVideos.videos.forEach((video: any) => {
           generatedVideoMap.set(video.sceneNumber, video);
         });
       }
 
+      // Initialize status for each scene
       project.aiGeneratedStoryboard.scenes.forEach((scene: any) => {
         // Check if video has been generated and saved in aiGeneratedVideos
         const generatedVideo = generatedVideoMap.get(scene.sceneNumber);
@@ -119,12 +136,18 @@ export function Stage6GenerateVideo({
       });
       setSceneVideos(initialStatuses);
 
-      // Set first scene as selected
-      if (project.aiGeneratedStoryboard.scenes.length > 0 && selectedScene === null) {
-        setSelectedScene(project.aiGeneratedStoryboard.scenes[0].sceneNumber);
+      // Set first scene as selected if none is selected
+      if (selectedScene === null && project.aiGeneratedStoryboard.scenes.length > 0) {
+        const firstSceneNumber = project.aiGeneratedStoryboard.scenes[0].sceneNumber;
+        setSelectedScene(firstSceneNumber);
+        console.log(`Stage6: Auto-selected first scene: ${firstSceneNumber}`);
       }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error initializing stage';
+      setInitError(errorMsg);
+      console.error('Stage6 initialization error:', error);
     }
-  }, [project?.aiGeneratedStoryboard?.scenes, project?.aiGeneratedVideos?.videos]);
+  }, [project?.id, project?.aiGeneratedStoryboard?.scenes?.length, project?.aiGeneratedVideos?.videos?.length]);
 
   // Helper: Build video prompt from screenplay data
   const buildVideoPrompt = (sceneData: any, screenplayEntry: any): string => {
@@ -515,6 +538,27 @@ Generate a high-quality, professional marketing video that brings this scene to 
 
   return (
     <div className="max-w-7xl mx-auto p-8 lg:p-12">
+      {/* Error State */}
+      {initError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{initError}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {!project && !initError && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center space-y-4">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-gray-400">Loading project data...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Content - Only show if project loaded and no errors */}
+      {project && !initError && (
+        <>
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
@@ -833,6 +877,8 @@ Generate a high-quality, professional marketing video that brings this scene to 
             )}
           </Button>
         </div>
+      )}
+        </>
       )}
     </div>
   );
