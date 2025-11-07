@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Download, AlertCircle, Play, RefreshCw, SettingsIcon, CheckCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -57,6 +57,26 @@ export function Stage6GenerateVideo({
   const [currentRecipe, setCurrentRecipe] = useState<any>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [playingScenes, setPlayingScenes] = useState<Set<number>>(new Set());
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handlePlayClick = () => {
+    if (selectedScene !== null && videoRef.current) {
+      videoRef.current.play();
+      setPlayingScenes(new Set([...playingScenes, selectedScene]));
+    }
+  };
+
+  const handleSceneCardClick = (sceneNumber: number) => {
+    setSelectedScene(sceneNumber);
+    // Auto-play video if it's already generated
+    setTimeout(() => {
+      if (videoRef.current && sceneVideos[sceneNumber]?.status === 'complete') {
+        videoRef.current.play();
+        setPlayingScenes(new Set([...playingScenes, sceneNumber]));
+      }
+    }, 0);
+  };
 
   // Initialize scene video statuses when project loads
   useEffect(() => {
@@ -580,15 +600,39 @@ Generate a high-quality, professional marketing video that brings this scene to 
                     {sceneVideos[selectedScene]?.videoData?.videoUrl ? (
                       <div className="bg-[#0a0a0a] aspect-video relative group">
                         <video
+                          ref={videoRef}
                           key={`video-${selectedScene}`}
                           controls
                           className="w-full h-full bg-black"
                           controlsList="nodownload"
-                          autoPlay
+                          onPlay={() => {
+                            if (selectedScene !== null) {
+                              setPlayingScenes(new Set([...playingScenes, selectedScene]));
+                            }
+                          }}
+                          onPause={() => {
+                            if (selectedScene !== null) {
+                              const newPlaying = new Set(playingScenes);
+                              newPlaying.delete(selectedScene);
+                              setPlayingScenes(newPlaying);
+                            }
+                          }}
                         >
                           <source src={sceneVideos[selectedScene]?.videoData?.videoUrl} type="video/mp4" />
                           Your browser does not support the video tag.
                         </video>
+
+                        {/* Play Button Overlay */}
+                        {!playingScenes.has(selectedScene || -1) && (
+                          <button
+                            onClick={handlePlayClick}
+                            className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/40 transition-colors group"
+                          >
+                            <div className="w-20 h-20 rounded-full bg-blue-600/80 hover:bg-blue-600 flex items-center justify-center transition-colors">
+                              <Play className="w-8 h-8 text-white fill-white" />
+                            </div>
+                          </button>
+                        )}
 
                         {/* StoryLab Watermark */}
                         <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg">
@@ -716,7 +760,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
                   return (
                     <div
                       key={scene.sceneNumber}
-                      onClick={() => setSelectedScene(scene.sceneNumber)}
+                      onClick={() => handleSceneCardClick(scene.sceneNumber)}
                       className={`scene-card cursor-pointer rounded-lg overflow-hidden border ${
                         isSelected
                           ? 'border-blue-500 ring-2 ring-blue-500/50'
