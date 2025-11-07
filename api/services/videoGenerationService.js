@@ -727,7 +727,7 @@ async function pollVeo3Operation(operationName, accessToken, gcpLocation, maxWai
       pollCount++;
 
       // Log progress
-      if (pollCount % 4 === 0 || operation.done) {
+      if (pollCount % 1 === 0 || operation.done) {
         console.log(`   [Poll #${pollCount}] Status: ${operation.done ? '✅ COMPLETED' : '⏳ IN_PROGRESS'}`);
       }
 
