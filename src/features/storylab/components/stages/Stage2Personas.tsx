@@ -143,6 +143,7 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           input: {
             productDescription: project.campaignDetails.productDescription,
             targetAudience: project.campaignDetails.targetAudience,
+            productImageUrl: project.campaignDetails.productImageUrl || null,
             numberOfPersonas: 3,
           },
           projectId: project.id,

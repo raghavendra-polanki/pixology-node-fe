@@ -20,6 +20,7 @@ export const PERSONA_GENERATION_RECIPE = {
       inputMapping: {
         productDescription: 'external_input.productDescription',
         targetAudience: 'external_input.targetAudience',
+        productImageUrl: 'external_input.productImageUrl',
         numberOfPersonas: 'external_input.numberOfPersonas',
       },
       outputKey: 'personaDetails',
@@ -37,16 +38,26 @@ You are an expert Casting Director and Consumer Psychologist. Your task is to cr
 **PRODUCT CONTEXT:**
 Product Description: {productDescription}
 Target Audience: {targetAudience}
+Product Image URL: {productImageUrl}
+
+**IMAGE ANALYSIS INSTRUCTION:**
+If a Product Image URL is provided, analyze it carefully to understand:
+- The visual design, color scheme, and aesthetic of the product
+- The product category, quality indicators, and positioning
+- The target market indicated by the visual design
+- Design elements that appeal to specific demographics
+Use these visual insights to create personas who would be authentically attracted to this product's visual and design aesthetic.
 
 **YOUR TASK:**
-Create {numberOfPersonas} UNIQUE personas with DIVERSE characteristics who would genuinely recommend this product. Each person should feel real, relatable, and authentic with distinct demographics, personalities, and backgrounds. Avoid stereotypes and ensure variety across:
+Create {numberOfPersonas} UNIQUE personas with DIVERSE characteristics who would genuinely recommend this product based on both the description AND the visual presentation. Each person should feel real, relatable, and authentic with distinct demographics, personalities, and backgrounds. Avoid stereotypes and ensure variety across:
 - Age ranges
 - Professional backgrounds
 - Personality types and communication styles
 - Lifestyles and values
 - Geographic/cultural contexts
+- Visual/aesthetic preferences that match the product design
 
-Each persona should have a genuine connection to the product (not forced).
+Each persona should have a genuine connection to the product (not forced) and be the type of person who would be visually attracted to the product's design and presentation.
 
 **RESPOND IN THIS EXACT JSON FORMAT (as a JSON array):**
 [
@@ -78,9 +89,9 @@ Each persona should have a genuine connection to the product (not forced).
       "socialMediaHabits": "How they use social media and what they post about"
     },
     "whyAndCredibility": {
-      "whyTheyUseProduct": "Their genuine reason for using this product (2-3 sentences)",
-      "credibility": "Why their recommendation would be credible (What experience/expertise do they have?)",
-      "influenceStyle": "How they influence others (e.g., 'Through personal examples', 'Through detailed explanations')"
+      "whyTheyUseProduct": "Their genuine reason for using this product including visual/aesthetic appeal (2-3 sentences)",
+      "credibility": "Why their recommendation would be credible (What experience/expertise do they have? What design/visual elements appeal to them?)",
+      "influenceStyle": "How they influence others (e.g., 'Through personal examples', 'Through detailed explanations', 'Through visual storytelling')"
     }
   }
 ]
@@ -93,6 +104,8 @@ Each persona should have a genuine connection to the product (not forced).
 - ENSURE DIVERSITY across personas, still overlaying in the target audience
 - Make physical appearance detailed enough for image generation
 - Include specifics about clothing style, hair, and notable features
+- If product image is available: Make personas whose visual style and aesthetic align with the product's design language
+- Personas should represent people who would be naturally drawn to this product based on its visual presentation
 
 **CRITICAL:** Return ONLY the JSON array, no additional text before or after.
       `.trim(),
