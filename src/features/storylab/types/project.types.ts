@@ -35,6 +35,7 @@ export interface UserInputCampaignDetails {
   budget?: string;
   deadline?: string;
   additionalNotes?: string;
+  productImageUrl?: string;
 }
 
 /**

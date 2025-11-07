@@ -519,4 +519,47 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/projects/:projectId/upload-product-image
+ * Upload a product image for the campaign
+ * Requires: Authorization header with Google token
+ */
+router.post('/:projectId/upload-product-image', verifyToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { imageBase64, fileName } = req.body;
+
+    if (!imageBase64 || !fileName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing imageBase64 or fileName',
+      });
+    }
+
+    // Import gcsService
+    const { uploadImageToGCS } = await import('./services/gcsService.js');
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+
+    // Upload to GCS with product image path
+    const publicUrl = await uploadImageToGCS(imageBuffer, projectId, 'product-image');
+
+    console.log(`[Projects API] Product image uploaded for project ${projectId}: ${publicUrl}`);
+
+    return res.status(200).json({
+      success: true,
+      imageUrl: publicUrl,
+      message: 'Product image uploaded successfully',
+    });
+  } catch (error) {
+    console.error('Error uploading product image:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to upload product image',
+      details: error.message,
+    });
+  }
+});
+
 export default router;

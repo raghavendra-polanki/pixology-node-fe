@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Target } from 'lucide-react';
+import { ArrowRight, Target, Upload, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card } from '../ui/card';
+import { Alert, AlertDescription } from '../ui/alert';
 import { StoryLabProject, CreateProjectInput, UserInputCampaignDetails } from '../../types/project.types';
+import { useAuth } from '@/shared/contexts/AuthContext';
 
 interface Stage1Props {
   project: StoryLabProject | null;
@@ -25,7 +27,11 @@ export function Stage1CampaignDetails({
   markStageCompleted,
   advanceToNextStage,
 }: Stage1Props) {
+  const { idToken } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Local form state
   const [formData, setFormData] = useState({
@@ -34,6 +40,7 @@ export function Stage1CampaignDetails({
     targetAudience: '',
     videoLength: '30s',
     callToAction: 'Visit Website',
+    productImageUrl: '',
   });
 
   // Sync form with project data when it loads
@@ -46,7 +53,11 @@ export function Stage1CampaignDetails({
         targetAudience: project.campaignDetails.targetAudience || '',
         videoLength: project.campaignDetails.videoLength || '30s',
         callToAction: project.campaignDetails.callToAction || 'Visit Website',
+        productImageUrl: project.campaignDetails.productImageUrl || '',
       });
+      if (project.campaignDetails.productImageUrl) {
+        setImagePreview(project.campaignDetails.productImageUrl);
+      }
     } else if (project === null) {
       // For new/temp projects, initialize with empty form (project will be created later)
       setFormData({
@@ -55,6 +66,7 @@ export function Stage1CampaignDetails({
         targetAudience: '',
         videoLength: '30s',
         callToAction: 'Visit Website',
+        productImageUrl: '',
       });
     }
   }, [project]);
@@ -89,6 +101,84 @@ export function Stage1CampaignDetails({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Image size must be less than 10MB');
+      return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+      setUploadError(null);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = (e.target?.result as string).split(',')[1];
+        setImagePreview(e.target?.result as string);
+
+        // Only upload if project exists (not a temporary project)
+        if (project && project.id && !project.id.startsWith('temp-')) {
+          try {
+            const response = await fetch(
+              `/api/projects/${project.id}/upload-product-image`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({
+                  imageBase64: base64Data,
+                  fileName: file.name,
+                }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+              setFormData({ ...formData, productImageUrl: data.imageUrl });
+              console.log('Image uploaded successfully:', data.imageUrl);
+            } else {
+              setUploadError(data.error || 'Failed to upload image');
+              setImagePreview(null);
+            }
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            setUploadError('Failed to upload image to server');
+            setImagePreview(null);
+          }
+        } else {
+          // For temporary projects, just store the preview
+          setFormData({ ...formData, productImageUrl: e.target?.result as string });
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setUploadError('Failed to process image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setFormData({ ...formData, productImageUrl: '' });
+    setUploadError(null);
   };
 
   const isFormValid = formData.campaignName && formData.productDescription && formData.targetAudience;
@@ -140,6 +230,63 @@ export function Stage1CampaignDetails({
                 placeholder="Describe your product or service in detail. What problem does it solve? What makes it unique?"
                 className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-32 focus:border-blue-500"
               />
+            </div>
+
+            {/* Product Image Upload */}
+            <div className="space-y-2">
+              <Label htmlFor="productImage" className="text-gray-300">
+                Product Image (Optional)
+              </Label>
+              <div className="bg-[#0a0a0a] border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
+                {imagePreview ? (
+                  <div className="space-y-4">
+                    <img
+                      src={imagePreview}
+                      alt="Product preview"
+                      className="max-h-48 mx-auto rounded-lg object-contain"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800/50"
+                    >
+                      <X className="w-4 h-4" />
+                      Remove Image
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer block">
+                    <input
+                      id="productImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="w-8 h-8 text-gray-500" />
+                      <div className="text-gray-400">
+                        <p className="font-medium">Click to upload or drag and drop</p>
+                        <p className="text-sm text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                      </div>
+                    </div>
+                  </label>
+                )}
+              </div>
+              {isUploadingImage && (
+                <p className="text-sm text-blue-400 flex items-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                  Uploading image...
+                </p>
+              )}
+              {uploadError && (
+                <Alert className="bg-red-900/20 border-red-800">
+                  <AlertDescription className="text-red-400">{uploadError}</AlertDescription>
+                </Alert>
+              )}
             </div>
 
             {/* Target Audience */}
