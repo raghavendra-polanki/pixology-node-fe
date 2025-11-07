@@ -49,6 +49,8 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
 
   // Track if initial sync from backend has happened
   const hasInitializedRef = useRef(false);
+  // Track the last backend currentStageIndex to avoid overriding user navigation
+  const lastBackendStageIndexRef = useRef<number | null>(null);
 
   // On initial load: sync frontend currentStage to backend's last completed stage
   // This ensures if user refreshes, they see the last stage they reached
@@ -57,6 +59,7 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
       const stageIndex = project.currentStageIndex ?? 0;
       console.log(`WorkflowView: Initial sync - Setting currentStage to ${stageIndex + 1}`);
       setCurrentStage(Math.max(1, stageIndex + 1)); // Ensure at least stage 1
+      lastBackendStageIndexRef.current = stageIndex;
       hasInitializedRef.current = true;
     }
   }, [project?.id]); // Only run once per project
@@ -65,17 +68,18 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
   // This is different from sidebar navigation - this is actual stage progression
   useEffect(() => {
     if (hasInitializedRef.current && project) {
-      // After initial load, if backend currentStageIndex changes, update UI
-      // But only update if we're not already there (avoid unnecessary state updates)
       const stageIndex = project.currentStageIndex ?? 0;
-      const backendStage = Math.max(1, stageIndex + 1);
-      if (backendStage !== currentStage) {
-        console.log(`WorkflowView: Backend currentStageIndex changed to ${stageIndex}, syncing currentStage to ${backendStage}`);
+
+      // Only sync if the backend actually changed, not on every render
+      if (lastBackendStageIndexRef.current !== stageIndex) {
+        const backendStage = Math.max(1, stageIndex + 1);
+        console.log(`WorkflowView: Backend currentStageIndex changed from ${lastBackendStageIndexRef.current} to ${stageIndex}, syncing currentStage to ${backendStage}`);
         setCurrentStage(backendStage);
+        lastBackendStageIndexRef.current = stageIndex;
       }
       setIsTransitioning(false);
     }
-  }, [project?.currentStageIndex, currentStage]);
+  }, [project?.currentStageIndex]);
 
   // Clear transitioning state after component renders with new stage
   useEffect(() => {
