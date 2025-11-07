@@ -1,0 +1,63 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="256" height="256" fill="#0a0a0a"/>
+
+  <!-- Gradient definitions -->
+  <defs>
+    <linearGradient id="pixelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer frame - represents video frame -->
+  <rect x="40" y="40" width="176" height="176" rx="24" fill="none" stroke="url(#pixelGradient)" stroke-width="3"/>
+
+  <!-- Pixel grid pattern (4x4 grid in background) -->
+  <g opacity="0.3">
+    <!-- Row 1 -->
+    <rect x="60" y="60" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="100" y="60" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="140" y="60" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="180" y="60" width="16" height="16" fill="url(#accentGradient)"/>
+
+    <!-- Row 2 -->
+    <rect x="60" y="100" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="140" y="100" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="180" y="100" width="16" height="16" fill="url(#accentGradient)"/>
+
+    <!-- Row 3 -->
+    <rect x="60" y="140" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="100" y="140" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="180" y="140" width="16" height="16" fill="url(#accentGradient)"/>
+
+    <!-- Row 4 -->
+    <rect x="60" y="180" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="100" y="180" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="140" y="180" width="16" height="16" fill="url(#accentGradient)"/>
+    <rect x="180" y="180" width="16" height="16" fill="url(#accentGradient)"/>
+  </g>
+
+  <!-- Play button - centered, representing video generation -->
+  <g>
+    <!-- Play button background circle -->
+    <circle cx="128" cy="128" r="45" fill="url(#pixelGradient)" opacity="0.95"/>
+
+    <!-- Play triangle -->
+    <polygon points="115,108 115,148 152,128" fill="#0a0a0a"/>
+
+    <!-- Accent pixels on play button corners -->
+    <rect x="88" y="88" width="12" height="12" fill="url(#accentGradient)"/>
+    <rect x="156" y="88" width="12" height="12" fill="url(#accentGradient)"/>
+    <rect x="88" y="156" width="12" height="12" fill="url(#accentGradient)"/>
+    <rect x="156" y="156" width="12" height="12" fill="url(#accentGradient)"/>
+  </g>
+
+  <!-- Animated glow effect (for favicon, kept subtle) -->
+  <circle cx="128" cy="128" r="45" fill="none" stroke="url(#pixelGradient)" stroke-width="1" opacity="0.4"/>
+</svg>
