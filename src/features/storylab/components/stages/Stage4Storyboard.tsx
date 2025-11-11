@@ -101,7 +101,17 @@ export function Stage4Storyboard({
 
       // Step 1: Fetch the recipe
       const recipeResponse = await fetch('/api/recipes?stageType=stage_4_storyboard');
-      const recipeData = await recipeResponse.json();
+
+      if (!recipeResponse.ok) {
+        throw new Error(`Failed to fetch recipe: HTTP ${recipeResponse.status}`);
+      }
+
+      let recipeData;
+      try {
+        recipeData = await recipeResponse.json();
+      } catch (parseError) {
+        throw new Error('Failed to parse recipe response: Invalid JSON returned');
+      }
 
       if (!recipeData.recipes || recipeData.recipes.length === 0) {
         throw new Error('No recipe found for storyboard generation. Please seed recipes first.');
@@ -159,11 +169,23 @@ export function Stage4Storyboard({
       });
 
       if (!executionResponse.ok) {
-        const errorData = await executionResponse.json();
-        throw new Error(errorData.error || 'Failed to execute recipe');
+        let errorMessage = `HTTP ${executionResponse.status}`;
+        try {
+          const errorData = await executionResponse.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not JSON (HTML error page), use status code
+          errorMessage = `HTTP ${executionResponse.status}: Failed to execute recipe`;
+        }
+        throw new Error(errorMessage);
       }
 
-      const executionData = await executionResponse.json();
+      let executionData;
+      try {
+        executionData = await executionResponse.json();
+      } catch (parseError) {
+        throw new Error(`Failed to parse recipe execution response: Invalid JSON returned`);
+      }
       const executionId = executionData.executionId;
 
       // Step 6: Poll for execution results
@@ -175,7 +197,26 @@ export function Stage4Storyboard({
         await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
 
         const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
-        execution = await statusResponse.json();
+
+        // Check if response is OK before parsing
+        if (!statusResponse.ok) {
+          const errorStatus = statusResponse.status;
+          let errorMessage = 'Unknown error';
+          try {
+            const errorData = await statusResponse.json();
+            errorMessage = errorData.error || errorStatus.toString();
+          } catch {
+            // If response is not JSON (HTML error page), use status code
+            errorMessage = `HTTP ${errorStatus}`;
+          }
+          throw new Error(`Failed to fetch execution status: ${errorMessage}`);
+        }
+
+        try {
+          execution = await statusResponse.json();
+        } catch (parseError) {
+          throw new Error(`Failed to parse execution response: Invalid JSON returned. ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+        }
 
         if (execution.execution.status === 'completed') {
           break;
