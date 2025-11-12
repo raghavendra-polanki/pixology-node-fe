@@ -49,24 +49,36 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
       try {
         setIsLoading(true);
         setError(null);
+        console.log(`[PromptTemplateEditor] Loading template for stage: ${stageType}`);
+
         const response = await fetch(`/api/prompts/templates?stageType=${stageType}`);
-        if (!response.ok) throw new Error('Failed to load prompt template');
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: Failed to load prompt template`);
+        }
+
         const data = await response.json();
+        console.log(`[PromptTemplateEditor] Response received:`, data);
 
         if (data.templates && data.templates.length > 0) {
           const loadedTemplate = data.templates[0];
+          console.log(`[PromptTemplateEditor] Template loaded:`, loadedTemplate);
           setTemplate(loadedTemplate);
 
           // Set initial active tab to first available capability
           const capabilities = Object.keys(loadedTemplate.prompts || {});
+          console.log(`[PromptTemplateEditor] Available capabilities:`, capabilities);
           if (capabilities.length > 0) {
             setActiveTab(capabilities[0]);
           }
         } else {
-          setError('No prompt template found for this stage');
+          setError(`No prompt template found for stage: ${stageType}`);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load template');
+        const errorMsg = err instanceof Error ? err.message : 'Failed to load template';
+        console.error(`[PromptTemplateEditor] Error:`, errorMsg);
+        setError(errorMsg);
       } finally {
         setIsLoading(false);
       }

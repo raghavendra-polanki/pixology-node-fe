@@ -7,7 +7,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import RecipeEditorPage from '../recipe/RecipeEditorPage';
+import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
 
 interface ScreenplayEntry {
   sceneNumber: number;
@@ -70,9 +70,7 @@ export function Stage5Screenplay({
   const [screenplay, setScreenplay] = useState<ScreenplayEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
-  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
-  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
 
   // Sync screenplay with project data when loaded
   useEffect(() => {
@@ -190,105 +188,16 @@ export function Stage5Screenplay({
     }
   };
 
-  const loadRecipe = async () => {
-    try {
-      setIsLoadingRecipe(true);
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      // Fetch screenplay generation recipe with cache-busting
-      const response = await fetch(`/api/recipes?stageType=stage_5_screenplay&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const data = await response.json();
-
-      if (data.recipes && data.recipes.length > 0) {
-        console.log('Loaded recipe from database:', {
-          id: data.recipes[0].id,
-        });
-        setCurrentRecipe(data.recipes[0]);
-        setShowRecipeEditor(true);
-      } else {
-        alert('No screenplay recipe found. Please seed recipes first.');
-      }
-    } catch (error) {
-      console.error('Error loading recipe:', error);
-      alert('Failed to load screenplay recipe');
-    } finally {
-      setIsLoadingRecipe(false);
-    }
+  const handleEditPrompts = () => {
+    setShowPromptEditor(true);
   };
 
-  const handleSaveRecipe = async (recipe: any) => {
-    try {
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      const response = await fetch(`/api/recipes/${recipe.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save recipe');
-      }
-
-      // Reload recipe from database to verify the changes were saved
-      const verifyResponse = await fetch(`/api/recipes?stageType=stage_5_screenplay&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const verifyData = await verifyResponse.json();
-
-      if (verifyData.recipes && verifyData.recipes.length > 0) {
-        const savedRecipe = verifyData.recipes[0];
-        console.log('Verified recipe from database:', {
-          id: savedRecipe.id,
-        });
-        setCurrentRecipe(savedRecipe);
-      }
-
-      setShowRecipeEditor(false);
-      alert('Screenplay recipe saved successfully!');
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      alert(`Failed to save recipe: ${error}`);
-    }
-  };
-
-  // Show recipe editor if requested
-  if (showRecipeEditor && currentRecipe) {
-    // Build previous stage output from project data (Stage 4 storyboard output)
-    // Extract persona name from selected persona
-    const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
-      (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
-    );
-    const selectedPersonaName = selectedPersona?.coreIdentity?.name || 'Character';
-
-    const previousStageOutput = {
-      selectedPersonaName,
-      storyboardScenes: project?.storyboard?.scenes || project?.aiGeneratedStoryboard?.scenes || [],
-    };
-
+  // Show prompt editor if requested
+  if (showPromptEditor) {
     return (
-      <RecipeEditorPage
-        onBack={() => setShowRecipeEditor(false)}
-        recipe={currentRecipe}
-        onSave={handleSaveRecipe}
-        previousStageOutput={previousStageOutput}
+      <PromptTemplateEditor
+        stageType="stage_5_screenplay"
+        onBack={() => setShowPromptEditor(false)}
       />
     );
   }
@@ -310,13 +219,12 @@ export function Stage5Screenplay({
             </div>
           </div>
           <Button
-            onClick={loadRecipe}
-            disabled={isLoadingRecipe}
+            onClick={handleEditPrompts}
             variant="outline"
             className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
           >
             <SettingsIcon className="w-4 h-4 mr-2" />
-            {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+            Edit Prompts
           </Button>
         </div>
       </div>

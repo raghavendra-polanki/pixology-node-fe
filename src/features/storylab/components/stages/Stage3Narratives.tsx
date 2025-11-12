@@ -16,7 +16,7 @@ import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import RecipeEditorPage from '../recipe/RecipeEditorPage';
+import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
 
 interface Narrative {
   id: string;
@@ -188,9 +188,7 @@ export function Stage3Narratives({
   const [customNarrative, setCustomNarrative] = useState<string>('');
   const [useCustom, setUseCustom] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
-  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
-  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [narrativeUpdateTrigger, setNarrativeUpdateTrigger] = useState(0);
 
@@ -335,55 +333,8 @@ export function Stage3Narratives({
     }
   };
 
-  const loadRecipe = async () => {
-    try {
-      setIsLoadingRecipe(true);
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      // Fetch narrative generation recipe
-      const response = await fetch('/api/recipes?stageType=stage_3_narratives');
-      const data = await response.json();
-
-      if (data.recipes && data.recipes.length > 0) {
-        setCurrentRecipe(data.recipes[0]);
-        setShowRecipeEditor(true);
-      } else {
-        alert('No narrative recipe found. Please seed recipes first.');
-      }
-    } catch (error) {
-      console.error('Error loading recipe:', error);
-      alert('Failed to load narrative recipe');
-    } finally {
-      setIsLoadingRecipe(false);
-    }
-  };
-
-  const handleSaveRecipe = async (recipe: any) => {
-    try {
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      const response = await fetch(`/api/recipes/${recipe.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save recipe');
-      }
-
-      setShowRecipeEditor(false);
-      alert('Narrative recipe saved successfully!');
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      alert(`Failed to save recipe: ${error}`);
-    }
+  const handleEditPrompts = () => {
+    setShowPromptEditor(true);
   };
 
   const handleSubmit = async () => {
@@ -427,29 +378,12 @@ export function Stage3Narratives({
 
   const canProceed = (useCustom && customNarrative.trim()) || (!useCustom && selectedNarrative);
 
-  // Show recipe editor if requested
-  if (showRecipeEditor && currentRecipe) {
-    // Get selected personas as text
-    const selectedPersonas = project?.aiGeneratedPersonas?.personas
-      ?.filter((p: any) => project?.userPersonaSelection?.selectedPersonaIds?.includes(p.id))
-      ?.map((p: any) => p.coreIdentity?.name || p.name || 'Unknown')
-      .join(', ') || 'No personas selected';
-
-    // Prepare external input with all required data from previous stages
-    const externalInput = {
-      productDescription: project?.campaignDetails?.productDescription || '',
-      targetAudience: project?.campaignDetails?.targetAudience || '',
-      numberOfNarratives: 6, // Default to 6 narrative themes
-      selectedPersonas: selectedPersonas, // Add selected personas as text
-    };
-
+  // Show prompt editor if requested
+  if (showPromptEditor) {
     return (
-      <RecipeEditorPage
-        recipe={currentRecipe}
-        previousStageOutput={externalInput}
-        onSave={handleSaveRecipe}
-        onBack={() => setShowRecipeEditor(false)}
-        title="Edit Narrative Generation Recipe"
+      <PromptTemplateEditor
+        stageType="stage_3_narratives"
+        onBack={() => setShowPromptEditor(false)}
       />
     );
   }
@@ -472,14 +406,13 @@ export function Stage3Narratives({
           </div>
           <div className="flex gap-3">
             <Button
-              onClick={loadRecipe}
-              disabled={isLoadingRecipe}
+              onClick={handleEditPrompts}
               variant="outline"
               className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
               size="lg"
             >
               <SettingsIcon className="w-5 h-5 mr-2" />
-              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+              Edit Prompts
             </Button>
             <Button
               onClick={handleGenerateNarratives}

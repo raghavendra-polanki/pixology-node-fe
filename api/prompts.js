@@ -19,10 +19,13 @@ router.get('/templates', async (req, res) => {
     const { stageType } = req.query;
 
     if (!stageType) {
+      console.warn('[API] /templates: stageType is required');
       return res.status(400).json({
         error: 'stageType is required',
       });
     }
+
+    console.log(`[API] /templates: Loading templates for stage: ${stageType}`);
 
     // Get templates for stage
     const templates = await PromptTemplateService.listTemplatesByStage(
@@ -31,9 +34,10 @@ router.get('/templates', async (req, res) => {
       db
     );
 
+    console.log(`[API] /templates: Returning ${templates.length} templates for stage: ${stageType}`);
     res.json({ templates });
   } catch (error) {
-    console.error('Error loading prompt templates:', error);
+    console.error('[API] /templates: Error loading prompt templates:', error);
     res.status(500).json({
       error: 'Failed to load prompt templates',
       message: error.message,

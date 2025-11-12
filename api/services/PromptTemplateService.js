@@ -139,6 +139,8 @@ class PromptTemplateService {
     try {
       const { activeOnly = true, limit = 50 } = options;
 
+      console.log(`[PromptTemplateService] Querying templates for stage: ${stageType}`, { activeOnly, limit });
+
       let query = db
         .collection('prompt_templates')
         .where('stageType', '==', stageType);
@@ -147,17 +149,28 @@ class PromptTemplateService {
         query = query.where('isActive', '==', true);
       }
 
-      query = query.orderBy('isDefault', 'desc').orderBy('createdAt', 'desc').limit(limit);
+      // Try with composite ordering, fall back to simple ordering if it fails
+      try {
+        query = query.orderBy('isDefault', 'desc').orderBy('createdAt', 'desc').limit(limit);
+      } catch (orderError) {
+        console.warn('[PromptTemplateService] Composite orderBy not available, using simple orderBy');
+        query = query.orderBy('createdAt', 'desc').limit(limit);
+      }
 
       const snapshot = await query.get();
 
-      return snapshot.docs.map((doc) => ({
+      console.log(`[PromptTemplateService] Found ${snapshot.docs.length} templates for stage: ${stageType}`);
+
+      const results = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      return results;
     } catch (error) {
-      console.error(`Failed to list templates: ${error.message}`);
-      throw error;
+      console.error(`[PromptTemplateService] Failed to list templates for ${stageType}: ${error.message}`);
+      // Don't throw - return empty array to allow UI to show proper error message
+      return [];
     }
   }
 

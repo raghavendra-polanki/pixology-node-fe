@@ -5,7 +5,7 @@ import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import RecipeEditorPage from '../recipe/RecipeEditorPage';
+import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
 
 interface Stage6Props {
   project?: any;
@@ -53,9 +53,7 @@ export function Stage6GenerateVideo({
 
   const [sceneVideos, setSceneVideos] = useState<SceneVideoStatus>({});
   const [selectedScene, setSelectedScene] = useState<number | null>(null);
-  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
-  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
-  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [playingScenes, setPlayingScenes] = useState<Set<number>>(new Set());
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -403,98 +401,16 @@ Generate a high-quality, professional marketing video that brings this scene to 
     }
   };
 
-  const loadRecipe = async () => {
-    try {
-      setIsLoadingRecipe(true);
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      // Fetch video generation recipe with cache-busting
-      const response = await fetch(`/api/recipes?stageType=stage_6_video&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const data = await response.json();
-
-      if (data.recipes && data.recipes.length > 0) {
-        setCurrentRecipe(data.recipes[0]);
-        setShowRecipeEditor(true);
-      } else {
-        alert('No video recipe found. Please seed recipes first.');
-      }
-    } catch (error) {
-      console.error('Error loading recipe:', error);
-      alert('Failed to load video recipe');
-    } finally {
-      setIsLoadingRecipe(false);
-    }
+  const handleEditPrompts = () => {
+    setShowPromptEditor(true);
   };
 
-  const handleSaveRecipe = async (recipe: any) => {
-    try {
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      const response = await fetch(`/api/recipes/${recipe.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save recipe');
-      }
-
-      // Reload recipe from database to verify the changes were saved
-      const verifyResponse = await fetch(`/api/recipes?stageType=stage_6_video&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const verifyData = await verifyResponse.json();
-
-      if (verifyData.recipes && verifyData.recipes.length > 0) {
-        const savedRecipe = verifyData.recipes[0];
-        setCurrentRecipe(savedRecipe);
-      }
-
-      setShowRecipeEditor(false);
-      alert('Video recipe saved successfully!');
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      alert(`Failed to save recipe: ${error}`);
-    }
-  };
-
-  // Show recipe editor if requested
-  if (showRecipeEditor && currentRecipe) {
-    // Build previous stage output with scene and screenplay data
-    const previousStageOutput = {
-      sceneData: project?.aiGeneratedStoryboard?.scenes?.[0] || {},
-      screenplayEntry: project?.aiGeneratedScreenplay?.screenplay?.[0] || {},
-      sceneImage: project?.aiGeneratedStoryboard?.scenes?.[0]?.image?.url || '',
-      storyboardScenes: project?.aiGeneratedStoryboard?.scenes || [],
-      screenplay: project?.aiGeneratedScreenplay?.screenplay || [],
-      projectId: project?.id || '',
-      sceneIndex: 0,
-    };
-
+  // Show prompt editor if requested
+  if (showPromptEditor) {
     return (
-      <RecipeEditorPage
-        onBack={() => setShowRecipeEditor(false)}
-        recipe={currentRecipe}
-        onSave={handleSaveRecipe}
-        previousStageOutput={previousStageOutput}
+      <PromptTemplateEditor
+        stageType="stage_6_video"
+        onBack={() => setShowPromptEditor(false)}
       />
     );
   }
@@ -542,13 +458,12 @@ Generate a high-quality, professional marketing video that brings this scene to 
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={loadRecipe}
-              disabled={isLoadingRecipe}
+              onClick={handleEditPrompts}
               variant="outline"
               className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
             >
               <SettingsIcon className="w-4 h-4 mr-2" />
-              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+              Edit Prompts
             </Button>
           </div>
         </div>

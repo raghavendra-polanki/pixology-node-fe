@@ -21,7 +21,7 @@ import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import RecipeEditorPage from '../recipe/RecipeEditorPage';
+import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
 
 interface Scene {
   id: string;
@@ -69,9 +69,7 @@ export function Stage4Storyboard({
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
   const [viewMode] = useState<ViewMode>('grid');
-  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
-  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
-  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
 
   // Sync scenes with project data when loaded
@@ -192,91 +190,8 @@ export function Stage4Storyboard({
     }
   };
 
-  const loadRecipe = async () => {
-    try {
-      setIsLoadingRecipe(true);
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      // Fetch storyboard generation recipe with cache-busting
-      const response = await fetch(`/api/recipes?stageType=stage_4_storyboard&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const data = await response.json();
-
-      if (data.recipes && data.recipes.length > 0) {
-        console.log('Loaded recipe from database:', {
-          id: data.recipes[0].id,
-          numberOfScenes: data.recipes[0].nodes?.[0]?.parameters?.numberOfScenes,
-        });
-        setCurrentRecipe(data.recipes[0]);
-        setShowRecipeEditor(true);
-      } else {
-        alert('No storyboard recipe found. Please seed recipes first.');
-      }
-    } catch (error) {
-      console.error('Error loading recipe:', error);
-      alert('Failed to load storyboard recipe');
-    } finally {
-      setIsLoadingRecipe(false);
-    }
-  };
-
-  const handleSaveRecipe = async (recipe: any) => {
-    try {
-      const authToken = sessionStorage.getItem('authToken');
-      if (!authToken) throw new Error('Authentication token not found');
-
-      console.log('Saving recipe with numberOfScenes:', recipe.nodes?.[0]?.parameters?.numberOfScenes);
-
-      const response = await fetch(`/api/recipes/${recipe.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save recipe');
-      }
-
-      const savedData = await response.json();
-      console.log('Recipe saved response:', {
-        numberOfScenes: savedData.recipe?.nodes?.[0]?.parameters?.numberOfScenes,
-      });
-
-      // Reload recipe from database to verify the changes were saved
-      const verifyResponse = await fetch(`/api/recipes?stageType=stage_4_storyboard&t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      const verifyData = await verifyResponse.json();
-
-      if (verifyData.recipes && verifyData.recipes.length > 0) {
-        const savedRecipe = verifyData.recipes[0];
-        console.log('Verified recipe from database:', {
-          numberOfScenes: savedRecipe.nodes?.[0]?.parameters?.numberOfScenes,
-        });
-        setCurrentRecipe(savedRecipe);
-      }
-
-      setShowRecipeEditor(false);
-      alert('Storyboard recipe saved successfully!');
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      alert(`Failed to save recipe: ${error}`);
-    }
+  const handleEditPrompts = () => {
+    setShowPromptEditor(true);
   };
 
   const handleEditOpen = (scene: Scene) => {
@@ -332,38 +247,12 @@ export function Stage4Storyboard({
     }
   };
 
-  // Show recipe editor if requested
-  if (showRecipeEditor && currentRecipe) {
-    // Prepare external input with all required data from previous stages
-    const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find(
-      (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
-    );
-    const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
-      (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
-    );
-
-    // Extract numberOfScenes from current recipe (updates when recipe is modified)
-    const recipeNumberOfScenes = currentRecipe.nodes?.[0]?.parameters?.numberOfScenes || 6;
-
-    const externalInput = {
-      productDescription: project?.campaignDetails?.productDescription || '',
-      targetAudience: project?.campaignDetails?.targetAudience || '',
-      selectedPersonaName: selectedPersona?.coreIdentity?.name || 'Unknown',
-      selectedPersonaDescription: selectedPersona?.coreIdentity?.bio || '',
-      selectedPersonaImage: selectedPersona?.image?.url || '', // Include persona image for consistency
-      narrativeTheme: selectedNarrative?.title || '',
-      narrativeStructure: selectedNarrative?.structure || '',
-      numberOfScenes: recipeNumberOfScenes,
-      videoDuration: project?.campaignDetails?.videoDuration || '30s',
-    };
-
+  // Show prompt editor if requested
+  if (showPromptEditor) {
     return (
-      <RecipeEditorPage
-        recipe={currentRecipe}
-        previousStageOutput={externalInput}
-        onSave={handleSaveRecipe}
-        onBack={() => setShowRecipeEditor(false)}
-        title="Edit Storyboard Generation Recipe"
+      <PromptTemplateEditor
+        stageType="stage_4_storyboard"
+        onBack={() => setShowPromptEditor(false)}
       />
     );
   }
@@ -387,14 +276,13 @@ export function Stage4Storyboard({
 
           <div className="flex gap-3">
             <Button
-              onClick={loadRecipe}
-              disabled={isLoadingRecipe}
+              onClick={handleEditPrompts}
               variant="outline"
               className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
               size="lg"
             >
               <SettingsIcon className="w-5 h-5 mr-2" />
-              {isLoadingRecipe ? 'Loading Recipe...' : 'Edit Recipe'}
+              Edit Prompts
             </Button>
           </div>
         </div>
