@@ -166,7 +166,23 @@ class StoryboardGenerationServiceV2 {
             quality: 'standard',
           });
 
-          const imageUrl = imageResult.imageUrl;
+          // Handle image URL - convert data URLs to GCS URLs
+          let imageUrl = imageResult.imageUrl;
+          const sceneTitle = scene.title || `scene_${i}`;
+
+          if (imageUrl && imageUrl.startsWith('data:')) {
+            // Convert data URL to buffer and upload to GCS
+            try {
+              const base64Data = imageUrl.split(',')[1];
+              const imageBuffer = Buffer.from(base64Data, 'base64');
+              const sceneTitleSafe = sceneTitle.replace(/\s+/g, '_');
+              imageUrl = await GCSService.uploadImageToGCS(imageBuffer, projectId, sceneTitleSafe);
+              console.log(`[StoryboardGen] Uploaded image to GCS for: ${sceneTitle}`);
+            } catch (uploadError) {
+              console.warn(`[StoryboardGen] Failed to upload image to GCS: ${uploadError.message}`);
+              // Continue with data URL if upload fails (will likely cause Firestore error)
+            }
+          }
 
           scenesWithImages.push({
             ...scene,
