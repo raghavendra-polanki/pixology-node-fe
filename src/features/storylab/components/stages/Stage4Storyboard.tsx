@@ -428,7 +428,7 @@ export function Stage4Storyboard({
                     <Button
                       onClick={() => handleAiEditOpen(scene)}
                       size="sm"
-                      className="bg-purple-600/90 hover:bg-purple-700 text-white rounded-lg h-8 w-8 p-0"
+                      className="bg-blue-600/90 hover:bg-blue-700 text-white rounded-lg h-8 w-8 p-0"
                       title="AI Edit Image"
                     >
                       <Wand2 className="w-4 h-4" />
@@ -624,7 +624,7 @@ export function Stage4Storyboard({
         <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-purple-500" />
+              <Wand2 className="w-5 h-5 text-blue-500" />
               AI Edit Scene {aiEditingScene?.number} Image
             </DialogTitle>
           </DialogHeader>
@@ -660,8 +660,8 @@ export function Stage4Storyboard({
               </div>
 
               {/* Info Box */}
-              <div className="bg-purple-600/10 border border-purple-600/30 rounded-lg p-3">
-                <p className="text-sm text-purple-300">
+              <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-3">
+                <p className="text-sm text-blue-300">
                   AI will regenerate the image based on your instructions while maintaining the scene's overall concept and style.
                 </p>
               </div>
@@ -679,7 +679,7 @@ export function Stage4Storyboard({
                 <Button
                   onClick={handleAiEditSubmit}
                   disabled={!aiEditPrompt.trim() || isRegeneratingImage}
-                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                 >
                   {isRegeneratingImage ? (
                     <>
