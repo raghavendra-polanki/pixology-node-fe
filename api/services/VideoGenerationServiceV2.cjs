@@ -1,29 +1,37 @@
 /**
  * VideoGenerationServiceV2
  *
- * Generates videos using legacy video generation service
- * Supports per-scene video generation for screenplay entries
+ * Generates videos from screenplay scenes using Veo API
+ * Follows ActionExecutor pattern for consistency
  */
 
-const VideoGenerationService = require('./videoGenerationService');
+const { generateVideoWithVeo } = require('./videoGenerationService');
 
 class VideoGenerationServiceV2 {
   /**
    * Generate videos for screenplay scenes
+   * Combines screenplay and storyboard data to create videos
    *
    * @param {string} projectId - Project ID
-   * @param {object} input - { screenplayScenes, sceneImages, videoDuration }
+   * @param {object} input - { screenplayScenes, storyboardScenes, videoDuration, aspectRatio, resolution }
    * @param {object} db - Firestore database
-   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
-   * @returns {Promise<object>} { videos, adaptor, model }
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance (not currently used)
+   * @returns {Promise<object>} { videos }
    */
   static async generateVideos(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
         screenplayScenes = [],
-        sceneImages = [],
-        videoDuration = '30s',
+        storyboardScenes = [],
+        videoDuration = '8s',
+        aspectRatio = '16:9',
+        resolution = '720p',
       } = input;
+
+      // Validate required inputs
+      if (!projectId) {
+        throw new Error('Missing required input: projectId');
+      }
 
       if (!Array.isArray(screenplayScenes) || screenplayScenes.length === 0) {
         throw new Error('screenplayScenes is required and must be a non-empty array');
@@ -39,24 +47,47 @@ class VideoGenerationServiceV2 {
       for (let i = 0; i < screenplayScenes.length; i++) {
         try {
           const screenplayEntry = screenplayScenes[i];
-          const sceneImage = sceneImages[i];
+          const storyboardScene = storyboardScenes[i];
 
           console.log(`[VideoGen] Generating video ${i + 1}/${screenplayScenes.length}`);
 
-          // For now, use legacy video generation service
-          // The adaptor system for video generation will be implemented later
-          const videoResult = await this.generateSingleVideo(
+          // Validate required scene data
+          if (!screenplayEntry) {
+            throw new Error(`Missing screenplay entry for scene ${i + 1}`);
+          }
+
+          // Combine screenplay and storyboard data (following ActionExecutor pattern)
+          const combinedSceneData = {
+            title: screenplayEntry.title || storyboardScene?.title || `Scene ${i + 1}`,
+            visual: storyboardScene?.description || screenplayEntry.visual || 'Professional video scene',
+            cameraFlow: screenplayEntry.cameraFlow || storyboardScene?.cameraWork || 'Smooth camera movement',
+            script: screenplayEntry.script || screenplayEntry.dialogue || 'Scene dialogue or narration',
+            backgroundMusic: screenplayEntry.backgroundMusic || 'Background music playing',
+            description: screenplayEntry.description || storyboardScene?.description || 'Scene description',
+            duration: screenplayEntry.duration || screenplayEntry.timeEnd || videoDuration,
+            aspectRatio,
+            resolution,
+          };
+
+          // Generate video using legacy service (Veo API)
+          const videoResult = await generateVideoWithVeo(
+            null,  // imageBase64 - can be added later if storyboard images available
+            combinedSceneData,
             projectId,
-            screenplayEntry,
-            null  // imageBase64 - will fetch from GCS URI if needed
+            i
           );
 
+          // Return structured video data
           videos.push({
             sceneNumber: screenplayEntry.sceneNumber || i + 1,
+            sceneTitle: combinedSceneData.title,
             videoUrl: videoResult.videoUrl,
             videoId: videoResult.videoId,
-            duration: screenplayEntry.timeEnd || '8s',
+            duration: combinedSceneData.duration,
+            videoFormat: videoResult.videoFormat || 'mp4',
             generatedAt: new Date().toISOString(),
+            uploadedToGCS: videoResult.uploadedToGCS,
+            metadata: videoResult.metadata,
           });
 
           // Rate limiting between video generations
@@ -64,16 +95,18 @@ class VideoGenerationServiceV2 {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         } catch (videoError) {
-          console.error(`[VideoGen] Video generation failed for scene ${i}: ${videoError.message}`);
+          console.error(`[VideoGen] Video generation failed for scene ${i + 1}: ${videoError.message}`);
 
-          // Continue with next scene
+          // Continue with next scene, record error
           videos.push({
-            sceneNumber: screenplayScenes[i].sceneNumber || i + 1,
+            sceneNumber: screenplayScenes[i]?.sceneNumber || i + 1,
             error: videoError.message,
             generatedAt: new Date().toISOString(),
           });
         }
       }
+
+      console.log(`[VideoGen] Video generation completed. Generated ${videos.length} videos.`);
 
       // Store in Firestore
       await db
@@ -82,6 +115,9 @@ class VideoGenerationServiceV2 {
         .update({
           aiGeneratedVideos: {
             videos,
+            totalCount: videos.length,
+            successCount: videos.filter(v => !v.error).length,
+            errorCount: videos.filter(v => v.error).length,
             generatedAt: new Date().toISOString(),
           },
         });
@@ -91,34 +127,6 @@ class VideoGenerationServiceV2 {
       };
     } catch (error) {
       console.error('[VideoGen] Error:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate single video using legacy service (backward compatibility)
-   *
-   * @param {string} projectId - Project ID
-   * @param {object} sceneData - Scene data from screenplay
-   * @param {string} imageBase64 - Base64 encoded scene image (optional)
-   * @returns {Promise<object>} Generated video info
-   */
-  static async generateSingleVideo(projectId, sceneData, imageBase64 = null) {
-    try {
-      console.log(`[VideoGen] Generating single video for scene ${sceneData.sceneNumber || 1}`);
-
-      // Use legacy video generation service
-      // This provides backward compatibility with existing video generation
-      const videoResult = await VideoGenerationService.generateVideoWithVeo(
-        imageBase64,
-        sceneData,
-        projectId,
-        (sceneData.sceneNumber || 1) - 1
-      );
-
-      return videoResult;
-    } catch (error) {
-      console.error('[VideoGen] Error generating single video:', error.message);
       throw error;
     }
   }
