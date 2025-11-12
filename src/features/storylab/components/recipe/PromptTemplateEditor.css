@@ -215,8 +215,7 @@
   overflow-y: auto;
   word-break: break-word;
   white-space: pre-wrap;
-  flex: 1;
-  min-height: 0;
+  max-height: 80%;
 }
 
 .model-info {
@@ -335,14 +334,13 @@
 }
 
 .output-content {
-  flex: 1;
   overflow-y: auto;
   background: #1a1a1a;
   border: 1px solid #333333;
   border-radius: 4px;
   padding: 0.75rem;
-  min-height: 0;
   margin-bottom: 0.75rem;
+  max-height: 80%;
 }
 
 .output-text {
