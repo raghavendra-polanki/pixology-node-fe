@@ -54,19 +54,26 @@ try {
 }
 
 // Get Firestore instance
-// NOTE: firebase-admin v13.5.0 doesn't support database ID parameter
-// Service account has Cloud Datastore User role (sufficient permissions for pixology-v2)
-// To use pixology-v2, configure the service account JSON with pixology-v2 as default database
-// or upgrade firebase-admin to v12.2.0+ which supports: admin.firestore({ databaseId: 'pixology-v2' })
 const db = admin.firestore();
 
-console.log(`✓ Using Firestore (default database from service account config)`);
-
-// Enable offline persistence for development
-if (process.env.NODE_ENV === 'development') {
+// Try to set database ID via settings (supported in some versions)
+const databaseId = process.env.FIRESTORE_DATABASE_ID || 'pixology-v2';
+try {
   db.settings({
     ignoreUndefinedProperties: true,
+    databaseId: databaseId,
   });
+  console.log(`✓ Using Firestore database: ${databaseId}`);
+} catch (settingsError) {
+  // If databaseId is not supported in settings, fall back to default
+  console.log(`⚠️  Could not configure database ID via settings: ${settingsError.message}`);
+  console.log(`✓ Using Firestore (default database from service account config)`);
+
+  if (process.env.NODE_ENV === 'development') {
+    db.settings({
+      ignoreUndefinedProperties: true,
+    });
+  }
 }
 
 export { db, admin };
