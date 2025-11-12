@@ -241,7 +241,7 @@ router.post('/video', async (req, res) => {
     console.log(`[Generation] Generating video for project ${projectId}`);
 
     const input = {
-      screenplayEntries,
+      screenplayScenes: screenplayEntries,
       storyboardScenes,
       videoDuration,
       aspectRatio,
