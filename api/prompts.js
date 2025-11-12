@@ -16,7 +16,7 @@ const router = express.Router();
  */
 router.get('/templates', async (req, res) => {
   try {
-    const { stageType } = req.query;
+    const { stageType, projectId } = req.query;
 
     if (!stageType) {
       console.warn('[API] /templates: stageType is required');
@@ -25,21 +25,20 @@ router.get('/templates', async (req, res) => {
       });
     }
 
-    console.log(`[API] /templates: Loading templates for stage: ${stageType}`);
+    console.log(`[API] /templates: Loading template for stage: ${stageType}`);
 
-    // Get templates for stage
-    const templates = await PromptTemplateService.listTemplatesByStage(
-      stageType,
-      { activeOnly: true, limit: 50 },
-      db
-    );
+    // Get template using PromptManager (same as persona generation)
+    const template = await PromptManager.getPromptTemplate(stageType, projectId, db);
+
+    // Return as array for UI consistency
+    const templates = template && template.prompts ? [template] : [];
 
     console.log(`[API] /templates: Returning ${templates.length} templates for stage: ${stageType}`);
     res.json({ templates });
   } catch (error) {
-    console.error('[API] /templates: Error loading prompt templates:', error);
+    console.error('[API] /templates: Error loading prompt template:', error);
     res.status(500).json({
-      error: 'Failed to load prompt templates',
+      error: 'Failed to load prompt template',
       message: error.message,
     });
   }
