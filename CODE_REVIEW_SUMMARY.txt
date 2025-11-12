@@ -1,0 +1,269 @@
+PIXOLOGY NODE FE - CODE REVIEW SUMMARY
+======================================
+
+ANALYSIS DATE: 2025-11-11
+COMPREHENSIVE REVIEW OF: pixology-node-fe
+
+KEY FINDINGS
+============
+
+1. ARCHITECTURE OVERVIEW
+   - Recipe-based DAG orchestration system
+   - Three-tier service architecture: Frontend (React/TS) -> Backend (Express/Node) -> AI Services (Gemini/Vertex AI)
+   - Database: Firestore for projects, recipes, and execution tracking
+   - Storage: GCS for images and videos
+
+2. AI SERVICE IMPLEMENTATIONS
+
+   A) GeminiService (api/services/geminiService.js - 725 lines)
+      - Text generation for personas, narratives, storyboards, screenplays
+      - Model: gemini-2.5-flash
+      - Key Functions:
+        * generateMultiplePersonasInSingleCall() - Optimized 3-persona generation
+        * generateStoryScenesInSingleCall() - 6-scene storyboard generation
+        * generateScreenplayFromStoryboard() - Professional screenplay with timing
+        * generateNarrativesInSingleCall() - 6 narrative theme generation
+      - Features:
+        * Custom prompt support with template variables
+        * JSON extraction from markdown code blocks
+        * Validates required fields per output type
+
+   B) ImageGenerationService (api/services/imageGenerationService.js - 254 lines)
+      - Persona image generation: Uses gemini-2.5-flash-image model
+      - Scene image generation: Maintains character consistency with persona reference
+      - Key Functions:
+        * generatePersonaImage() - Single persona portrait
+        * generateMultipleSceneImages() - Sequential scene generation with previous scene context
+      - Critical: Passes persona image buffer to maintain visual consistency across scenes
+
+   C) VideoGenerationService (api/services/videoGenerationService.js - 812 lines)
+      - Currently delegates to Python FastAPI backend for actual video generation
+      - Supports both:
+        * Python FastAPI backend (current): callPythonVideoGenerationAPI()
+        * Direct Veo3 API: generateVideoWithVeo3DirectAPI() (alternative implementation)
+      - Features:
+        * Veo3 constraints: 4, 6, 8 second durations only
+        * Long-running operation polling with 15-second intervals
+        * Service account support (separate Veo3 account optional)
+
+3. RECIPE SYSTEM ARCHITECTURE
+
+   A) RecipeOrchestrator (api/services/RecipeOrchestrator.js)
+      - Main orchestration engine
+      - Executes recipes as DAGs (Directed Acyclic Graphs)
+      - Workflow:
+        1. Load recipe definition
+        2. Create execution record (exec_{uuid})
+        3. Validate DAG structure
+        4. Execute nodes in topological order
+        5. Store intermediate outputs
+        6. Handle errors per node errorHandling strategy
+        7. Store final result keyed by output key
+      - Stores execution data to Firestore: recipe_executions collection
+
+   B) ActionExecutor (api/services/ActionExecutor.js - 507 lines)
+      - Routes node execution based on type:
+        * 'text_generation' -> Gemini service
+        * 'image_generation' -> Image service (with scene/persona detection)
+        * 'video_generation' -> Video service
+        * 'data_processing' -> GCS uploads + data combination
+      - Supports custom prompts from node.prompt field
+      - Error handling strategies: fail, skip, retry
+
+   C) RecipeSeedData (api/services/RecipeSeedData.js - 1000+ lines)
+      - Pre-built recipe definitions for all stages:
+        * PERSONA_GENERATION_RECIPE (Stage 2) - 3 nodes
+        * NARRATIVE_GENERATION_RECIPE (Stage 3) - 1 node
+        * STORYBOARD_GENERATION_RECIPE (Stage 4) - 3 nodes
+        * SCREENPLAY_GENERATION_RECIPE (Stage 5) - 1 node
+        * VIDEO_GENERATION_RECIPE (Stage 6) - 1 node
+      - Includes complete prompt templates with variable substitution
+
+4. DATABASE SCHEMA
+
+   A) collections.projects
+      - Stores all project data including AI-generated content
+      - Key fields:
+        * campaignDetails: product info
+        * aiGeneratedPersonas: personas + images
+        * aiGeneratedNarratives: narrative themes
+        * aiGeneratedStoryboard: scenes + scene images
+        * aiGeneratedScreenplay: screenplay entries
+        * aiGeneratedVideos: video URLs
+        * stageExecutions: recipe execution IDs per stage
+        * currentStageIndex, completionPercentage: workflow progress
+
+   B) collections.recipes
+      - Recipe definitions with nodes and edges
+      - Fields: nodes[], edges[], executionConfig, metadata
+      - Supports versioning and tagging
+
+   C) collections.recipe_executions
+      - Execution tracking
+      - Stores: input, output, status, action results, timing
+
+5. PROMPT HANDLING & TEMPLATES
+
+   Current State:
+   - Hardcoded prompts in:
+     * geminiService.js (fallback defaults)
+     * RecipeSeedData.js (primary location)
+   - Custom prompts via node.prompt field in recipes
+
+   Prompt Variables Supported:
+   - Persona: {productDescription}, {targetAudience}, {numberOfPersonas}, {productImageUrl}
+   - Narrative: {productDescription}, {targetAudience}, {numberOfNarratives}, {selectedPersonas}
+   - Storyboard: {productDescription}, {targetAudience}, {selectedPersonaName}, {selectedPersonaDescription}, 
+                 {narrativeTheme}, {narrativeStructure}, {numberOfScenes}, {videoDuration}
+   - Screenplay: {storyboardScenes}, {videoDuration}, {selectedPersonaName}
+
+   Migration Opportunity:
+   - Extract to Firestore collection: prompt_templates
+   - Add UI for prompt template CRUD
+   - Support template versioning and A/B testing
+
+6. API ROUTES
+
+   /api/recipes:
+   - GET / - List recipes (with stageType, tags, search filtering)
+   - GET /:recipeId - Get single recipe
+   - POST / - Create recipe (validates DAG)
+   - POST /:recipeId/execute - Execute recipe (returns executionId)
+   - GET /executions/:executionId - Poll execution status
+
+   /api/projects:
+   - GET / - List user's accessible projects
+   - GET /:projectId - Get single project
+   - POST / - Create project
+   - PUT /:projectId - Update project (all fields)
+
+7. FRONTEND INTEGRATION
+
+   Stage Components (src/features/storylab/components/stages/):
+   - Stage1CampaignDetails.tsx: Collects product info (no AI)
+   - Stage2Personas.tsx: Triggers persona generation, handles selection
+   - Stage3Narratives.tsx: Generates narrative themes
+   - Stage4Storyboard.tsx: Complex flow with persona image passing for consistency
+   - Stage5Screenplay.tsx: Generates screenplay from storyboard
+   - Stage6GenerateVideo.tsx: Per-scene video generation
+
+   Frontend Patterns:
+   - Recipe fetching: GET /api/recipes?stageType={stage}
+   - Recipe execution: POST /api/recipes/{recipeId}/execute with input
+   - Polling: 5-second interval with 3-minute timeout (36 attempts)
+   - Project updates: PUT /api/projects/:projectId with AI results
+   - Recipe editing: Users can modify prompts before execution
+
+8. ENVIRONMENT CONFIGURATION
+
+   Required Variables:
+   - VITE_GOOGLE_CLIENT_ID - OAuth client ID
+   - GCP_PROJECT_ID - Google Cloud project
+   - GEMINI_API_KEY - AI text/image generation
+   - GOOGLE_APPLICATION_CREDENTIALS - Service account JSON path
+   - GCS_BUCKET_NAME - Cloud storage bucket
+   - PYTHON_API_URL - Video generation backend
+
+   Optional:
+   - VEO3_SERVICE_ACCOUNT_KEY - Separate Veo3 service account
+   - ENABLE_DEBUG_IMAGES - Save debug images
+
+9. DATA CONSISTENCY MECHANISMS
+
+   Persona Consistency:
+   - Persona image buffer passed to all scene generation calls
+   - Previous scene image used as context for next scene
+   - Prompt explicitly instructs character consistency
+
+   Product Consistency:
+   - Product description passed through all generations
+   - Product image URL in persona and scene prompts
+   - Narrative themes aligned with product
+
+10. CRITICAL IMPLEMENTATION DETAILS
+
+    Model Information:
+    - Text generation: gemini-2.5-flash (creative, ~2000 token limit)
+    - Image generation: gemini-2.5-flash-image (dedicated image model)
+    - Video generation: Veo3.1 via Python backend
+
+    Rate Limiting & Delays:
+    - Persona images: 1000ms between API calls
+    - Scene images: 1000ms between API calls
+    - Video generation: 2000ms between API calls
+
+    JSON Parsing:
+    - Markdown code block extraction for personas (```json ... ```)
+    - Direct JSON object extraction if no markdown blocks
+    - Field validation for required structure
+
+    Execution Timing:
+    - Persona generation: ~30-60 seconds for 3 personas
+    - Storyboard generation: ~60-120 seconds for 6 scenes
+    - Screenplay generation: ~30-45 seconds
+    - Video generation: 5-30 minutes per scene (depends on Veo3 queue)
+
+MIGRATION PLANNING INSIGHTS
+===========================
+
+1. PROMPT TEMPLATE EXTRACTION
+   - Move from hardcoded strings to Firestore collection
+   - Add prompt_templates collection with versioning
+   - Update ActionExecutor to load templates by ID
+   - Add frontend UI for prompt management
+
+2. VIDEO GENERATION IMPROVEMENTS
+   - Currently uses Python backend wrapper
+   - Could migrate to direct Veo3 API calls
+   - Consider caching frequently generated content
+
+3. EXECUTION HISTORY & ANALYTICS
+   - Current: Basic status tracking
+   - Future: Cost tracking, performance metrics, user analytics
+
+4. RECIPE EDITOR ENHANCEMENTS
+   - Current: Users can edit node.prompt before execution
+   - Future: Visual recipe builder, node parameter editor
+
+5. CUSTOM PROMPT INTERFACE
+   - Add ability to test prompt variations
+   - Support multiple prompt versions per recipe
+   - A/B testing framework
+
+TECHNICAL DEBT & IMPROVEMENTS
+============================
+
+1. Prompt management should move to database (not hardcoded)
+2. Video generation could be optimized with direct Veo3 calls
+3. Consider adding prompt template versioning
+4. Add execution cost tracking for billing
+5. Implement parallel node execution support
+
+ARCHITECTURE STRENGTHS
+======================
+
+1. Clean separation of concerns (Orchestrator, Executor, Services)
+2. DAG-based recipe system is extensible
+3. Firestore integration provides persistence and audit trail
+4. Custom prompt support allows for experimentation
+5. Modular stage-based workflow
+6. Consistency mechanisms for persona/product across generations
+
+SECURITY CONSIDERATIONS
+=======================
+
+1. Service account key files (.json) in repo root - should move to secrets manager
+2. OAuth token verification in place for API endpoints
+3. Firestore rules should restrict collection access
+4. GCS bucket permissions correctly configured for public images
+5. API endpoints require authentication except GET operations
+
+FILES TO SAVE FOR MIGRATION PLANNING
+====================================
+
+See DEEP_CODE_REVIEW.md for:
+- Complete method signatures and line numbers
+- Full prompt templates
+- Database schema details
+- API route specifications
+- Frontend component flow diagrams
