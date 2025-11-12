@@ -252,7 +252,7 @@ router.post('/video', async (req, res) => {
 
     res.json({
       success: true,
-      data: result,
+      data: result.videos,
       message: 'Video generation started',
     });
   } catch (error) {

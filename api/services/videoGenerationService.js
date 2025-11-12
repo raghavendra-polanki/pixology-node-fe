@@ -341,45 +341,134 @@ async function pollOperationStatus(operationName, accessToken, gcpRegion, maxWai
 }
 
 /**
- * Call Python FastAPI backend for video generation (replaces Veo 3.1 API)
+ * Call Veo 3.1 API directly for video generation and upload to GCS
  * @private
  */
 async function callVeoAPIAndUploadToGCS(imageBase64, description, projectId, sceneIndex) {
   try {
-    console.log('Calling Python FastAPI backend for video generation...');
+    console.log('🎬 Generating video with direct Veo 3.1 API...');
 
-    // Debug image data (for reference, though we're not using the image with Python API for now)
-    debugAnalyzeImage(imageBase64);
-    debugSaveImage(imageBase64, sceneIndex, 'original');
+    // Debug image data if provided
+    if (imageBase64) {
+      debugAnalyzeImage(imageBase64);
+      debugSaveImage(imageBase64, sceneIndex, 'original');
+    }
 
-    // Extract duration from description if available
-    // Default to 5 seconds, can be adjusted based on scene data
-    let duration_seconds = 5;
-    let quality = 'fast';
+    // Get GCP configuration
+    const gcpProjectId = process.env.GCP_PROJECT_ID;
+    const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
+    const gcsBucket = process.env.GCS_BUCKET_NAME || 'pixology-personas';
+    const veoModelId = 'veo-3.1-generate-preview';
 
-    // Try to extract duration from description if it mentions seconds
+    if (!gcpProjectId) {
+      throw new Error('GCP_PROJECT_ID environment variable not set');
+    }
+
+    // Extract duration from description (Veo 3 supports: 4, 6, 8 seconds only)
+    let durationSeconds = 6; // Default to 6 seconds
     const durationMatch = description.match(/(\d+)\s*seconds?\s*duration/i);
     if (durationMatch) {
       const extractedDuration = parseInt(durationMatch[1]);
-      if (extractedDuration >= 1 && extractedDuration <= 30) {
-        duration_seconds = extractedDuration;
+      // Map to closest allowed duration (4, 6, or 8)
+      if (extractedDuration <= 5) {
+        durationSeconds = 4;
+      } else if (extractedDuration <= 7) {
+        durationSeconds = 6;
+      } else {
+        durationSeconds = 8;
       }
     }
 
-    console.log(`Using duration: ${duration_seconds}s, quality: ${quality}`);
+    console.log(`   Duration: ${durationSeconds}s`);
+    console.log(`   Prompt: ${description.substring(0, 100)}...`);
 
-    // Call Python FastAPI backend
-    const pythonApiResponse = await callPythonVideoGenerationAPI(description, duration_seconds, quality);
+    // Get access token using Veo3 service account
+    const accessToken = await getAccessToken('veo3');
 
-    console.log('✅ Video generation completed successfully via Python FastAPI');
-    console.log(`📺 Video URL: ${pythonApiResponse.video_url}`);
-    console.log(`📺 Video ID: ${pythonApiResponse.video_id}`);
-    console.log(`📺 GCS Path: ${pythonApiResponse.gcs_path}`);
+    // Build GCS output path
+    const sceneNumber = sceneIndex + 1;
+    const projectPath = projectId ? `${projectId}` : 'default';
+    const outputStorageUri = `gs://${gcsBucket}/videos/${projectPath}/scene_${sceneNumber}/`;
 
-    return pythonApiResponse.video_url;
+    console.log(`   Output location: ${outputStorageUri}`);
+
+    // Build request payload (without image for now - text-to-video)
+    // TODO: Add image support by uploading imageBase64 to GCS first
+    const requestPayload = {
+      instances: [
+        {
+          prompt: description,
+          // image: {
+          //   gcsUri: sceneImageGcsUri,
+          //   mimeType: 'image/jpeg',
+          // },
+        },
+      ],
+      parameters: {
+        durationSeconds: durationSeconds,
+        aspectRatio: '16:9',
+        resolution: '720p',
+        enhancePrompt: true,
+        generateAudio: true,
+        storageUri: outputStorageUri,
+      },
+    };
+
+    // Call Veo 3.1 API
+    const apiEndpoint = `https://${gcpLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${gcpLocation}/publishers/google/models/${veoModelId}:predictLongRunning`;
+
+    console.log(`📡 Calling Veo 3.1 API: ${apiEndpoint}`);
+
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      let errorMessage = `HTTP ${response.status}`;
+
+      try {
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+        } else if (contentType && contentType.includes('text/html')) {
+          const htmlText = await response.text();
+          errorMessage = `Received HTML response (possible auth error). First 200 chars: ${htmlText.substring(0, 200)}`;
+        } else {
+          const text = await response.text();
+          errorMessage = text.substring(0, 500);
+        }
+      } catch (parseError) {
+        errorMessage = `Could not parse error response. Status: ${response.status}`;
+      }
+
+      throw new Error(`Veo 3.1 API error: ${errorMessage}`);
+    }
+
+    const operationData = await response.json();
+    const operationName = operationData.name;
+
+    console.log(`⏳ Operation started: ${operationName}`);
+    console.log(`   Polling for completion...`);
+
+    // Poll for operation completion
+    const result = await pollVeo3Operation(operationName, accessToken, gcpLocation);
+
+    // Extract video URL from result
+    const videoUrl = extractVideoUrl(result);
+
+    console.log(`✅ Video generation completed!`);
+    console.log(`   Video URL: ${videoUrl}`);
+
+    return videoUrl;
 
   } catch (error) {
-    console.error('Error in video generation:', error);
+    console.error('❌ Error in video generation:', error);
     throw new Error(`Video Generation Error: ${error.message}`);
   }
 }
