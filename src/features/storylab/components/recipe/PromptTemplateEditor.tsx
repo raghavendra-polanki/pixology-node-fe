@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Save, AlertCircle, Loader } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader, Play } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-import { Card } from '../ui/card';
+import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import './PromptTemplateEditor.css';
 
@@ -14,6 +14,7 @@ interface PromptConfig {
 
 interface PromptTemplate {
   id: string;
+  templateId?: string;
   stageType: string;
   name: string;
   prompts: {
@@ -25,6 +26,7 @@ interface PromptTemplate {
 
 interface PromptTemplateEditorProps {
   stageType: string;
+  projectId?: string;
   onBack: () => void;
 }
 
@@ -34,14 +36,19 @@ const CAPABILITY_LABELS: Record<string, { label: string; icon: string }> = {
   videoGeneration: { label: 'Video Generation', icon: '🎬' },
 };
 
-export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditorProps) {
+interface VariableValue {
+  [key: string]: string;
+}
+
+export function PromptTemplateEditor({ stageType, projectId, onBack }: PromptTemplateEditorProps) {
   const [template, setTemplate] = useState<PromptTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('');
-  const [localChanges, setLocalChanges] = useState<Record<string, any>>({});
+  const [activeCapability, setActiveCapability] = useState<string>('');
+  const [variableValues, setVariableValues] = useState<VariableValue>({});
+  const [testOutput, setTestOutput] = useState<string | null>(null);
 
   // Load template
   useEffect(() => {
@@ -66,11 +73,11 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
           console.log(`[PromptTemplateEditor] Template loaded:`, loadedTemplate);
           setTemplate(loadedTemplate);
 
-          // Set initial active tab to first available capability
+          // Set initial active capability to first available
           const capabilities = Object.keys(loadedTemplate.prompts || {});
           console.log(`[PromptTemplateEditor] Available capabilities:`, capabilities);
           if (capabilities.length > 0) {
-            setActiveTab(capabilities[0]);
+            setActiveCapability(capabilities[0]);
           }
         } else {
           setError(`No prompt template found for stage: ${stageType}`);
@@ -87,97 +94,76 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
     loadTemplate();
   }, [stageType]);
 
-  const handlePromptChange = (capability: string, field: 'systemPrompt' | 'userPromptTemplate', value: string) => {
-    setLocalChanges({
-      ...localChanges,
-      [capability]: {
-        ...(localChanges[capability] || {}),
-        [field]: value,
-      },
-    });
-  };
-
-  const handleSave = async () => {
-    if (!template) return;
+  const handleTestPrompt = async () => {
+    if (!template || !activeCapability) return;
 
     try {
-      setIsSaving(true);
+      setIsTesting(true);
       setError(null);
+      setTestOutput(null);
 
-      // Merge local changes with template
-      const updatedTemplate = {
-        ...template,
-        prompts: {
-          ...template.prompts,
-          ...Object.entries(localChanges).reduce((acc, [capability, changes]) => {
-            return {
-              ...acc,
-              [capability]: {
-                ...(template.prompts[capability as keyof typeof template.prompts] || {}),
-                ...changes,
-              },
-            };
-          }, {}),
-        },
-      };
-
-      const response = await fetch(`/api/prompts/templates/${template.id}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/prompts/test`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
         },
-        body: JSON.stringify(updatedTemplate),
+        body: JSON.stringify({
+          stageType,
+          projectId,
+          capability: activeCapability,
+          variables: variableValues,
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save template');
+        throw new Error(errorData.error || 'Failed to test prompt');
       }
 
-      setTemplate(updatedTemplate);
-      setLocalChanges({});
-      setSuccessMessage('Prompt template saved successfully!');
+      const data = await response.json();
+      setTestOutput(data.output);
+      setSuccessMessage('Prompt test completed successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save template');
+      setError(err instanceof Error ? err.message : 'Failed to test prompt');
     } finally {
-      setIsSaving(false);
+      setIsTesting(false);
     }
   };
 
-  const getFieldValue = (capability: string, field: 'systemPrompt' | 'userPromptTemplate') => {
-    // Check local changes first, then fall back to template
-    if (localChanges[capability] && localChanges[capability][field] !== undefined) {
-      return localChanges[capability][field];
+  const extractVariables = (template: string): string[] => {
+    const regex = /\{\{(\w+)\}\}/g;
+    const matches: string[] = [];
+    let match;
+    while ((match = regex.exec(template)) !== null) {
+      if (!matches.includes(match[1])) {
+        matches.push(match[1]);
+      }
     }
-    return template?.prompts[capability as keyof typeof template.prompts]?.[field] || '';
+    return matches;
   };
 
   const capabilities = template ? Object.keys(template.prompts) : [];
-  const hasMultipleCapabilities = capabilities.length > 1;
+  const currentPrompt = activeCapability && template ? template.prompts[activeCapability as keyof typeof template.prompts] : null;
+  const variables = currentPrompt ? extractVariables(`${currentPrompt.systemPrompt || ''}${currentPrompt.userPromptTemplate || ''}`) : [];
 
   return (
-    <div className="prompt-template-editor">
+    <div className="prompt-template-editor-split">
       {/* Header */}
       <div className="prompt-editor-header">
         <div className="prompt-editor-header-content">
           <button
             className="prompt-editor-back-button"
             onClick={onBack}
-            disabled={isSaving}
+            disabled={isTesting}
           >
             <ArrowLeft size={20} />
             <span>Back</span>
           </button>
 
           <div className="prompt-editor-title-section">
-            <h1 className="prompt-editor-title">Edit Prompts</h1>
-            {template && (
-              <p className="prompt-editor-subtitle">
-                {template.name} • {stageType}
-              </p>
-            )}
+            <h1 className="prompt-editor-title">Playground</h1>
+            <p className="prompt-editor-subtitle">Iterate on and test prompts.</p>
           </div>
 
           <div className="prompt-editor-actions">
@@ -192,29 +178,12 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
                 <span>✓ {successMessage}</span>
               </div>
             )}
-            <Button
-              onClick={handleSave}
-              disabled={isSaving || Object.keys(localChanges).length === 0}
-              className="save-button"
-            >
-              {isSaving ? (
-                <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="prompt-editor-content">
+      {/* Content - Split Pane */}
+      <div className="prompt-editor-content-split">
         {isLoading ? (
           <div className="prompt-editor-loading">
             <Loader className="w-8 h-8 animate-spin" />
@@ -230,76 +199,137 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
           </div>
         ) : template ? (
           <>
-            {/* Tabs for multiple capabilities */}
-            {hasMultipleCapabilities && (
-              <div className="prompt-editor-tabs">
-                {capabilities.map((capability) => (
-                  <button
-                    key={capability}
-                    className={`prompt-tab ${activeTab === capability ? 'active' : ''}`}
-                    onClick={() => setActiveTab(capability)}
-                  >
-                    <span className="tab-icon">
-                      {CAPABILITY_LABELS[capability]?.icon || '⚙️'}
-                    </span>
-                    <span className="tab-label">
-                      {CAPABILITY_LABELS[capability]?.label || capability}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Prompt Editor Cards */}
-            <div className="prompt-editor-cards">
-              {capabilities.map((capability) => (
-                <div
-                  key={capability}
-                  className={`prompt-card ${activeTab === capability || !hasMultipleCapabilities ? 'visible' : 'hidden'}`}
-                >
-                  <div className="card-header">
-                    <h2 className="card-title">
-                      {CAPABILITY_LABELS[capability]?.icon}{' '}
-                      {CAPABILITY_LABELS[capability]?.label || capability}
-                    </h2>
-                  </div>
-
-                  <div className="card-content">
-                    {/* System Prompt */}
-                    <div className="field-group">
-                      <Label htmlFor={`system-${capability}`} className="field-label">
-                        System Prompt
-                      </Label>
-                      <Textarea
-                        id={`system-${capability}`}
-                        value={getFieldValue(capability, 'systemPrompt')}
-                        onChange={(e) => handlePromptChange(capability, 'systemPrompt', e.target.value)}
-                        placeholder="Enter system prompt (e.g., 'You are an expert...')"
-                        className="field-textarea system-prompt"
-                        rows={6}
-                      />
-                    </div>
-
-                    {/* User Prompt Template */}
-                    <div className="field-group">
-                      <Label htmlFor={`user-${capability}`} className="field-label">
-                        User Prompt Template
-                      </Label>
-                      <Textarea
-                        id={`user-${capability}`}
-                        value={getFieldValue(capability, 'userPromptTemplate')}
-                        onChange={(e) => handlePromptChange(capability, 'userPromptTemplate', e.target.value)}
-                        placeholder="Enter user prompt template with {{variables}}"
-                        className="field-textarea user-prompt"
-                        rows={10}
-                      />
-                      <p className="field-hint">
-                        Use {`{{variableName}}`} to reference input variables
-                      </p>
-                    </div>
-                  </div>
+            {/* Left Pane - Prompts */}
+            <div className="prompt-pane-left">
+              <div className="prompts-section">
+                <div className="prompts-header">
+                  <h2 className="prompts-title">Prompts</h2>
                 </div>
-              ))}
+
+                {/* Capability Selector */}
+                <div className="capability-selector">
+                  <label className="capability-label">Select prompt</label>
+                  <select
+                    value={activeCapability}
+                    onChange={(e) => {
+                      setActiveCapability(e.target.value);
+                      setTestOutput(null);
+                      setVariableValues({});
+                    }}
+                    className="capability-select"
+                  >
+                    <option value="">Choose a prompt...</option>
+                    {capabilities.map((cap) => (
+                      <option key={cap} value={cap}>
+                        {CAPABILITY_LABELS[cap]?.label || cap}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Display Selected Prompt */}
+                {currentPrompt && (
+                  <div className="prompt-display">
+                    <div className="prompt-display-section">
+                      <h3 className="prompt-display-title">System Prompt</h3>
+                      <div className="prompt-text">
+                        {currentPrompt.systemPrompt || 'No system prompt'}
+                      </div>
+                    </div>
+
+                    <div className="prompt-display-section">
+                      <h3 className="prompt-display-title">User Prompt Template</h3>
+                      <div className="prompt-text">
+                        {currentPrompt.userPromptTemplate || 'No user prompt'}
+                      </div>
+                    </div>
+
+                    {currentPrompt.aiModel && (
+                      <div className="prompt-display-section">
+                        <h3 className="prompt-display-title">Model</h3>
+                        <div className="model-info">
+                          {currentPrompt.aiModel.modelName || currentPrompt.aiModel.provider}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Pane - Inputs & Output */}
+            <div className="prompt-pane-right">
+              {currentPrompt ? (
+                <>
+                  {/* Inputs Section */}
+                  <div className="inputs-section">
+                    <h2 className="inputs-title">Inputs</h2>
+                    <div className="variables-form">
+                      {variables.length > 0 ? (
+                        variables.map((variable) => (
+                          <div key={variable} className="variable-input-group">
+                            <Label htmlFor={`var-${variable}`} className="variable-label">
+                              {variable}
+                            </Label>
+                            <Input
+                              id={`var-${variable}`}
+                              type="text"
+                              value={variableValues[variable] || ''}
+                              onChange={(e) =>
+                                setVariableValues({
+                                  ...variableValues,
+                                  [variable]: e.target.value,
+                                })
+                              }
+                              placeholder={`Enter ${variable}...`}
+                              className="variable-input"
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <p className="no-variables">No variables in this prompt</p>
+                      )}
+                    </div>
+
+                    {/* Test Button */}
+                    <Button
+                      onClick={handleTestPrompt}
+                      disabled={isTesting}
+                      className="test-button"
+                    >
+                      {isTesting ? (
+                        <>
+                          <Loader className="w-4 h-4 mr-2 animate-spin" />
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Start
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Output Section */}
+                  <div className="output-section">
+                    <h2 className="output-title">Output</h2>
+                    {testOutput ? (
+                      <div className="output-content">
+                        <pre className="output-text">{testOutput}</pre>
+                      </div>
+                    ) : (
+                      <div className="output-placeholder">
+                        Click Start to run generation...
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="no-capability-selected">
+                  <p>Select a prompt from the left to test it</p>
+                </div>
+              )}
             </div>
           </>
         ) : null}

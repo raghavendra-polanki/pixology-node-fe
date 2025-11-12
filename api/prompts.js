@@ -224,4 +224,60 @@ router.get('/variables', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/prompts/test
+ * Test a prompt with given variables and get output
+ */
+router.post('/test', async (req, res) => {
+  try {
+    const { stageType, projectId, capability, variables } = req.body;
+
+    if (!stageType || !capability || !variables) {
+      return res.status(400).json({
+        error: 'stageType, capability, and variables are required',
+      });
+    }
+
+    console.log(`[API] /test: Testing prompt for ${stageType}/${capability}`);
+
+    // Get the template
+    const template = await PromptManager.getPromptTemplate(stageType, projectId, db);
+
+    if (!template || !template.prompts[capability]) {
+      return res.status(404).json({
+        error: `No prompt found for ${stageType}/${capability}`,
+      });
+    }
+
+    const promptConfig = template.prompts[capability];
+
+    // Resolve prompt template with variables
+    const resolvedPrompt = PromptManager.resolvePrompt(
+      promptConfig,
+      variables
+    );
+
+    // Combine system and user prompts
+    const fullPrompt = resolvedPrompt.systemPrompt
+      ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
+      : resolvedPrompt.userPrompt;
+
+    console.log(`[API] /test: Resolved prompt: ${fullPrompt.substring(0, 100)}...`);
+
+    // For now, return the resolved prompt as output (testing mode)
+    // In a real implementation, this would call the AI adaptor
+    res.json({
+      success: true,
+      output: fullPrompt,
+      message: 'Prompt test completed (resolved template)',
+    });
+  } catch (error) {
+    console.error('[API] /test: Error testing prompt:', error);
+    res.status(500).json({
+      error: 'Failed to test prompt',
+      message: error.message,
+    });
+  }
+});
+
 export default router;
