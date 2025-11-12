@@ -39,6 +39,7 @@ import projectsRouter from './api/projects.js';
 import personasRouter from './api/personas.js';
 import recipesRouter from './api/recipes.js';
 import videosRouter from './api/videos.js';
+import storyboardRouter from './api/storyboard.js';
 
 // New AI Adaptor Architecture routes
 import adaptorsRouter from './api/adaptors.js';
@@ -170,6 +171,9 @@ app.use('/api/recipes', recipesRouter);
 
 // Video generation API routes
 app.use('/api/videos', videosRouter);
+
+// Storyboard API routes
+app.use('/api/storyboard', storyboardRouter);
 
 // AI Adaptor management API routes
 app.use('/api/adaptors', adaptorsRouter);

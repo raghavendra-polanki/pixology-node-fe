@@ -9,7 +9,8 @@ import {
   Image as ImageIcon,
   SettingsIcon,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wand2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -71,6 +72,9 @@ export function Stage4Storyboard({
   const [viewMode] = useState<ViewMode>('grid');
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
+  const [aiEditingScene, setAiEditingScene] = useState<Scene | null>(null);
+  const [aiEditPrompt, setAiEditPrompt] = useState('');
+  const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
 
   // Sync scenes with project data when loaded
   useEffect(() => {
@@ -229,6 +233,67 @@ export function Stage4Storyboard({
     setEditingScene(newScene);
   };
 
+  const handleAiEditOpen = (scene: Scene) => {
+    setAiEditingScene(scene);
+    setAiEditPrompt('');
+  };
+
+  const handleAiEditSubmit = async () => {
+    if (!aiEditingScene || !aiEditPrompt.trim()) {
+      alert('Please provide edit instructions');
+      return;
+    }
+
+    setIsRegeneratingImage(true);
+    try {
+      // Get the full scene data from project
+      const fullSceneData = project?.aiGeneratedStoryboard?.scenes?.find(
+        (s: any) => s.sceneNumber?.toString() === aiEditingScene.id
+      );
+
+      if (!fullSceneData) {
+        throw new Error('Could not find complete scene data');
+      }
+
+      // Call AI image edit API
+      const response = await fetch('/api/storyboard/edit-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          sceneNumber: aiEditingScene.number,
+          sceneData: fullSceneData,
+          editPrompt: aiEditPrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to edit image');
+      }
+
+      const result = await response.json();
+      const newImageUrl = result.imageUrl;
+
+      // Update scene with new image
+      setScenes(scenes.map(s =>
+        s.id === aiEditingScene.id ? { ...s, image: newImageUrl } : s
+      ));
+
+      // Close dialog
+      setAiEditingScene(null);
+      setAiEditPrompt('');
+
+      alert('Image regenerated successfully!');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate image';
+      console.error('Error regenerating image:', errorMessage);
+      alert(`Failed to regenerate image: ${errorMessage}`);
+    } finally {
+      setIsRegeneratingImage(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       // Save storyboard customizations
@@ -360,6 +425,14 @@ export function Stage4Storyboard({
                   </div>
                   {/* Action Buttons */}
                   <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      onClick={() => handleAiEditOpen(scene)}
+                      size="sm"
+                      className="bg-purple-600/90 hover:bg-purple-700 text-white rounded-lg h-8 w-8 p-0"
+                      title="AI Edit Image"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                    </Button>
                     <Button
                       onClick={() => handleEditOpen(scene)}
                       size="sm"
@@ -539,6 +612,86 @@ export function Stage4Storyboard({
                   className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                 >
                   Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Edit Dialog */}
+      <Dialog open={!!aiEditingScene} onOpenChange={() => setAiEditingScene(null)}>
+        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-purple-500" />
+              AI Edit Scene {aiEditingScene?.number} Image
+            </DialogTitle>
+          </DialogHeader>
+          {aiEditingScene && (
+            <div className="space-y-4 mt-4">
+              {/* Current Image Preview */}
+              {aiEditingScene.image && (
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Current Image</Label>
+                  <div className="relative h-48 rounded-lg overflow-hidden bg-gray-900">
+                    <ImageWithFallback
+                      src={aiEditingScene.image}
+                      alt={aiEditingScene.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Instructions */}
+              <div className="space-y-2">
+                <Label htmlFor="ai-edit-prompt" className="text-gray-300">
+                  What would you like to change?
+                </Label>
+                <Textarea
+                  id="ai-edit-prompt"
+                  value={aiEditPrompt}
+                  onChange={(e) => setAiEditPrompt(e.target.value)}
+                  className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-32"
+                  placeholder="E.g., 'Make the lighting warmer', 'Change to outdoor setting', 'Add more products in the background', etc."
+                  disabled={isRegeneratingImage}
+                />
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-purple-600/10 border border-purple-600/30 rounded-lg p-3">
+                <p className="text-sm text-purple-300">
+                  AI will regenerate the image based on your instructions while maintaining the scene's overall concept and style.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <Button
+                  onClick={() => setAiEditingScene(null)}
+                  variant="outline"
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+                  disabled={isRegeneratingImage}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAiEditSubmit}
+                  disabled={!aiEditPrompt.trim() || isRegeneratingImage}
+                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+                >
+                  {isRegeneratingImage ? (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-4 h-4 mr-2" />
+                      Regenerate Image
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
