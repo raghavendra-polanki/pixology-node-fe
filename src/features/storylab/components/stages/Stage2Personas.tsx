@@ -201,7 +201,14 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     return (
       <PromptTemplateEditor
         stageType="stage_2_personas"
+        projectId={project.id}
         onBack={() => setShowPromptEditor(false)}
+        stageData={{
+          productDescription: project.campaignDetails?.productDescription || '',
+          targetAudience: project.campaignDetails?.targetAudience || '',
+          numberOfPersonas: '3',
+          productImageUrl: project.campaignDetails?.productImageUrl || '',
+        }}
       />
     );
   }

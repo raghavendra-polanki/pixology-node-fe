@@ -383,7 +383,12 @@ export function Stage3Narratives({
     return (
       <PromptTemplateEditor
         stageType="stage_3_narratives"
+        projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
+        stageData={{
+          productDescription: project?.campaignDetails?.productDescription || '',
+          targetAudience: project?.campaignDetails?.targetAudience || '',
+        }}
       />
     );
   }

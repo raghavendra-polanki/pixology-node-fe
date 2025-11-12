@@ -410,7 +410,11 @@ Generate a high-quality, professional marketing video that brings this scene to 
     return (
       <PromptTemplateEditor
         stageType="stage_6_video"
+        projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
+        stageData={{
+          videoDuration: project?.campaignDetails?.videoDuration || '',
+        }}
       />
     );
   }

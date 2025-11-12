@@ -28,6 +28,7 @@ interface PromptTemplateEditorProps {
   stageType: string;
   projectId?: string;
   onBack: () => void;
+  stageData?: Record<string, string>;
 }
 
 const CAPABILITY_LABELS: Record<string, { label: string; icon: string }> = {
@@ -40,7 +41,7 @@ interface VariableValue {
   [key: string]: string;
 }
 
-export function PromptTemplateEditor({ stageType, projectId, onBack }: PromptTemplateEditorProps) {
+export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }: PromptTemplateEditorProps) {
   const [template, setTemplate] = useState<PromptTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
@@ -79,6 +80,16 @@ export function PromptTemplateEditor({ stageType, projectId, onBack }: PromptTem
           if (capabilities.length > 0) {
             setActiveCapability(capabilities[0]);
           }
+
+          // Prefill variable values from stageData if provided
+          if (stageData) {
+            console.log(`[PromptTemplateEditor] Prefilling variables from stageData:`, stageData);
+            const initialValues: VariableValue = {};
+            Object.entries(stageData).forEach(([key, value]) => {
+              initialValues[key] = String(value);
+            });
+            setVariableValues(initialValues);
+          }
         } else {
           setError(`No prompt template found for stage: ${stageType}`);
         }
@@ -92,7 +103,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack }: PromptTem
     };
 
     loadTemplate();
-  }, [stageType]);
+  }, [stageType, stageData]);
 
   const handleTestPrompt = async () => {
     if (!template || !activeCapability) return;

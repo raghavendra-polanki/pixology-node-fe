@@ -252,7 +252,13 @@ export function Stage4Storyboard({
     return (
       <PromptTemplateEditor
         stageType="stage_4_storyboard"
+        projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
+        stageData={{
+          productDescription: project?.campaignDetails?.productDescription || '',
+          targetAudience: project?.campaignDetails?.targetAudience || '',
+          videoDuration: project?.campaignDetails?.videoDuration || '',
+        }}
       />
     );
   }

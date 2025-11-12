@@ -197,7 +197,11 @@ export function Stage5Screenplay({
     return (
       <PromptTemplateEditor
         stageType="stage_5_screenplay"
+        projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
+        stageData={{
+          videoDuration: project?.campaignDetails?.videoDuration || '',
+        }}
       />
     );
   }
