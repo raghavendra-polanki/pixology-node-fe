@@ -294,7 +294,7 @@ export function PromptTemplateEditor({ stageType, onBack }: PromptTemplateEditor
                         rows={10}
                       />
                       <p className="field-hint">
-                        Use {{variableName}} to reference input variables
+                        Use {`{{variableName}}`} to reference input variables
                       </p>
                     </div>
                   </div>
