@@ -146,7 +146,7 @@ class PromptTemplateService {
         .where('stageType', '==', stageType);
 
       if (activeOnly) {
-        query = query.where('isActive', '==', true);
+        query = query.where('active', '==', true);
       }
 
       // Try with composite ordering, fall back to simple ordering if it fails

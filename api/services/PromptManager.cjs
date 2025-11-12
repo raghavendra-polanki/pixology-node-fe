@@ -209,7 +209,7 @@ class PromptManager {
       const snapshot = await db
         .collection('prompt_templates')
         .where('stageType', '==', stageType)
-        .where('isActive', '==', true)
+        .where('active', '==', true)
         .orderBy('isDefault', 'desc')
         .get();
 
