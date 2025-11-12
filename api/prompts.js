@@ -4,12 +4,11 @@
  */
 
 import express from 'express';
-import admin from 'firebase-admin';
+import { db } from './config/firestore.js';
 import PromptTemplateService from './services/PromptTemplateService.js';
 import PromptManager from './services/PromptManager.js';
 
 const router = express.Router();
-const db = admin.firestore();
 
 /**
  * GET /api/prompts/templates

@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import admin from 'firebase-admin';
+import { db } from './config/firestore.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -16,7 +16,6 @@ const ScreenplayGenerationServiceV2 = require('./services/ScreenplayGenerationSe
 const VideoGenerationServiceV2 = require('./services/VideoGenerationServiceV2.cjs');
 
 const router = express.Router();
-const db = admin.firestore();
 
 /**
  * POST /api/generation/personas

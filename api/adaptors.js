@@ -4,12 +4,11 @@
  */
 
 import express from 'express';
-import admin from 'firebase-admin';
+import { db } from './config/firestore.js';
 import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 import { AdaptorRegistry } from './services/adaptors/index.js';
 
 const router = express.Router();
-const db = admin.firestore();
 
 /**
  * GET /api/adaptors/available

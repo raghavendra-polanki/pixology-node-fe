@@ -4,10 +4,9 @@
  */
 
 import express from 'express';
-import admin from 'firebase-admin';
+import { db } from './config/firestore.js';
 
 const router = express.Router();
-const db = admin.firestore();
 
 /**
  * POST /api/usage/track

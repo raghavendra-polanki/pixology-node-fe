@@ -54,7 +54,15 @@ try {
 }
 
 // Get Firestore instance
+// NOTE: To use pixology-v2 database, you need to either:
+// 1. Upgrade firebase-admin to v11+ which supports database IDs: admin.firestore('pixology-v2')
+// 2. Configure your service account JSON to use pixology-v2 as the default database
+// 3. Use gcloud commands: gcloud config set firestore/database pixology-v2
+//
+// For now, using default database from service account configuration
 const db = admin.firestore();
+
+console.log(`✓ Using Firestore (default database from service account config)`);
 
 // Enable offline persistence for development
 if (process.env.NODE_ENV === 'development') {
