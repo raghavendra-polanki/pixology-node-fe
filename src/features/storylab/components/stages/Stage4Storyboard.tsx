@@ -316,6 +316,10 @@ export function Stage4Storyboard({
           },
           project.id
         );
+
+        // Reload project to ensure fresh data when navigating back
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await loadProject(project.id);
       }
 
       // Close dialog
