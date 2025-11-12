@@ -263,70 +263,38 @@ Generate a high-quality, professional marketing video that brings this scene to 
         throw new Error(`No screenplay entry found for Scene ${sceneNumber}`);
       }
 
-      // Get GCS URI for storyboard image
-      const sceneImageGcsUri = getSceneImageGcsUri(sceneData);
-      if (!sceneImageGcsUri) {
-        const imageInfo = sceneData?.image
-          ? `Image exists but not in expected format: ${JSON.stringify(sceneData.image).substring(0, 100)}`
-          : 'No image data found in scene';
-        throw new Error(`No GCS image URI available for Scene ${sceneNumber}. ${imageInfo}`);
-      }
-
-      setSceneVideos(prev => ({
-        ...prev,
-        [sceneNumber]: { ...prev[sceneNumber], progress: 10 }
-      }));
-
-      // Build prompt from screenplay data
-      const prompt = buildVideoPrompt(sceneData, screenplayEntry);
-
       setSceneVideos(prev => ({
         ...prev,
         [sceneNumber]: { ...prev[sceneNumber], progress: 20 }
       }));
 
-      // Call Veo3 Direct API via backend
-      const response = await fetch('/api/videos/generate-veo3', {
+      // Generate video using adaptor-based V2 service
+      const generationResponse = await fetch('/api/generation/video', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sceneImageGcsUri: sceneImageGcsUri,
-          prompt: prompt,
-          sceneData: sceneData,
-          screenplayEntry: screenplayEntry,
-          durationSeconds: 6,
+          projectId: project.id,
+          screenplayEntries: [screenplayEntry],
+          storyboardScenes: [sceneData],
+          videoDuration: '6s',
           aspectRatio: '16:9',
-          resolution: '720p',
-          projectId: project?.id,
-          sceneNumber: sceneNumber,
+          resolution: '1080p',
         }),
       });
 
-      if (!response.ok) {
-        let errorMessage = `API error: ${response.status}`;
-        try {
-          const contentType = response.headers.get('content-type');
-          if (contentType?.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } else {
-            const text = await response.text();
-            errorMessage = text || errorMessage;
-          }
-        } catch (e) {
-          // Fallback to status code if parsing fails
-        }
-        throw new Error(errorMessage);
+      if (!generationResponse.ok) {
+        const errorData = await generationResponse.json();
+        throw new Error(errorData.error || 'Failed to generate video');
       }
 
-      let result;
-      try {
-        result = await response.json();
-      } catch (parseError) {
-        throw new Error(`Failed to parse video generation response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      const generationData = await generationResponse.json();
+      const videos = generationData.data || [];
+
+      if (!Array.isArray(videos) || videos.length === 0) {
+        throw new Error('No video returned from generation service');
       }
+
+      const result = videos[0];
 
       setSceneVideos(prev => ({
         ...prev,
@@ -339,7 +307,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
         sceneTitle: result.sceneTitle || `Scene ${sceneNumber}`,
         videoUrl: result.videoUrl || '',
         videoFormat: result.videoFormat || 'mp4',
-        duration: result.duration || '5s',
+        duration: result.duration || '6s',
         generatedAt: new Date().toISOString(),
       };
 
@@ -364,12 +332,11 @@ Generate a high-quality, professional marketing video that brings this scene to 
         videoUrl: result.videoUrl,
         gcsUri: result.gcsUri,
         duration: result.duration || '6s',
-        resolution: result.resolution || '720p',
+        resolution: result.resolution || '1080p',
         format: 'mp4',
         status: 'complete' as const,
         generatedAt: new Date(),
-        model: 'veo-3.1-generate-preview',
-        prompt: result.prompt,
+        model: 'video-generation-v2',
       };
 
       // Update or add the video entry
@@ -389,7 +356,7 @@ Generate a high-quality, professional marketing video that brings this scene to 
         failedCount: updatedVideos.filter(v => v.status === 'error').length,
         totalCount: updatedVideos.length,
         generatedAt: new Date(),
-        model: 'veo-3.1-generate-preview',
+        model: 'video-generation-v2',
       };
 
       // Update project with aiGeneratedVideos using hook method

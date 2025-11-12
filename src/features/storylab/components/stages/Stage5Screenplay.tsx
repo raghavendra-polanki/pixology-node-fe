@@ -87,12 +87,6 @@ export function Stage5Screenplay({
     try {
       setIsGenerating(true);
 
-      // Get authentication token
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
-
       // Validate required project data
       if (!project?.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
         throw new Error('No storyboard scenes found. Please generate storyboard first.');
@@ -111,132 +105,41 @@ export function Stage5Screenplay({
 
       console.log('Generating screenplay for scenes:', project.aiGeneratedStoryboard.scenes.length);
 
-      // Step 1: Fetch the recipe
-      const recipeResponse = await fetch('/api/recipes?stageType=stage_5_screenplay');
-
-      if (!recipeResponse.ok) {
-        throw new Error(`Failed to fetch recipe: HTTP ${recipeResponse.status}`);
-      }
-
-      let recipeData;
-      try {
-        recipeData = await recipeResponse.json();
-      } catch (parseError) {
-        throw new Error('Failed to parse recipe response: Invalid JSON returned');
-      }
-
-      if (!recipeData.recipes || recipeData.recipes.length === 0) {
-        throw new Error('No recipe found for screenplay generation. Please seed recipes first.');
-      }
-
-      const recipe = recipeData.recipes[0];
-      const recipeId = recipe.id;
-
-      // Prepare execution input
-      const executionInput = {
-        storyboardScenes: project.aiGeneratedStoryboard.scenes,
-        videoDuration,
-        selectedPersonaName,
-      };
-
-      // Step 2: Execute the screenplay generation recipe
-      const executeResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+      // Generate screenplay using adaptor-based V2 service
+      const generationResponse = await fetch('/api/generation/screenplay', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: executionInput,
-          projectId: project?.id,
-          stageId: 'stage_5',
+          projectId: project.id,
+          storyboardScenes: project.aiGeneratedStoryboard.scenes,
+          videoDuration,
+          selectedPersonaName,
         }),
       });
 
-      if (!executeResponse.ok) {
-        let errorMessage = `HTTP ${executeResponse.status}`;
-        try {
-          const errorData = await executeResponse.json();
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          // If response is not JSON (HTML error page), use status code
-          errorMessage = `HTTP ${executeResponse.status}: Failed to execute recipe`;
-        }
-        throw new Error(errorMessage);
+      if (!generationResponse.ok) {
+        const errorData = await generationResponse.json();
+        throw new Error(errorData.error || 'Failed to generate screenplay');
       }
 
-      let executionData;
-      try {
-        executionData = await executeResponse.json();
-      } catch (parseError) {
-        throw new Error(`Failed to parse recipe execution response: Invalid JSON returned`);
-      }
-      const executionId = executionData.executionId;
+      const generationData = await generationResponse.json();
+      const screenplayEntries: ScreenplayEntry[] = generationData.data || [];
 
-      console.log('Screenplay generation started, execution ID:', executionId);
-
-      // Step 3: Poll for execution results
-      let execution: any = null;
-      let attempts = 0;
-      const maxAttempts = 120; // 10 minutes with 5-second polling
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
-
-        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
-
-        // Check if response is OK before parsing
-        if (!statusResponse.ok) {
-          const errorStatus = statusResponse.status;
-          let errorMessage = 'Unknown error';
-          try {
-            const errorData = await statusResponse.json();
-            errorMessage = errorData.error || errorStatus.toString();
-          } catch {
-            // If response is not JSON (HTML error page), use status code
-            errorMessage = `HTTP ${errorStatus}`;
-          }
-          throw new Error(`Failed to fetch execution status: ${errorMessage}`);
-        }
-
-        try {
-          execution = await statusResponse.json();
-        } catch (parseError) {
-          throw new Error(`Failed to parse execution response: Invalid JSON returned. ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
-        }
-
-        if (execution.execution.status === 'completed') {
-          break;
-        }
-
-        if (execution.execution.status === 'failed') {
-          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
-        }
-
-        attempts++;
-      }
-
-      if (!execution || execution.execution.status !== 'completed') {
-        throw new Error('Recipe execution timed out after 10 minutes');
+      if (screenplayEntries.length === 0) {
+        throw new Error('No screenplay entries returned from generation service');
       }
 
       console.log('Screenplay generation completed');
 
-      // Step 4: Extract screenplay entries from result
-      const screenplayEntries: ScreenplayEntry[] = execution.execution.result?.screenplayEntries || [];
-
-      if (screenplayEntries.length === 0) {
-        throw new Error('No screenplay entries in result');
-      }
-
-      // Step 5: Update screenplay state
+      // Update screenplay state
       setScreenplay(screenplayEntries);
 
-      // Step 6: Save to project
+      // Save to project
       await updateAIScreenplay(
         {
           screenplay: screenplayEntries,
           generatedAt: new Date(),
+          model: 'screenplay-generation-v2',
         },
         project?.id || projectId || ''
       );

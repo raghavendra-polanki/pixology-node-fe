@@ -267,118 +267,57 @@ export function Stage3Narratives({
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
 
-      const token = sessionStorage.getItem('authToken');
-      if (!token) throw new Error('Authentication token not found');
-
-      // Step 1: Fetch the recipe
-      const recipeResponse = await fetch('/api/recipes?stageType=stage_3_narratives');
-      const recipeData = await recipeResponse.json();
-
-      if (!recipeData.recipes || recipeData.recipes.length === 0) {
-        throw new Error('No recipe found for narrative generation. Please seed recipes first.');
-      }
-
-      const recipeId = recipeData.recipes[0].id;
-
-      // Step 2: Get selected personas for input
-      const selectedPersonas = project?.aiGeneratedPersonas?.personas
-        ?.filter((p: any) => project?.userPersonaSelection?.selectedPersonaIds?.includes(p.id))
-        ?.map((p: any) => p.coreIdentity?.name || p.name || 'Unknown')
-        .join(', ') || 'No personas selected';
-
-      // Step 3: Execute the recipe
-      const executionResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+      // Generate narratives using adaptor-based V2 service
+      const generationResponse = await fetch('/api/generation/narratives', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: {
-            productDescription: project?.campaignDetails?.productDescription || '',
-            targetAudience: project?.campaignDetails?.targetAudience || '',
-            numberOfNarratives: 6,
-            selectedPersonas: selectedPersonas,
-          },
-          projectId: project?.id,
-          stageId: 'stage_3',
+          projectId: project.id,
+          productDescription: project.campaignDetails.productDescription,
+          targetAudience: project.campaignDetails.targetAudience,
+          numberOfNarratives: 6,
+          selectedPersonas: project?.aiGeneratedPersonas?.personas
+            ?.filter((p: any) => project?.userPersonaSelection?.selectedPersonaIds?.includes(p.id))
+            ?.map((p: any) => p.coreIdentity?.name || p.name || 'Unknown')
+            .join(', ') || 'No personas selected',
         }),
       });
 
-      if (!executionResponse.ok) {
-        const errorData = await executionResponse.json();
-        throw new Error(errorData.error || 'Failed to execute recipe');
+      if (!generationResponse.ok) {
+        const errorData = await generationResponse.json();
+        throw new Error(errorData.error || 'Failed to generate narratives');
       }
 
-      const executionData = await executionResponse.json();
-      const executionId = executionData.executionId;
+      const generationData = await generationResponse.json();
+      const narratives = generationData.data || [];
 
-      // Step 4: Poll for execution results
-      let execution: any = null;
-      let attempts = 0;
-      const maxAttempts = 60; // 5 minutes with 5-second polling
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
-
-        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
-        execution = await statusResponse.json();
-
-        if (execution.execution.status === 'completed') {
-          break;
-        }
-
-        if (execution.execution.status === 'failed') {
-          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
-        }
-
-        attempts++;
+      if (!Array.isArray(narratives) || narratives.length === 0) {
+        throw new Error('No narratives returned from generation service');
       }
 
-      if (!execution || execution.execution.status !== 'completed') {
-        throw new Error('Recipe execution timed out after 5 minutes');
-      }
-
-      // Step 5: Process results
-      console.log('Processing execution results...');
-      console.log('Execution result structure:', execution.execution.result);
-
-      // Get narratives from result.narrativeThemes (output key from recipe)
-      const finalNarratives = execution.execution.result?.narrativeThemes || [];
-
-      if (!Array.isArray(finalNarratives) || finalNarratives.length === 0) {
-        throw new Error('No narratives returned from recipe execution');
-      }
-
-      // Step 6: Save generated narratives to project
+      // Save generated narratives to project
       const narrativesPayload = {
-        narratives: finalNarratives,
+        narratives,
         generatedAt: new Date(),
-        generationRecipeId: recipeId,
-        generationExecutionId: executionId,
-        model: 'narrative-generation-pipeline',
-        count: finalNarratives.length,
+        model: 'narrative-generation-v2',
+        count: narratives.length,
       };
 
       console.log('Saving narratives to project...', {
         projectId: project.id,
-        narrativeCount: finalNarratives.length,
-        payload: narrativesPayload
+        narrativeCount: narratives.length,
       });
 
       const savedProject = await updateAINarratives(narrativesPayload, project.id);
-      console.log('After updateAINarratives - returned project:', savedProject?.aiGeneratedNarratives);
+      console.log('Narratives saved successfully');
 
-      console.log('Narratives saved to database. Reloading project from Firestore...');
-
-      // Step 7: Small delay to ensure database write completes, then reload project
+      // Small delay to ensure database write completes, then reload project
       await new Promise(resolve => setTimeout(resolve, 1500));
       const reloadedProject = await hookResult.loadProject(project.id);
 
       console.log('Project reloaded from DB:', {
         hasAIGeneratedNarratives: !!reloadedProject?.aiGeneratedNarratives,
         narrativesCount: reloadedProject?.aiGeneratedNarratives?.narratives?.length,
-        fullNarratives: reloadedProject?.aiGeneratedNarratives,
       });
 
       // Scroll to the generated narratives section
