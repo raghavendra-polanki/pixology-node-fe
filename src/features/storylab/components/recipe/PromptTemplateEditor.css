@@ -104,9 +104,8 @@
 .prompt-pane-left {
   flex: 0 0 60%;
   border-right: 1px solid #333333;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 1rem 1.5rem 1.5rem 1rem;
+  overflow: hidden;
+  padding: 1rem 1rem 1rem 1rem;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -118,8 +117,8 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  margin-right: 1rem;
-  margin-bottom: 1rem;
+  margin-right: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 /* Left Pane - Prompts Section */
@@ -127,8 +126,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  overflow-y: auto;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .prompts-header {
@@ -234,12 +233,11 @@
 .inputs-section {
   flex: 0 0 auto;
   border-bottom: 1px solid #333333;
-  padding: 1rem 1rem 1rem 1rem;
+  padding: 0.75rem 0.75rem 0.75rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: none;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .inputs-title {
@@ -320,7 +318,7 @@
 /* Output Section */
 .output-section {
   flex: 1;
-  padding: 1rem 1rem 0 1rem;
+  padding: 0.75rem 0.75rem 0 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -344,7 +342,7 @@
   border-radius: 4px;
   padding: 0.75rem;
   min-height: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .output-text {
@@ -408,30 +406,22 @@
 }
 
 /* Scrollbar Styling */
-.prompt-pane-left::-webkit-scrollbar,
-.inputs-section::-webkit-scrollbar,
 .output-content::-webkit-scrollbar,
 .prompt-text::-webkit-scrollbar {
   width: 8px;
 }
 
-.prompt-pane-left::-webkit-scrollbar-track,
-.inputs-section::-webkit-scrollbar-track,
 .output-content::-webkit-scrollbar-track,
 .prompt-text::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.prompt-pane-left::-webkit-scrollbar-thumb,
-.inputs-section::-webkit-scrollbar-thumb,
 .output-content::-webkit-scrollbar-thumb,
 .prompt-text::-webkit-scrollbar-thumb {
   background: #444444;
   border-radius: 4px;
 }
 
-.prompt-pane-left::-webkit-scrollbar-thumb:hover,
-.inputs-section::-webkit-scrollbar-thumb:hover,
 .output-content::-webkit-scrollbar-thumb:hover,
 .prompt-text::-webkit-scrollbar-thumb:hover {
   background: #555555;
