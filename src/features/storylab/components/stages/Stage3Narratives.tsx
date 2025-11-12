@@ -287,7 +287,7 @@ export function Stage3Narratives({
       }
 
       const generationData = await generationResponse.json();
-      const narratives = generationData.data || [];
+      const narratives = generationData.data?.narratives || [];
 
       if (!Array.isArray(narratives) || narratives.length === 0) {
         throw new Error('No narratives returned from generation service');
