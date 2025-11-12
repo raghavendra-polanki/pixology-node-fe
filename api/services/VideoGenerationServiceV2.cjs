@@ -5,7 +5,7 @@
  * Generates videos using configured AI adaptor with prompt templates
  */
 
-const PromptManager = require('./PromptManager');
+const PromptManager = require('./PromptManager.cjs');
 const VideoGenerationService = require('./videoGenerationService');
 
 class VideoGenerationServiceV2 {

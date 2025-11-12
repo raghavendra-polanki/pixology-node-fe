@@ -45,6 +45,8 @@ import adaptorsRouter from './api/adaptors.js';
 import promptsRouter from './api/prompts.js';
 import usageRouter from './api/usage.js';
 import generationRouter from './api/generation.js';
+import seedsRouter from './api/seeds.js';
+import { initializeAdaptors } from './api/services/adaptors/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -142,6 +144,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Initialize AI adaptors at startup
+console.log('[Server] Initializing AI adaptors...');
+try {
+  initializeAdaptors();
+} catch (error) {
+  console.error('[Server] Failed to initialize adaptors:', error.message);
+  console.error('[Server] Continuing with server startup - generation endpoints may not work');
+}
+
 // Authentication API routes
 app.use('/api/auth', authRouter);
 
@@ -171,6 +182,9 @@ app.use('/api/usage', usageRouter);
 
 // V2 Generation API routes (adaptor-aware generation)
 app.use('/api/generation', generationRouter);
+
+// Database seeding API routes
+app.use('/api/seeds', seedsRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {

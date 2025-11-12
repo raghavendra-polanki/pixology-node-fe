@@ -5,7 +5,7 @@
  * Generates narrative themes using configured AI adaptor with prompt templates
  */
 
-const PromptManager = require('./PromptManager');
+const PromptManager = require('./PromptManager.cjs');
 
 class NarrativeGenerationServiceV2 {
   /**

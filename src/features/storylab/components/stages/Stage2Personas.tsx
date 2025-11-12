@@ -151,16 +151,26 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
       }
 
       // Convert personas to UI format
-      const generatedPersonas: Persona[] = finalPersonas.map((p: any) => ({
-        id: p.id || `persona_${Math.random().toString(36).substr(2, 9)}`,
-        name: p.name || 'Unknown',
-        age: String(p.age || ''),
-        demographic: p.demographic || '',
-        motivation: p.motivation || '',
-        bio: p.bio || '',
-        image: p.imageUrl || '',
-        selected: false,
-      }));
+      const generatedPersonas: Persona[] = finalPersonas.map((p: any) => {
+        // Extract image URL from nested structure or coreIdentity
+        let imageUrl = '';
+        if (p.image && typeof p.image === 'object') {
+          imageUrl = p.image.url || '';
+        } else if (p.imageUrl) {
+          imageUrl = p.imageUrl;
+        }
+
+        return {
+          id: p.id || `persona_${Math.random().toString(36).substr(2, 9)}`,
+          name: (p.coreIdentity as any)?.name || p.name || 'Unknown',
+          age: String((p.coreIdentity as any)?.age || p.age || ''),
+          demographic: (p.coreIdentity as any)?.demographic || p.demographic || '',
+          motivation: (p.coreIdentity as any)?.motivation || p.motivation || '',
+          bio: (p.coreIdentity as any)?.bio || p.bio || '',
+          image: imageUrl,
+          selected: false,
+        };
+      });
 
       console.log(`[V2] Generated ${generatedPersonas.length} personas`);
       generatedPersonas.forEach((p, idx) => {
@@ -175,8 +185,6 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
       await updateAIPersonas({
         personas: finalPersonas,
         generatedAt: new Date(),
-        generationRecipeId: recipeId,
-        generationExecutionId: executionId,
         model: 'multi-modal-pipeline',
         temperature: 0.7,
         count: generatedPersonas.length,

@@ -5,7 +5,7 @@
  * Generates personas using configured AI adaptor with prompt templates
  */
 
-const PromptManager = require('./PromptManager');
+const PromptManager = require('./PromptManager.cjs');
 const GCSService = require('./gcsService');
 
 class PersonaGenerationServiceV2 {
@@ -75,7 +75,8 @@ class PersonaGenerationServiceV2 {
       const personasWithImages = await this._generatePersonaImages(
         projectId,
         personas,
-        db
+        db,
+        AIAdaptorResolver
       );
 
       // 7. Store in Firestore
@@ -108,8 +109,12 @@ class PersonaGenerationServiceV2 {
    * Generate images for personas
    *
    * @private
+   * @param {string} projectId - Project ID
+   * @param {Array} personas - Array of persona objects
+   * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - The adaptor resolver instance
    */
-  static async _generatePersonaImages(projectId, personas, db) {
+  static async _generatePersonaImages(projectId, personas, db, AIAdaptorResolver) {
     try {
       // Resolve image generation adaptor
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(

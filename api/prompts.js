@@ -6,7 +6,7 @@
 import express from 'express';
 import { db } from './config/firestore.js';
 import PromptTemplateService from './services/PromptTemplateService.js';
-import PromptManager from './services/PromptManager.js';
+import PromptManager from './services/PromptManager.cjs';
 
 const router = express.Router();
 

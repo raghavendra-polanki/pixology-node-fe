@@ -123,12 +123,13 @@ class PromptManager {
    * @returns {object} { systemPrompt, userPrompt }
    */
   resolvePrompt(promptTemplate, variables = {}) {
-    if (!promptTemplate) {
+    if (!promptTemplate || !promptTemplate.userPromptTemplate) {
+      console.warn('Prompt template missing or incomplete:', { promptTemplate, variables });
       throw new Error('Prompt template is required');
     }
 
     return {
-      systemPrompt: this.resolvePromptVariables(promptTemplate.systemPrompt, variables),
+      systemPrompt: this.resolvePromptVariables(promptTemplate.systemPrompt || '', variables),
       userPrompt: this.resolvePromptVariables(promptTemplate.userPromptTemplate, variables),
       outputFormat: promptTemplate.outputFormat || 'text',
     };
@@ -303,19 +304,41 @@ class PromptManager {
    */
   async _getDefaultTemplate(stageType, db) {
     try {
-      const snapshot = await db
+      // First try to find a template marked as default and active
+      let snapshot = await db
         .collection('prompt_templates')
         .where('stageType', '==', stageType)
         .where('isDefault', '==', true)
-        .where('isActive', '==', true)
+        .where('active', '==', true)
         .limit(1)
         .get();
 
+      // If not found, try without the isDefault filter
       if (snapshot.empty) {
+        snapshot = await db
+          .collection('prompt_templates')
+          .where('stageType', '==', stageType)
+          .where('active', '==', true)
+          .limit(1)
+          .get();
+      }
+
+      // If still not found, just get any template with matching stageType
+      if (snapshot.empty) {
+        snapshot = await db
+          .collection('prompt_templates')
+          .where('stageType', '==', stageType)
+          .limit(1)
+          .get();
+      }
+
+      if (snapshot.empty) {
+        console.warn(`No prompt template found for stageType: ${stageType}`);
         return null;
       }
 
       const doc = snapshot.docs[0];
+      console.log(`Found prompt template for ${stageType}:`, { id: doc.id, stageType: doc.data().stageType });
       return { id: doc.id, ...doc.data() };
     } catch (error) {
       console.warn(`Failed to get default template for ${stageType}: ${error.message}`);
@@ -335,4 +358,4 @@ class PromptManager {
 // Singleton instance
 const promptManager = new PromptManager();
 
-export default promptManager;
+module.exports = promptManager;

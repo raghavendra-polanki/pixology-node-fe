@@ -6,7 +6,7 @@
  * Also handles scene image generation with per-scene consistency
  */
 
-const PromptManager = require('./PromptManager');
+const PromptManager = require('./PromptManager.cjs');
 const ImageGenerationService = require('./imageGenerationService');
 const GCSService = require('./gcsService');
 

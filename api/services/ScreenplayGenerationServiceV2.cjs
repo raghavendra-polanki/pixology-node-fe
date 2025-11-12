@@ -5,7 +5,7 @@
  * Generates screenplay with detailed timings from storyboard scenes
  */
 
-const PromptManager = require('./PromptManager');
+const PromptManager = require('./PromptManager.cjs');
 
 class ScreenplayGenerationServiceV2 {
   /**

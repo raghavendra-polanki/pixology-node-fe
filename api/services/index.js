@@ -12,6 +12,6 @@ const __dirname = path.dirname(__filename);
 
 // Import CommonJS modules
 export { default as AIAdaptorResolver } from './AIAdaptorResolver.js';
-export { default as PromptManager } from './PromptManager.js';
+export { default as PromptManager } from './PromptManager.cjs';
 export { default as PromptTemplateService } from './PromptTemplateService.js';
 
