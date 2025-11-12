@@ -113,109 +113,58 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const handleGenerate = async () => {
     setIsGenerating(true);
     try {
-      // Get auth token from sessionStorage
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
+      console.log('[V2] Generating personas using AI adaptor...');
 
-      // Step 1: Get the recipe
-      console.log('Fetching persona generation recipe...');
-      const recipeResponse = await fetch('/api/recipes?stageType=stage_2_personas');
-      const recipeData = await recipeResponse.json();
-
-      if (!recipeData.recipes || recipeData.recipes.length === 0) {
-        throw new Error('No recipe found for persona generation. Please seed recipes first.');
-      }
-
-      const recipeId = recipeData.recipes[0].id;
-      console.log('Using recipe:', recipeId);
-
-      // Step 2: Execute the recipe
-      console.log('Executing recipe...');
-      const executionResponse = await fetch(`/api/recipes/${recipeId}/execute`, {
+      // Call V2 generation endpoint (adaptor-aware)
+      const generationResponse = await fetch('/api/generation/personas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          input: {
-            productDescription: project.campaignDetails.productDescription,
-            targetAudience: project.campaignDetails.targetAudience,
-            productImageUrl: project.campaignDetails.productImageUrl || null,
-            numberOfPersonas: 3,
-          },
           projectId: project.id,
-          stageId: 'stage_2',
+          productDescription: project.campaignDetails.productDescription,
+          targetAudience: project.campaignDetails.targetAudience,
+          numberOfPersonas: 3,
+          productImageUrl: project.campaignDetails.productImageUrl || null,
         }),
       });
 
-      if (!executionResponse.ok) {
-        const errorData = await executionResponse.json();
-        throw new Error(errorData.error || 'Failed to execute recipe');
+      if (!generationResponse.ok) {
+        const errorData = await generationResponse.json();
+        throw new Error(errorData.message || errorData.error || 'Failed to generate personas');
       }
 
-      const executionData = await executionResponse.json();
-      const executionId = executionData.executionId;
-      console.log('Recipe execution started:', executionId);
+      const generationData = await generationResponse.json();
+      console.log('[V2] Generation response:', generationData);
 
-      // Step 3: Poll for execution results
-      console.log('Polling for execution results...');
-      let execution: any = null;
-      let attempts = 0;
-      const maxAttempts = 60; // 5 minutes with 5-second polling
-
-      while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
-
-        const statusResponse = await fetch(`/api/recipes/executions/${executionId}`);
-        execution = await statusResponse.json();
-
-        console.log(`Execution status (attempt ${attempts + 1}):`, execution.execution?.status);
-
-        if (execution.execution.status === 'completed') {
-          console.log('Recipe execution completed');
-          break;
-        }
-
-        if (execution.execution.status === 'failed') {
-          throw new Error(`Recipe execution failed: ${execution.execution.executionContext?.error}`);
-        }
-
-        attempts++;
+      if (!generationData.success || !generationData.data) {
+        throw new Error('Invalid response from generation service');
       }
 
-      if (!execution || execution.execution.status !== 'completed') {
-        throw new Error('Recipe execution timed out after 5 minutes');
-      }
-
-      // Step 4: Process results
-      console.log('Processing execution results...');
-      console.log('Execution result structure:', execution.execution.result);
-
-      // Get personas from result.finalPersonas (output key from the final node: combine_and_upload)
-      const finalPersonas = execution.execution.result?.finalPersonas || [];
+      // Extract personas from V2 response
+      const generatedData = generationData.data;
+      const finalPersonas = generatedData.personas || [];
 
       if (!Array.isArray(finalPersonas) || finalPersonas.length === 0) {
-        throw new Error('No personas returned from recipe execution');
+        throw new Error('No personas returned from generation service');
       }
 
-      // Convert final personas to UI format
+      // Convert personas to UI format
       const generatedPersonas: Persona[] = finalPersonas.map((p: any) => ({
-        id: p.id,
-        name: p.coreIdentity?.name || 'Unknown',
-        age: String(p.coreIdentity?.age || ''),
-        demographic: p.coreIdentity?.demographic || '',
-        motivation: p.coreIdentity?.motivation || '',
-        bio: p.coreIdentity?.bio || '',
-        image: p.image?.url || '',
+        id: p.id || `persona_${Math.random().toString(36).substr(2, 9)}`,
+        name: p.name || 'Unknown',
+        age: String(p.age || ''),
+        demographic: p.demographic || '',
+        motivation: p.motivation || '',
+        bio: p.bio || '',
+        image: p.imageUrl || '',
         selected: false,
       }));
 
-      console.log(`Generated ${generatedPersonas.length} personas`);
+      console.log(`[V2] Generated ${generatedPersonas.length} personas`);
       generatedPersonas.forEach((p, idx) => {
-        console.log(`Persona ${idx + 1}: ${p.name} - Image: ${p.image ? '✓' : '✗'}`);
+        console.log(`  Persona ${idx + 1}: ${p.name} - Image: ${p.image ? '✓' : '✗'}`);
       });
 
       setPersonas(generatedPersonas);
