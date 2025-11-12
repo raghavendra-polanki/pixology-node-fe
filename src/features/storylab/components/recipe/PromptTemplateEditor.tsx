@@ -103,7 +103,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
     };
 
     loadTemplate();
-  }, [stageType, stageData]);
+  }, [stageType]);
 
   const handleTestPrompt = async () => {
     if (!template || !activeCapability) return;
