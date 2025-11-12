@@ -334,13 +334,15 @@
 }
 
 .output-content {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background: #1a1a1a;
   border: 1px solid #333333;
   border-radius: 4px;
   padding: 0.75rem;
   margin-bottom: 0.75rem;
-  max-height: 80%;
+  max-height: 65%;
 }
 
 .output-text {
