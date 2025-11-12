@@ -121,7 +121,7 @@ export function Stage5Screenplay({
       }
 
       const generationData = await generationResponse.json();
-      const screenplayEntries: ScreenplayEntry[] = generationData.data || [];
+      const screenplayEntries: ScreenplayEntry[] = generationData.data?.screenplay || [];
 
       if (screenplayEntries.length === 0) {
         throw new Error('No screenplay entries returned from generation service');
