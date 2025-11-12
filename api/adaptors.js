@@ -5,11 +5,8 @@
 
 import express from 'express';
 import admin from 'firebase-admin';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const AIAdaptorResolver = require('./services/AIAdaptorResolver.js');
-const { AdaptorRegistry } = require('./services/adaptors/index.js');
+import AIAdaptorResolver from './services/AIAdaptorResolver.js';
+import { AdaptorRegistry } from './services/adaptors/index.js';
 
 const router = express.Router();
 const db = admin.firestore();

@@ -5,10 +5,10 @@
  * Supports text generation (GPT), image generation (DALL-E), and vision capabilities
  */
 
-const BaseAIAdaptor = require('./BaseAIAdaptor');
-const OpenAI = require('openai');
+import BaseAIAdaptor from './BaseAIAdaptor.js';
+import OpenAI from 'openai';
 
-class OpenAIAdaptor extends BaseAIAdaptor {
+export default class OpenAIAdaptor extends BaseAIAdaptor {
   constructor(modelId, config = {}, credentials = {}) {
     super(modelId, config, credentials);
 
@@ -278,5 +278,3 @@ class OpenAIAdaptor extends BaseAIAdaptor {
     return models.find((m) => m.id === modelId);
   }
 }
-
-module.exports = OpenAIAdaptor;

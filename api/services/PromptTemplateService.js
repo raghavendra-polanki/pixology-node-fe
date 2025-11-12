@@ -5,7 +5,7 @@
  * Handles template versioning and lifecycle management
  */
 
-const { v4: uuidv4 } = require('uuid');
+import { v4 as uuidv4 } from 'uuid';
 
 class PromptTemplateService {
   /**
@@ -302,4 +302,4 @@ class PromptTemplateService {
 // Singleton instance
 const promptTemplateService = new PromptTemplateService();
 
-module.exports = promptTemplateService;
+export default promptTemplateService;

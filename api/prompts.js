@@ -5,11 +5,8 @@
 
 import express from 'express';
 import admin from 'firebase-admin';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const PromptTemplateService = require('./services/PromptTemplateService.js');
-const PromptManager = require('./services/PromptManager.js');
+import PromptTemplateService from './services/PromptTemplateService.js';
+import PromptManager from './services/PromptManager.js';
 
 const router = express.Router();
 const db = admin.firestore();

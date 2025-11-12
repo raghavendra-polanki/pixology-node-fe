@@ -7,7 +7,7 @@
  * Singleton pattern for consistent resolution across the application.
  */
 
-const AdaptorRegistry = require('./adaptors/AdaptorRegistry');
+import AdaptorRegistry from './adaptors/AdaptorRegistry.js';
 
 class AIAdaptorResolver {
   /**
@@ -228,4 +228,4 @@ class AIAdaptorResolver {
 // Singleton instance
 const resolver = new AIAdaptorResolver();
 
-module.exports = resolver;
+export default resolver;

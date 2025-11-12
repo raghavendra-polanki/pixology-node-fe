@@ -8,7 +8,7 @@
  *   class GeminiAdaptor extends BaseAIAdaptor { ... }
  */
 
-class BaseAIAdaptor {
+export default class BaseAIAdaptor {
   /**
    * Initialize adaptor with model and configuration
    *
@@ -117,5 +117,3 @@ class BaseAIAdaptor {
     throw new Error('getModelInfo() must be implemented in subclass');
   }
 }
-
-module.exports = BaseAIAdaptor;

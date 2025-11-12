@@ -5,10 +5,10 @@
  * Supports text generation and vision capabilities
  */
 
-const BaseAIAdaptor = require('./BaseAIAdaptor');
-const Anthropic = require('@anthropic-ai/sdk');
+import BaseAIAdaptor from './BaseAIAdaptor.js';
+import Anthropic from '@anthropic-ai/sdk';
 
-class AnthropicAdaptor extends BaseAIAdaptor {
+export default class AnthropicAdaptor extends BaseAIAdaptor {
   constructor(modelId, config = {}, credentials = {}) {
     super(modelId, config, credentials);
 
@@ -230,5 +230,3 @@ class AnthropicAdaptor extends BaseAIAdaptor {
     return models.find((m) => m.id === modelId);
   }
 }
-
-module.exports = AnthropicAdaptor;

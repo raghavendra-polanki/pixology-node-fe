@@ -335,4 +335,4 @@ class PromptManager {
 // Singleton instance
 const promptManager = new PromptManager();
 
-module.exports = promptManager;
+export default promptManager;

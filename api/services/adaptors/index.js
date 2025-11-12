@@ -4,16 +4,16 @@
  * Initializes and registers all available adaptors
  */
 
-const AdaptorRegistry = require('./AdaptorRegistry');
-const GeminiAdaptor = require('./GeminiAdaptor');
-const OpenAIAdaptor = require('./OpenAIAdaptor');
-const AnthropicAdaptor = require('./AnthropicAdaptor');
+import AdaptorRegistry from './AdaptorRegistry.js';
+import GeminiAdaptor from './GeminiAdaptor.js';
+import OpenAIAdaptor from './OpenAIAdaptor.js';
+import AnthropicAdaptor from './AnthropicAdaptor.js';
 
 /**
  * Initialize all adaptors
  * Called once at application startup
  */
-function initializeAdaptors() {
+export function initializeAdaptors() {
   try {
     AdaptorRegistry.register('gemini', GeminiAdaptor);
     AdaptorRegistry.register('openai', OpenAIAdaptor);
@@ -26,10 +26,9 @@ function initializeAdaptors() {
   }
 }
 
-module.exports = {
+export {
   AdaptorRegistry,
   GeminiAdaptor,
   OpenAIAdaptor,
   AnthropicAdaptor,
-  initializeAdaptors,
 };

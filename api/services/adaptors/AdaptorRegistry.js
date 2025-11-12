@@ -144,4 +144,4 @@ class AdaptorRegistry {
 // Singleton instance
 const registry = new AdaptorRegistry();
 
-module.exports = registry;
+export default registry;

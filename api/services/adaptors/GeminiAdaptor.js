@@ -5,10 +5,10 @@
  * Supports text generation, image generation, and vision capabilities
  */
 
-const BaseAIAdaptor = require('./BaseAIAdaptor');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+import BaseAIAdaptor from './BaseAIAdaptor.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-class GeminiAdaptor extends BaseAIAdaptor {
+export default class GeminiAdaptor extends BaseAIAdaptor {
   constructor(modelId, config = {}, credentials = {}) {
     super(modelId, config, credentials);
 
@@ -226,5 +226,3 @@ class GeminiAdaptor extends BaseAIAdaptor {
     return models.find((m) => m.id === modelId);
   }
 }
-
-module.exports = GeminiAdaptor;
