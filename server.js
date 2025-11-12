@@ -44,6 +44,7 @@ import videosRouter from './api/videos.js';
 import adaptorsRouter from './api/adaptors.js';
 import promptsRouter from './api/prompts.js';
 import usageRouter from './api/usage.js';
+import generationRouter from './api/generation.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -167,6 +168,9 @@ app.use('/api/prompts', promptsRouter);
 
 // Usage tracking and analytics API routes
 app.use('/api/usage', usageRouter);
+
+// V2 Generation API routes (adaptor-aware generation)
+app.use('/api/generation', generationRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {
