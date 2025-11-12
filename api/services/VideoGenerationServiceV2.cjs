@@ -72,7 +72,7 @@ class VideoGenerationServiceV2 {
           };
 
           const resolvedPrompt = PromptManager.resolvePrompt(
-            promptTemplate.prompts.textGeneration,
+            promptTemplate.prompts.videoGeneration,
             variables
           );
 
