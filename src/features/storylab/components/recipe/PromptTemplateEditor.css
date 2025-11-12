@@ -8,11 +8,12 @@
 
 /* Header */
 .prompt-editor-header {
-  border-bottom: 1px solid #333333;
-  background: #0a0a0a;
+  border-bottom: 1px solid rgba(96, 200, 255, 0.15);
+  background: linear-gradient(180deg, rgba(10, 10, 26, 0.9) 0%, rgba(21, 26, 46, 0.8) 100%);
   padding: 0;
   flex-shrink: 0;
   min-height: 0;
+  backdrop-filter: blur(10px);
 }
 
 .prompt-editor-header-content {
@@ -27,19 +28,22 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #1a1a1a;
-  border: 1px solid #333333;
-  color: #ffffff;
-  border-radius: 6px;
+  background: rgba(96, 200, 255, 0.1);
+  border: 1px solid rgba(96, 200, 255, 0.25);
+  color: #60c8ff;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.875rem;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
 .prompt-editor-back-button:hover:not(:disabled) {
-  background: #252525;
-  border-color: #444444;
+  background: rgba(96, 200, 255, 0.15);
+  border-color: rgba(96, 200, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(96, 200, 255, 0.15);
+  transform: translateY(-1px);
 }
 
 .prompt-editor-back-button:disabled {
@@ -53,14 +57,18 @@
 
 .prompt-editor-title {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60c8ff 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .prompt-editor-subtitle {
   margin: 0.25rem 0 0 0;
   font-size: 0.875rem;
-  color: #999999;
+  color: #a0aec0;
 }
 
 .prompt-editor-actions {
@@ -75,11 +83,12 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: #3d2d2d;
-  border: 1px solid #8b4545;
-  color: #ff6b6b;
-  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 8px;
   font-size: 0.875rem;
+  backdrop-filter: blur(10px);
 }
 
 .prompt-editor-success {
@@ -87,11 +96,12 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: #2d3d2d;
-  border: 1px solid #458b45;
-  color: #6bff6b;
-  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #86efac;
+  border-radius: 8px;
   font-size: 0.875rem;
+  backdrop-filter: blur(10px);
 }
 
 /* Content - Split Pane Layout */
@@ -103,12 +113,13 @@
 
 .prompt-pane-left {
   flex: 0 0 60%;
-  border-right: 1px solid #333333;
+  border-right: 1px solid rgba(96, 200, 255, 0.1);
   overflow: hidden;
-  padding: 1rem 1rem 0.75rem 1rem;
+  padding: 1.5rem 1.5rem 0.75rem 1.5rem;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: linear-gradient(180deg, rgba(21, 26, 46, 0.3) 0%, rgba(21, 26, 46, 0.15) 100%);
 }
 
 .prompt-pane-right {
@@ -117,7 +128,8 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  padding: 0.75rem 0.75rem 0.75rem 0.75rem;
+  padding: 1.5rem 1.5rem 1.5rem 1.5rem;
+  background: linear-gradient(180deg, rgba(10, 10, 26, 0.1) 0%, rgba(21, 26, 46, 0.2) 100%);
 }
 
 /* Left Pane - Prompts Section */
@@ -138,10 +150,13 @@
 
 .prompts-title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: #ffffff;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #60c8ff;
 }
 
 /* Capability Selector */
@@ -153,28 +168,33 @@
 
 .capability-label {
   font-size: 0.875rem;
-  font-weight: 500;
-  color: #cccccc;
+  font-weight: 600;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .capability-select {
   padding: 0.75rem;
-  background: #1a1a1a;
-  border: 1px solid #333333;
+  background: rgba(21, 26, 46, 0.6);
+  border: 1px solid rgba(96, 200, 255, 0.2);
   color: #ffffff;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .capability-select:hover {
-  border-color: #444444;
+  border-color: rgba(96, 200, 255, 0.35);
+  background: rgba(21, 26, 46, 0.8);
 }
 
 .capability-select:focus {
   outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+  border-color: #60c8ff;
+  box-shadow: 0 0 0 3px rgba(96, 200, 255, 0.1);
+  background: rgba(21, 26, 46, 0.9);
 }
 
 /* Prompt Display */
@@ -199,30 +219,37 @@
   margin: 0;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #cccccc;
+  color: #a0aec0;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .prompt-text {
-  padding: 0.6rem;
-  background: #1a1a1a;
-  border: 1px solid #333333;
-  border-radius: 4px;
+  padding: 0.75rem;
+  background: rgba(21, 26, 46, 0.5);
+  border: 1px solid rgba(96, 200, 255, 0.15);
+  border-radius: 8px;
   color: #e0e0e0;
-  font-size: 0.7rem;
-  line-height: 1.4;
+  font-size: 0.75rem;
+  line-height: 1.5;
   overflow-y: auto;
   word-break: break-word;
   white-space: pre-wrap;
   max-height: 80%;
+  transition: all 0.2s;
+}
+
+.prompt-text:hover {
+  border-color: rgba(96, 200, 255, 0.25);
 }
 
 .model-info {
-  padding: 0.5rem 0.75rem;
-  background: #1a1a1a;
-  border: 1px solid #333333;
-  border-radius: 6px;
-  color: #60a5fa;
+  padding: 0.6rem 0.85rem;
+  background: linear-gradient(135deg, rgba(96, 200, 255, 0.1), rgba(59, 130, 246, 0.1));
+  border: 1px solid rgba(96, 200, 255, 0.2);
+  border-radius: 8px;
+  color: #60c8ff;
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -230,7 +257,7 @@
 /* Right Pane - Inputs & Output */
 .inputs-section {
   flex: 0 0 auto;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid rgba(96, 200, 255, 0.1);
   padding: 0 0 0.75rem 0;
   display: flex;
   flex-direction: column;
@@ -241,9 +268,11 @@
 .inputs-title {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .variables-form {
@@ -259,25 +288,32 @@
 }
 
 .variable-label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #cccccc;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a0aec0;
   flex-shrink: 0;
 }
 
 .variable-input {
-  padding: 0.5rem 0.6rem;
-  background: #1a1a1a !important;
-  border: 1px solid #333333 !important;
+  padding: 0.6rem 0.75rem;
+  background: rgba(21, 26, 46, 0.5) !important;
+  border: 1px solid rgba(96, 200, 255, 0.15) !important;
   color: #ffffff !important;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 0.8rem;
   height: 2.2rem;
+  transition: all 0.2s !important;
+}
+
+.variable-input:hover {
+  border-color: rgba(96, 200, 255, 0.25) !important;
+  background: rgba(21, 26, 46, 0.7) !important;
 }
 
 .variable-input:focus {
-  border-color: #60a5fa !important;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1) !important;
+  border-color: #60c8ff !important;
+  box-shadow: 0 0 0 3px rgba(96, 200, 255, 0.1) !important;
+  background: rgba(21, 26, 46, 0.9) !important;
 }
 
 .no-variables {
@@ -287,30 +323,36 @@
 }
 
 .test-button {
-  background: #0ea5e9 !important;
+  background: linear-gradient(135deg, #0061ff 0%, #3b82f6 100%) !important;
   color: #ffffff !important;
-  padding: 0.55rem 1.2rem !important;
-  border: none !important;
-  border-radius: 4px !important;
+  padding: 0.6rem 1.4rem !important;
+  border: 1px solid rgba(96, 200, 255, 0.3) !important;
+  border-radius: 8px !important;
   cursor: pointer !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 0.4rem !important;
+  gap: 0.5rem !important;
   font-size: 0.8rem !important;
-  font-weight: 500 !important;
-  transition: all 0.2s !important;
+  font-weight: 600 !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   height: 2.2rem;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 97, 255, 0.2) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
 }
 
 .test-button:hover:not(:disabled) {
-  background: #0284c7 !important;
+  background: linear-gradient(135deg, #0050d4 0%, #3b7cf2 100%) !important;
+  box-shadow: 0 6px 16px rgba(0, 97, 255, 0.35) !important;
+  transform: translateY(-2px) !important;
 }
 
 .test-button:disabled {
   opacity: 0.5 !important;
   cursor: not-allowed !important;
+  transform: none !important;
 }
 
 /* Output Section */
@@ -327,19 +369,26 @@
 .output-title {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .output-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: #1a1a1a;
-  border: 1px solid #333333;
-  border-radius: 4px;
-  padding: 0.5rem;
+  background: rgba(21, 26, 46, 0.5);
+  border: 1px solid rgba(96, 200, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.75rem;
+  transition: all 0.2s;
+}
+
+.output-content:hover {
+  border-color: rgba(96, 200, 255, 0.25);
 }
 
 .output-text {
@@ -359,11 +408,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666666;
+  color: #a0aec0;
   font-size: 0.875rem;
-  background: #1a1a1a;
-  border: 1px dashed #333333;
-  border-radius: 6px;
+  background: rgba(21, 26, 46, 0.3);
+  border: 1px dashed rgba(96, 200, 255, 0.15);
+  border-radius: 8px;
   padding: 2rem;
   text-align: center;
 }
@@ -373,7 +422,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666666;
+  color: #a0aec0;
   font-size: 0.875rem;
   padding: 2rem;
 }
@@ -385,21 +434,24 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 2rem;
-  color: #999999;
+  gap: 1.5rem;
+  padding: 3rem 2rem;
+  color: #a0aec0;
 }
 
 .prompt-editor-loading svg,
 .prompt-editor-error-state svg {
   width: 3rem;
   height: 3rem;
+  color: #60c8ff;
 }
 
 .prompt-editor-error-state p {
   text-align: center;
   max-width: 400px;
   margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 /* Scrollbar Styling */
@@ -415,11 +467,11 @@
 
 .output-content::-webkit-scrollbar-thumb,
 .prompt-text::-webkit-scrollbar-thumb {
-  background: #444444;
+  background: rgba(96, 200, 255, 0.3);
   border-radius: 4px;
 }
 
 .output-content::-webkit-scrollbar-thumb:hover,
 .prompt-text::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: rgba(96, 200, 255, 0.5);
 }
