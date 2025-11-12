@@ -191,7 +191,7 @@ export function Stage4Storyboard({
       // Step 6: Poll for execution results
       let execution: any = null;
       let attempts = 0;
-      const maxAttempts = 120; // 10 minutes with 5-second polling
+      const maxAttempts = 36; // 3 minutes with 5-second polling (180 seconds / 5 = 36)
 
       while (attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds
@@ -230,7 +230,7 @@ export function Stage4Storyboard({
       }
 
       if (!execution || execution.execution.status !== 'completed') {
-        throw new Error('Recipe execution timed out after 10 minutes');
+        throw new Error('Recipe execution timed out after 3 minutes');
       }
 
       // Step 7: Process results and map to Scene interface

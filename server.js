@@ -165,12 +165,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
   console.log(`📦 Serving static files from: ${path.join(__dirname, 'dist')}`);
   console.log(`🏥 Health check available at: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+// Set socket timeout to 5 minutes (300 seconds) to allow long-running recipe executions
+// This prevents "504 Gateway Timeout" errors on operations like storyboard generation
+server.setTimeout(300000); // 300 seconds = 5 minutes
+server.keepAliveTimeout = 310000; // Keep-alive must be higher than socket timeout (310 seconds)
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
