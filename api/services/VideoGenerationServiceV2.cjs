@@ -5,7 +5,6 @@
  * Generates videos using configured AI adaptor with prompt templates
  */
 
-const AIAdaptorResolver = require('./AIAdaptorResolver');
 const PromptManager = require('./PromptManager');
 const VideoGenerationService = require('./videoGenerationService');
 
@@ -16,9 +15,10 @@ class VideoGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { screenplayScenes, sceneImages, videoDuration }
    * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
    * @returns {Promise<object>} { videos, adaptor, model }
    */
-  static async generateVideos(projectId, input, db) {
+  static async generateVideos(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
         screenplayScenes = [],

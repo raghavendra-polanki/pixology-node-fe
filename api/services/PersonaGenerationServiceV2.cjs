@@ -5,7 +5,6 @@
  * Generates personas using configured AI adaptor with prompt templates
  */
 
-const AIAdaptorResolver = require('./AIAdaptorResolver');
 const PromptManager = require('./PromptManager');
 const GCSService = require('./gcsService');
 
@@ -16,9 +15,10 @@ class PersonaGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { productDescription, targetAudience, numberOfPersonas, productImageUrl }
    * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - The adaptor resolver instance
    * @returns {Promise<object>} { personas, adaptor, model, usage }
    */
-  static async generatePersonas(projectId, input, db) {
+  static async generatePersonas(projectId, input, db, AIAdaptorResolver) {
     try {
       const { productDescription, targetAudience, numberOfPersonas = 3, productImageUrl } = input;
 

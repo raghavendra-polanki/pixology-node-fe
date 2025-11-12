@@ -5,7 +5,6 @@
  * Generates narrative themes using configured AI adaptor with prompt templates
  */
 
-const AIAdaptorResolver = require('./AIAdaptorResolver');
 const PromptManager = require('./PromptManager');
 
 class NarrativeGenerationServiceV2 {
@@ -15,9 +14,10 @@ class NarrativeGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { productDescription, targetAudience, numberOfNarratives, selectedPersonas }
    * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
    * @returns {Promise<object>} { narratives, adaptor, model, usage }
    */
-  static async generateNarratives(projectId, input, db) {
+  static async generateNarratives(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
         productDescription,

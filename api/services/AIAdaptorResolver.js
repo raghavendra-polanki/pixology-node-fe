@@ -228,4 +228,9 @@ class AIAdaptorResolver {
 // Singleton instance
 const resolver = new AIAdaptorResolver();
 
+// For CommonJS compatibility (when required via require())
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = resolver;
+}
+
 export default resolver;

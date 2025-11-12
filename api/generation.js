@@ -6,6 +6,7 @@
 
 import express from 'express';
 import { db } from './config/firestore.js';
+import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -46,7 +47,7 @@ router.post('/personas', async (req, res) => {
       productImageUrl,
     };
 
-    const result = await PersonaGenerationServiceV2.generatePersonas(projectId, input, db);
+    const result = await PersonaGenerationServiceV2.generatePersonas(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -92,7 +93,7 @@ router.post('/narratives', async (req, res) => {
       selectedPersonas,
     };
 
-    const result = await NarrativeGenerationServiceV2.generateNarratives(projectId, input, db);
+    const result = await NarrativeGenerationServiceV2.generateNarratives(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -155,7 +156,7 @@ router.post('/storyboard', async (req, res) => {
       videoDuration,
     };
 
-    const result = await StoryboardGenerationServiceV2.generateStoryboardScenes(projectId, input, db);
+    const result = await StoryboardGenerationServiceV2.generateStoryboardScenes(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -199,7 +200,7 @@ router.post('/screenplay', async (req, res) => {
       selectedPersonaName,
     };
 
-    const result = await ScreenplayGenerationServiceV2.generateScreenplay(projectId, input, db);
+    const result = await ScreenplayGenerationServiceV2.generateScreenplay(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -247,7 +248,7 @@ router.post('/video', async (req, res) => {
       resolution,
     };
 
-    const result = await VideoGenerationServiceV2.generateVideos(projectId, input, db);
+    const result = await VideoGenerationServiceV2.generateVideos(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,

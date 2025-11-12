@@ -6,7 +6,6 @@
  * Also handles scene image generation with per-scene consistency
  */
 
-const AIAdaptorResolver = require('./AIAdaptorResolver');
 const PromptManager = require('./PromptManager');
 const ImageGenerationService = require('./imageGenerationService');
 const GCSService = require('./gcsService');
@@ -18,9 +17,10 @@ class StoryboardGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { productDescription, targetAudience, selectedPersonaName, selectedPersonaDescription, narrativeTheme, narrativeStructure, numberOfScenes, videoDuration }
    * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
    * @returns {Promise<object>} { scenes, adaptor, model, usage }
    */
-  static async generateStoryboardScenes(projectId, input, db) {
+  static async generateStoryboardScenes(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
         productDescription,
@@ -101,7 +101,8 @@ class StoryboardGenerationServiceV2 {
         scenes,
         selectedPersonaName,
         selectedPersonaDescription,
-        db
+        db,
+        AIAdaptorResolver
       );
 
       // 8. Store in Firestore
@@ -135,7 +136,7 @@ class StoryboardGenerationServiceV2 {
    *
    * @private
    */
-  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, db) {
+  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, db, AIAdaptorResolver) {
     try {
       // Resolve image generation adaptor
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(

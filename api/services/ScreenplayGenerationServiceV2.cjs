@@ -5,7 +5,6 @@
  * Generates screenplay with detailed timings from storyboard scenes
  */
 
-const AIAdaptorResolver = require('./AIAdaptorResolver');
 const PromptManager = require('./PromptManager');
 
 class ScreenplayGenerationServiceV2 {
@@ -15,9 +14,10 @@ class ScreenplayGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { storyboardScenes, videoDuration, selectedPersonaName }
    * @param {object} db - Firestore database
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
    * @returns {Promise<object>} { screenplay, adaptor, model, usage }
    */
-  static async generateScreenplay(projectId, input, db) {
+  static async generateScreenplay(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
         storyboardScenes = [],
