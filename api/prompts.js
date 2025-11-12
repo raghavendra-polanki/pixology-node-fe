@@ -7,6 +7,7 @@ import express from 'express';
 import { db } from './config/firestore.js';
 import PromptTemplateService from './services/PromptTemplateService.js';
 import PromptManager from './services/PromptManager.cjs';
+import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 
 const router = express.Router();
 
@@ -226,7 +227,8 @@ router.get('/variables', async (req, res) => {
 
 /**
  * POST /api/prompts/test
- * Test a prompt with given variables and get output
+ * Test a prompt with given variables and get output from AI
+ * Note: This is stateless - outputs are not saved
  */
 router.post('/test', async (req, res) => {
   try {
@@ -258,18 +260,41 @@ router.post('/test', async (req, res) => {
     );
 
     // Combine system and user prompts
-    const fullPrompt = resolvedPrompt.systemPrompt
-      ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
-      : resolvedPrompt.userPrompt;
+    const systemPrompt = resolvedPrompt.systemPrompt || '';
+    const userPrompt = resolvedPrompt.userPrompt || '';
+    const fullPrompt = systemPrompt
+      ? `${systemPrompt}\n\n${userPrompt}`
+      : userPrompt;
 
     console.log(`[API] /test: Resolved prompt: ${fullPrompt.substring(0, 100)}...`);
 
-    // For now, return the resolved prompt as output (testing mode)
-    // In a real implementation, this would call the AI adaptor
+    // Resolve which AI adaptor to use
+    console.log(`[API] /test: Resolving adaptor for capability: ${capability}`);
+    const resolution = await AIAdaptorResolver.resolveAdaptor(
+      projectId,
+      stageType,
+      capability,
+      db
+    );
+
+    console.log(`[API] /test: Using adaptor '${resolution.adaptorId}' with model '${resolution.modelId}'`);
+
+    // Call the AI adaptor to generate output
+    const result = await resolution.adaptor.generateText(fullPrompt, {
+      temperature: 0.7,
+      maxTokens: 2048,
+    });
+
+    console.log(`[API] /test: AI generation completed. Tokens used - Input: ${result.usage?.inputTokens}, Output: ${result.usage?.outputTokens}`);
+
+    // Return the actual AI-generated output (stateless - not saved)
     res.json({
       success: true,
-      output: fullPrompt,
-      message: 'Prompt test completed (resolved template)',
+      output: result.text,
+      model: result.model,
+      adaptorId: resolution.adaptorId,
+      usage: result.usage,
+      message: 'Prompt test completed with AI generation',
     });
   } catch (error) {
     console.error('[API] /test: Error testing prompt:', error);
