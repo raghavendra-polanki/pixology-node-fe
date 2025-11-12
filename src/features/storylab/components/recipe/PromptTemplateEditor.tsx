@@ -242,13 +242,6 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                 {currentPrompt && (
                   <div className="prompt-display">
                     <div className="prompt-display-section">
-                      <h3 className="prompt-display-title">System Prompt</h3>
-                      <div className="prompt-text">
-                        {currentPrompt.systemPrompt || 'No system prompt'}
-                      </div>
-                    </div>
-
-                    <div className="prompt-display-section">
                       <h3 className="prompt-display-title">User Prompt Template</h3>
                       <div className="prompt-text">
                         {currentPrompt.userPromptTemplate || 'No user prompt'}
