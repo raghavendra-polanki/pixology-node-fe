@@ -65,11 +65,16 @@ class PersonaGenerationServiceV2 {
       });
 
       // 5. Parse response
+      console.log(`[PersonaGen] AI Response length: ${generationResult.text.length} chars`);
+      console.log(`[PersonaGen] AI Response preview: ${generationResult.text.substring(0, 200)}...`);
+
       let personas = this._parsePersonasFromResponse(generationResult.text);
 
       if (!Array.isArray(personas)) {
         personas = [personas];
       }
+
+      console.log(`[PersonaGen] Parsed ${personas.length} personas from response`);
 
       // 6. Generate images for each persona
       const personasWithImages = await this._generatePersonaImages(
@@ -140,13 +145,23 @@ class PersonaGenerationServiceV2 {
             quality: 'standard',
           });
 
-          // Upload to GCS
+          // Handle image URL - convert data URLs to GCS URLs
+          let imageUrl = imageResult.imageUrl;
           const personaName = persona.coreIdentity?.name || `persona_${i}`;
-          const imagePath = `personas/${projectId}/${personaName.replace(/\s+/g, '_')}.png`;
 
-          // Note: imageResult.imageUrl is already a public URL from the adaptor
-          // If we need to store it, we'd download and upload to GCS
-          const imageUrl = imageResult.imageUrl;
+          if (imageUrl && imageUrl.startsWith('data:')) {
+            // Convert data URL to buffer and upload to GCS
+            try {
+              const base64Data = imageUrl.split(',')[1];
+              const imageBuffer = Buffer.from(base64Data, 'base64');
+              const personaNameSafe = personaName.replace(/\s+/g, '_');
+              imageUrl = await GCSService.uploadImageToGCS(imageBuffer, projectId, personaNameSafe);
+              console.log(`[PersonaGen] Uploaded image to GCS for: ${personaName}`);
+            } catch (uploadError) {
+              console.warn(`[PersonaGen] Failed to upload image to GCS: ${uploadError.message}`);
+              // Continue with data URL if upload fails (will likely cause Firestore error)
+            }
+          }
 
           personasWithImages.push({
             ...persona,

@@ -65,15 +65,47 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
   }
 
   /**
-   * Generate image using Gemini
-   * Note: Gemini can generate images via API, but we primarily use it for vision/analysis
+   * Generate image using Gemini 2.5 Flash Image model
    */
   async generateImage(prompt, options = {}) {
-    // Gemini's image generation capabilities are limited
-    // For now, throw error and recommend using appropriate image generation adaptor
-    throw new Error(
-      'Gemini adaptor does not support direct image generation. Use OpenAI (DALL-E) or other image generation adaptors.'
-    );
+    try {
+      // Use the specialized image generation model
+      const imageModel = this.client.getGenerativeModel({
+        model: 'gemini-2.5-flash-image',
+      });
+
+      const result = await imageModel.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+      });
+
+      const response = result.response;
+
+      // Extract the generated image from the response
+      const generatedImagePart = response.candidates[0].content.parts.find(
+        part => part.inlineData
+      );
+
+      if (generatedImagePart && generatedImagePart.inlineData) {
+        // Return the image URL (inline data)
+        const imageUrl = `data:${generatedImagePart.inlineData.mimeType};base64,${generatedImagePart.inlineData.data}`;
+
+        return {
+          imageUrl,
+          format: 'data-url',
+          model: 'gemini-2.5-flash-image',
+          backend: 'gemini',
+        };
+      } else {
+        throw new Error('No image data found in the response');
+      }
+    } catch (error) {
+      throw new Error(`Gemini image generation error: ${error.message}`);
+    }
   }
 
   /**
@@ -167,7 +199,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         description: 'Latest fast model, optimized for speed and efficiency',
         capabilities: {
           textGeneration: true,
-          imageGeneration: false,
+          imageGeneration: true,
           videoGeneration: false,
           vision: true,
           multimodal: true,
@@ -185,7 +217,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         description: 'Most capable model for complex tasks',
         capabilities: {
           textGeneration: true,
-          imageGeneration: false,
+          imageGeneration: true,
           videoGeneration: false,
           vision: true,
           multimodal: true,
@@ -203,7 +235,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         description: 'Fast and efficient multimodal model',
         capabilities: {
           textGeneration: true,
-          imageGeneration: false,
+          imageGeneration: true,
           videoGeneration: false,
           vision: true,
           multimodal: true,

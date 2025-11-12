@@ -123,11 +123,19 @@ router.post('/templates', async (req, res) => {
 router.put('/templates/:templateId', async (req, res) => {
   try {
     const { templateId } = req.params;
-    const { updates } = req.body;
+    const body = req.body;
 
-    if (!updates) {
+    // Support both formats: { updates: {...} } and direct template object
+    const updates = body.updates || {
+      stageType: body.stageType,
+      name: body.name,
+      description: body.description,
+      prompts: body.prompts,
+    };
+
+    if (!updates || !updates.prompts) {
       return res.status(400).json({
-        error: 'updates are required',
+        error: 'prompts are required',
       });
     }
 
@@ -136,6 +144,7 @@ router.put('/templates/:templateId', async (req, res) => {
     res.json({
       success: true,
       message: 'Template updated',
+      templateId,
     });
   } catch (error) {
     console.error('Error updating prompt template:', error);

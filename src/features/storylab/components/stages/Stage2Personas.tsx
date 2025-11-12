@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Sparkles, RefreshCw, Edit2, User, Check } from 'lucide-react';
+import { ArrowRight, Sparkles, Edit2, User, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
@@ -7,7 +7,7 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import RecipeEditorPage from '../recipe/RecipeEditorPage';
+import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
 
 // UI representation of persona (different from PersonaData in data model)
 interface Persona {
@@ -35,9 +35,7 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const [isSaving, setIsSaving] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [showRecipeEditor, setShowRecipeEditor] = useState(false);
-  const [currentRecipe, setCurrentRecipe] = useState<any>(null);
-  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
 
   // Sync personas with project data when loaded - only if they've been generated
   useEffect(() => {
@@ -58,56 +56,8 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     }
   }, [project?.aiGeneratedPersonas, project?.userPersonaSelection]);
 
-  const handleEditRecipe = async () => {
-    try {
-      setIsLoadingRecipe(true);
-      const response = await fetch('/api/recipes?stageType=stage_2_personas');
-      const data = await response.json();
-
-      if (data.recipes && data.recipes.length > 0) {
-        setCurrentRecipe(data.recipes[0]);
-        setShowRecipeEditor(true);
-      } else {
-        alert('No recipe found for persona generation. Please seed recipes first.');
-      }
-    } catch (error) {
-      console.error('Error fetching recipe:', error);
-      alert('Failed to load recipe');
-    } finally {
-      setIsLoadingRecipe(false);
-    }
-  };
-
-  const handleRecipeSaved = async (recipe: any) => {
-    try {
-      const token = sessionStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      const response = await fetch(`/api/recipes/${recipe.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save recipe');
-      }
-
-      console.log('Recipe saved successfully');
-      setShowRecipeEditor(false);
-      setCurrentRecipe(null);
-      alert('Recipe saved successfully!');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save recipe';
-      console.error('Error saving recipe:', errorMessage);
-      throw error;
-    }
+  const handleEditPrompts = () => {
+    setShowPromptEditor(true);
   };
 
   const handleGenerate = async () => {
@@ -246,22 +196,12 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const selectedCount = personas.filter(p => p.selected).length;
   const canProceed = selectedCount > 0;
 
-  // Show full-screen recipe editor if editing
-  if (showRecipeEditor && currentRecipe) {
-    // Pass previous stage output (Stage 1 campaign details) to the editor
-    const previousStageOutput = {
-      numberOfPersonas: project?.numberOfPersonas || 3,
-      productDescription: project?.campaignDetails?.productDescription || '',
-      targetAudience: project?.campaignDetails?.targetAudience || '',
-    };
-
+  // Show prompt editor if editing
+  if (showPromptEditor) {
     return (
-      <RecipeEditorPage
-        recipe={currentRecipe}
-        previousStageOutput={previousStageOutput}
-        onSave={handleRecipeSaved}
-        onBack={() => setShowRecipeEditor(false)}
-        title="Edit Persona Generation Recipe"
+      <PromptTemplateEditor
+        stageType="stage_2_personas"
+        onBack={() => setShowPromptEditor(false)}
       />
     );
   }
@@ -314,23 +254,13 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         `}</style>
 
         <Button
-          onClick={handleEditRecipe}
-          disabled={isLoadingRecipe}
+          onClick={handleEditPrompts}
           variant="outline"
           className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
           size="lg"
         >
-          {isLoadingRecipe ? (
-            <>
-              <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-              Loading Recipe...
-            </>
-          ) : (
-            <>
-              <Edit2 className="w-5 h-5 mr-2" />
-              Edit Recipe
-            </>
-          )}
+          <Edit2 className="w-5 h-5 mr-2" />
+          Edit Prompts
         </Button>
       </div>
 
