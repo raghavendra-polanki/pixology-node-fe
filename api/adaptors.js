@@ -3,10 +3,13 @@
  * Endpoints for managing AI adaptors and their configurations
  */
 
-const express = require('express');
-const admin = require('firebase-admin');
-const AIAdaptorResolver = require('./services/AIAdaptorResolver');
-const { AdaptorRegistry } = require('./services/adaptors');
+import express from 'express';
+import admin from 'firebase-admin';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const AIAdaptorResolver = require('./services/AIAdaptorResolver.js');
+const { AdaptorRegistry } = require('./services/adaptors/index.js');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -217,39 +220,4 @@ router.get('/config', async (req, res) => {
   }
 });
 
-/**
- * POST /api/adaptors/health
- * Check health status of adaptors
- */
-router.post('/health', async (req, res) => {
-  try {
-    const allAdaptorIds = AdaptorRegistry.getAllAdaptors();
-    const healthStatus = {};
-
-    for (const adaptorId of allAdaptorIds) {
-      try {
-        const AdaptorClass = AdaptorRegistry.registry.get(adaptorId);
-        healthStatus[adaptorId] = {
-          isHealthy: true,
-          lastChecked: new Date().toISOString(),
-        };
-      } catch (err) {
-        healthStatus[adaptorId] = {
-          isHealthy: false,
-          error: err.message,
-          lastChecked: new Date().toISOString(),
-        };
-      }
-    }
-
-    res.json({ healthStatus });
-  } catch (error) {
-    console.error('Error checking adaptor health:', error);
-    res.status(500).json({
-      error: 'Failed to check adaptor health',
-      message: error.message,
-    });
-  }
-});
-
-module.exports = router;
+export default router;

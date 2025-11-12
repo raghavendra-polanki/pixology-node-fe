@@ -3,9 +3,13 @@
  * Endpoints for managing prompt templates
  */
 
-const express = require('express');
-const admin = require('firebase-admin');
-const PromptTemplateService = require('./services/PromptTemplateService');
+import express from 'express';
+import admin from 'firebase-admin';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const PromptTemplateService = require('./services/PromptTemplateService.js');
+const PromptManager = require('./services/PromptManager.js');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -16,7 +20,7 @@ const db = admin.firestore();
  */
 router.get('/templates', async (req, res) => {
   try {
-    const { stageType, projectId } = req.query;
+    const { stageType } = req.query;
 
     if (!stageType) {
       return res.status(400).json({
@@ -31,23 +35,7 @@ router.get('/templates', async (req, res) => {
       db
     );
 
-    // If projectId provided, also include project overrides
-    let projectOverrides = null;
-    if (projectId) {
-      try {
-        const configDoc = await db.collection('project_ai_config').doc(projectId).get();
-        if (configDoc.exists) {
-          projectOverrides = configDoc.data().promptOverrides?.[stageType];
-        }
-      } catch (err) {
-        console.warn('Error loading project overrides:', err.message);
-      }
-    }
-
-    res.json({
-      templates,
-      projectOverrides,
-    });
+    res.json({ templates });
   } catch (error) {
     console.error('Error loading prompt templates:', error);
     res.status(500).json({
@@ -89,7 +77,7 @@ router.get('/templates/:templateId', async (req, res) => {
  */
 router.post('/templates', async (req, res) => {
   try {
-    const { projectId, stageType, template, isProjectOverride } = req.body;
+    const { projectId, stageType, template } = req.body;
 
     if (!template || !stageType) {
       return res.status(400).json({
@@ -106,51 +94,23 @@ router.post('/templates', async (req, res) => {
       });
     }
 
-    let result;
+    const templateId = await PromptTemplateService.createTemplate(
+      {
+        stageType,
+        name: template.name || `${stageType} template`,
+        description: template.description || '',
+        prompts: template.prompts,
+        isDefault: false,
+      },
+      'system',
+      db
+    );
 
-    if (isProjectOverride && projectId) {
-      // Save as project-specific override
-      const configRef = db.collection('project_ai_config').doc(projectId);
-      const updates = {
-        [`promptOverrides.${stageType}`]: {
-          prompts: template.prompts,
-          version: template.version || 1,
-          updatedAt: new Date().toISOString(),
-        },
-        updatedAt: new Date().toISOString(),
-      };
-
-      await configRef.set(updates, { merge: true });
-
-      result = {
-        success: true,
-        message: 'Project prompt override saved',
-        type: 'project_override',
-      };
-    } else {
-      // Save as global template
-      const userId = req.user?.uid || 'system';
-      const templateId = await PromptTemplateService.createTemplate(
-        {
-          stageType,
-          name: template.name || `${stageType} template`,
-          description: template.description || '',
-          prompts: template.prompts,
-          isDefault: false,
-        },
-        userId,
-        db
-      );
-
-      result = {
-        success: true,
-        message: 'Template created',
-        templateId,
-        type: 'global_template',
-      };
-    }
-
-    res.json(result);
+    res.json({
+      success: true,
+      message: 'Template created',
+      templateId,
+    });
   } catch (error) {
     console.error('Error saving prompt template:', error);
     res.status(500).json({
@@ -191,31 +151,8 @@ router.put('/templates/:templateId', async (req, res) => {
 });
 
 /**
- * DELETE /api/prompts/templates/:templateId
- * Delete a template
- */
-router.delete('/templates/:templateId', async (req, res) => {
-  try {
-    const { templateId } = req.params;
-
-    await PromptTemplateService.deleteTemplate(templateId, db);
-
-    res.json({
-      success: true,
-      message: 'Template deleted',
-    });
-  } catch (error) {
-    console.error('Error deleting prompt template:', error);
-    res.status(500).json({
-      error: 'Failed to delete prompt template',
-      message: error.message,
-    });
-  }
-});
-
-/**
  * POST /api/prompts/override
- * Save project-specific prompt override (alternative endpoint)
+ * Save project-specific prompt override
  */
 router.post('/override', async (req, res) => {
   try {
@@ -227,7 +164,6 @@ router.post('/override', async (req, res) => {
       });
     }
 
-    const PromptManager = require('./services/PromptManager');
     await PromptManager.savePromptOverride(projectId, stageType, promptTemplate, db);
 
     res.json({
@@ -238,36 +174,6 @@ router.post('/override', async (req, res) => {
     console.error('Error saving prompt override:', error);
     res.status(500).json({
       error: 'Failed to save prompt override',
-      message: error.message,
-    });
-  }
-});
-
-/**
- * DELETE /api/prompts/override
- * Remove project-specific prompt override
- */
-router.delete('/override', async (req, res) => {
-  try {
-    const { projectId, stageType } = req.query;
-
-    if (!projectId || !stageType) {
-      return res.status(400).json({
-        error: 'projectId and stageType are required',
-      });
-    }
-
-    const PromptManager = require('./services/PromptManager');
-    await PromptManager.removePromptOverride(projectId, stageType, db);
-
-    res.json({
-      success: true,
-      message: 'Prompt override removed',
-    });
-  } catch (error) {
-    console.error('Error removing prompt override:', error);
-    res.status(500).json({
-      error: 'Failed to remove prompt override',
       message: error.message,
     });
   }
@@ -292,36 +198,14 @@ router.get('/variables', async (req, res) => {
       stage_2_personas: [
         { name: 'productDescription', description: 'Description of the product' },
         { name: 'targetAudience', description: 'Target audience information' },
-        { name: 'numberOfPersonas', description: 'Number of personas to generate' },
       ],
       stage_3_narratives: [
         { name: 'productDescription', description: 'Description of the product' },
         { name: 'targetAudience', description: 'Target audience information' },
-        { name: 'numberOfNarratives', description: 'Number of narrative themes' },
-        { name: 'selectedPersonas', description: 'Selected personas information' },
-      ],
-      stage_4_storyboard: [
-        { name: 'productDescription', description: 'Description of the product' },
-        { name: 'targetAudience', description: 'Target audience information' },
-        { name: 'selectedPersonaName', description: 'Name of selected persona' },
-        { name: 'narrativeTheme', description: 'Narrative theme' },
-        { name: 'numberOfScenes', description: 'Number of scenes' },
-      ],
-      stage_5_screenplay: [
-        { name: 'storyboardScenes', description: 'Storyboard scenes' },
-        { name: 'selectedPersonaName', description: 'Name of main character' },
-        { name: 'videoDuration', description: 'Total video duration' },
-      ],
-      stage_6_video: [
-        { name: 'sceneNumber', description: 'Scene number' },
-        { name: 'visual', description: 'Visual description' },
-        { name: 'cameraFlow', description: 'Camera movements' },
-        { name: 'duration', description: 'Scene duration' },
       ],
     };
 
     const variables = stageVariables[stageType] || [];
-
     res.json({ variables });
   } catch (error) {
     console.error('Error loading variables:', error);
@@ -332,4 +216,4 @@ router.get('/variables', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -40,6 +40,11 @@ import personasRouter from './api/personas.js';
 import recipesRouter from './api/recipes.js';
 import videosRouter from './api/videos.js';
 
+// New AI Adaptor Architecture routes
+import adaptorsRouter from './api/adaptors.js';
+import promptsRouter from './api/prompts.js';
+import usageRouter from './api/usage.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -153,6 +158,15 @@ app.use('/api/recipes', recipesRouter);
 
 // Video generation API routes
 app.use('/api/videos', videosRouter);
+
+// AI Adaptor management API routes
+app.use('/api/adaptors', adaptorsRouter);
+
+// Prompt template management API routes
+app.use('/api/prompts', promptsRouter);
+
+// Usage tracking and analytics API routes
+app.use('/api/usage', usageRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {
