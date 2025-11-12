@@ -75,6 +75,7 @@ export function Stage4Storyboard({
   const [aiEditingScene, setAiEditingScene] = useState<Scene | null>(null);
   const [aiEditPrompt, setAiEditPrompt] = useState('');
   const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
+  const [newGeneratedImage, setNewGeneratedImage] = useState<string | null>(null);
 
   // Sync scenes with project data when loaded
   useEffect(() => {
@@ -236,6 +237,7 @@ export function Stage4Storyboard({
   const handleAiEditOpen = (scene: Scene) => {
     setAiEditingScene(scene);
     setAiEditPrompt('');
+    setNewGeneratedImage(null);
   };
 
   const handleAiEditSubmit = async () => {
@@ -275,22 +277,57 @@ export function Stage4Storyboard({
       const result = await response.json();
       const newImageUrl = result.imageUrl;
 
-      // Update scene with new image
-      setScenes(scenes.map(s =>
-        s.id === aiEditingScene.id ? { ...s, image: newImageUrl } : s
-      ));
-
-      // Close dialog
-      setAiEditingScene(null);
-      setAiEditPrompt('');
-
-      alert('Image regenerated successfully!');
+      // Store the new image but don't update storyboard yet
+      setNewGeneratedImage(newImageUrl);
+      setAiEditPrompt(''); // Clear prompt for next edit
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate image';
       console.error('Error regenerating image:', errorMessage);
       alert(`Failed to regenerate image: ${errorMessage}`);
     } finally {
       setIsRegeneratingImage(false);
+    }
+  };
+
+  const handleSaveEditedImage = async () => {
+    if (!aiEditingScene || !newGeneratedImage) return;
+
+    try {
+      // Update scene with new image
+      const updatedScenes = scenes.map(s =>
+        s.id === aiEditingScene.id ? { ...s, image: newGeneratedImage } : s
+      );
+      setScenes(updatedScenes);
+
+      // Save to database
+      const updatedStoryboard = project?.aiGeneratedStoryboard?.scenes?.map((s: any) =>
+        s.sceneNumber?.toString() === aiEditingScene.id
+          ? { ...s, image: { ...s.image, url: newGeneratedImage } }
+          : s
+      );
+
+      if (updatedStoryboard) {
+        await updateAIStoryboard(
+          {
+            scenes: updatedStoryboard,
+            generatedAt: new Date(),
+            model: 'storyboard-generation-v2-edited',
+            count: updatedStoryboard.length,
+          },
+          project.id
+        );
+      }
+
+      // Close dialog
+      setAiEditingScene(null);
+      setNewGeneratedImage(null);
+      setAiEditPrompt('');
+
+      console.log('Image saved successfully');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save image';
+      console.error('Error saving image:', errorMessage);
+      alert(`Failed to save image: ${errorMessage}`);
     }
   };
 
@@ -620,8 +657,12 @@ export function Stage4Storyboard({
       </Dialog>
 
       {/* AI Edit Dialog */}
-      <Dialog open={!!aiEditingScene} onOpenChange={() => setAiEditingScene(null)}>
-        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-2xl">
+      <Dialog open={!!aiEditingScene} onOpenChange={() => {
+        setAiEditingScene(null);
+        setNewGeneratedImage(null);
+        setAiEditPrompt('');
+      }}>
+        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wand2 className="w-5 h-5 text-blue-500" />
@@ -629,72 +670,98 @@ export function Stage4Storyboard({
             </DialogTitle>
           </DialogHeader>
           {aiEditingScene && (
-            <div className="space-y-4 mt-4">
-              {/* Current Image Preview */}
-              {aiEditingScene.image && (
+            <ScrollArea className="max-h-[calc(90vh-8rem)]">
+              <div className="space-y-4 mt-4 pr-6">
+                {/* Image Preview - Show new image if generated, otherwise show original */}
                 <div className="space-y-2">
-                  <Label className="text-gray-300">Current Image</Label>
-                  <div className="relative h-48 rounded-lg overflow-hidden bg-gray-900">
+                  <Label className="text-gray-300">
+                    {newGeneratedImage ? 'New Generated Image' : 'Current Image'}
+                  </Label>
+                  <div className="relative w-full rounded-lg overflow-hidden bg-gray-900">
                     <ImageWithFallback
-                      src={aiEditingScene.image}
+                      src={newGeneratedImage || aiEditingScene.image}
                       alt={aiEditingScene.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto object-contain"
                     />
                   </div>
-                </div>
-              )}
-
-              {/* Edit Instructions */}
-              <div className="space-y-2">
-                <Label htmlFor="ai-edit-prompt" className="text-gray-300">
-                  What would you like to change?
-                </Label>
-                <Textarea
-                  id="ai-edit-prompt"
-                  value={aiEditPrompt}
-                  onChange={(e) => setAiEditPrompt(e.target.value)}
-                  className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-32"
-                  placeholder="E.g., 'Make the lighting warmer', 'Change to outdoor setting', 'Add more products in the background', etc."
-                  disabled={isRegeneratingImage}
-                />
-              </div>
-
-              {/* Info Box */}
-              <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-3">
-                <p className="text-sm text-blue-300">
-                  AI will regenerate the image based on your instructions while maintaining the scene's overall concept and style.
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <Button
-                  onClick={() => setAiEditingScene(null)}
-                  variant="outline"
-                  className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-                  disabled={isRegeneratingImage}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAiEditSubmit}
-                  disabled={!aiEditPrompt.trim() || isRegeneratingImage}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                >
-                  {isRegeneratingImage ? (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2 animate-spin" />
-                      Regenerating...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="w-4 h-4 mr-2" />
-                      Regenerate Image
-                    </>
+                  {newGeneratedImage && (
+                    <p className="text-sm text-green-400 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Image regenerated successfully! Click "Save & Apply" to update the storyboard.
+                    </p>
                   )}
-                </Button>
+                </div>
+
+                {/* Edit Instructions */}
+                <div className="space-y-2">
+                  <Label htmlFor="ai-edit-prompt" className="text-gray-300">
+                    What would you like to change?
+                  </Label>
+                  <Textarea
+                    id="ai-edit-prompt"
+                    value={aiEditPrompt}
+                    onChange={(e) => setAiEditPrompt(e.target.value)}
+                    className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-24"
+                    placeholder="E.g., 'Make the lighting warmer', 'Change to outdoor setting', 'Add more products in the background', etc."
+                    disabled={isRegeneratingImage}
+                  />
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-3">
+                  <p className="text-sm text-blue-300">
+                    {newGeneratedImage
+                      ? 'You can continue editing or save the current result. Click "Regenerate" to apply more changes.'
+                      : 'AI will regenerate the image based on your instructions while maintaining the scene\'s overall concept and style.'
+                    }
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-4">
+                  <Button
+                    onClick={() => {
+                      setAiEditingScene(null);
+                      setNewGeneratedImage(null);
+                      setAiEditPrompt('');
+                    }}
+                    variant="outline"
+                    className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+                    disabled={isRegeneratingImage}
+                  >
+                    Cancel
+                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={handleAiEditSubmit}
+                      disabled={!aiEditPrompt.trim() || isRegeneratingImage}
+                      variant="outline"
+                      className="border-blue-600 text-blue-400 hover:bg-blue-600/10 rounded-lg"
+                    >
+                      {isRegeneratingImage ? (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4 mr-2" />
+                          Regenerate
+                        </>
+                      )}
+                    </Button>
+                    {newGeneratedImage && (
+                      <Button
+                        onClick={handleSaveEditedImage}
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                      >
+                        Save & Apply
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>
