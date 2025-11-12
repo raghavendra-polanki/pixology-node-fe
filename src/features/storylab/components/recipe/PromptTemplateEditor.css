@@ -117,6 +117,7 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  padding: 0.75rem 0.75rem 0.75rem 0.75rem;
 }
 
 /* Left Pane - Prompts Section */
@@ -230,7 +231,7 @@
 .inputs-section {
   flex: 0 0 auto;
   border-bottom: 1px solid #333333;
-  padding: 0.75rem 0.75rem 0.75rem 0.75rem;
+  padding: 0 0 0.75rem 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -315,7 +316,7 @@
 /* Output Section */
 .output-section {
   flex: 1;
-  padding: 0.75rem 0.75rem 0.75rem 0.75rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -338,7 +339,7 @@
   background: #1a1a1a;
   border: 1px solid #333333;
   border-radius: 4px;
-  padding: 0.75rem;
+  padding: 0.5rem;
 }
 
 .output-text {
