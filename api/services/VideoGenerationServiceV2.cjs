@@ -1,11 +1,10 @@
 /**
  * VideoGenerationServiceV2
  *
- * Refactored for adaptor-aware operations
- * Generates videos using configured AI adaptor with prompt templates
+ * Generates videos using legacy video generation service
+ * Supports per-scene video generation for screenplay entries
  */
 
-const PromptManager = require('./PromptManager.cjs');
 const VideoGenerationService = require('./videoGenerationService');
 
 class VideoGenerationServiceV2 {
@@ -34,26 +33,9 @@ class VideoGenerationServiceV2 {
         `[VideoGen] Generating ${screenplayScenes.length} videos for project ${projectId}`
       );
 
-      // 1. Resolve video generation adaptor
-      const videoAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_6_video',
-        'videoGeneration',
-        db
-      );
-
-      console.log(`[VideoGen] Video adaptor: ${videoAdaptor.adaptorId}/${videoAdaptor.modelId}`);
-
-      // 2. Get prompt template
-      const promptTemplate = await PromptManager.getPromptTemplate(
-        'stage_6_video',
-        projectId,
-        db
-      );
-
       const videos = [];
 
-      // 3. Generate video for each scene
+      // Generate video for each scene
       for (let i = 0; i < screenplayScenes.length; i++) {
         try {
           const screenplayEntry = screenplayScenes[i];
@@ -61,50 +43,19 @@ class VideoGenerationServiceV2 {
 
           console.log(`[VideoGen] Generating video ${i + 1}/${screenplayScenes.length}`);
 
-          // Build video generation prompt from screenplay
-          const variables = {
-            sceneNumber: screenplayEntry.sceneNumber || i + 1,
-            visual: screenplayEntry.visual || '',
-            cameraFlow: screenplayEntry.cameraFlow || '',
-            script: screenplayEntry.script || '',
-            backgroundMusic: screenplayEntry.backgroundMusic || '',
-            duration: screenplayEntry.timeEnd || '8s',
-          };
-
-          const resolvedPrompt = PromptManager.resolvePrompt(
-            promptTemplate.prompts.videoGeneration,
-            variables
+          // For now, use legacy video generation service
+          // The adaptor system for video generation will be implemented later
+          const videoResult = await this.generateSingleVideo(
+            projectId,
+            screenplayEntry,
+            null  // imageBase64 - will fetch from GCS URI if needed
           );
-
-          const videoPrompt = resolvedPrompt.systemPrompt
-            ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
-            : resolvedPrompt.userPrompt;
-
-          // Call adaptor video generation
-          let videoResult;
-
-          if (sceneImage && sceneImage.gcsUri) {
-            // Use image-based video generation if image available
-            videoResult = await videoAdaptor.adaptor.generateVideo(videoPrompt, {
-              duration: screenplayEntry.timeEnd || '8s',
-              imageUri: sceneImage.gcsUri,
-              resolution: '720p',
-            });
-          } else {
-            // Use text-based video generation
-            videoResult = await videoAdaptor.adaptor.generateVideo(videoPrompt, {
-              duration: screenplayEntry.timeEnd || '8s',
-              resolution: '720p',
-            });
-          }
 
           videos.push({
             sceneNumber: screenplayEntry.sceneNumber || i + 1,
             videoUrl: videoResult.videoUrl,
             videoId: videoResult.videoId,
             duration: screenplayEntry.timeEnd || '8s',
-            adaptor: videoAdaptor.adaptorId,
-            model: videoAdaptor.modelId,
             generatedAt: new Date().toISOString(),
           });
 
@@ -124,23 +75,19 @@ class VideoGenerationServiceV2 {
         }
       }
 
-      // 4. Store in Firestore
+      // Store in Firestore
       await db
         .collection('projects')
         .doc(projectId)
         .update({
           aiGeneratedVideos: {
             videos,
-            adaptor: videoAdaptor.adaptorId,
-            model: videoAdaptor.modelId,
             generatedAt: new Date().toISOString(),
           },
         });
 
       return {
         videos,
-        adaptor: videoAdaptor.adaptorId,
-        model: videoAdaptor.modelId,
       };
     } catch (error) {
       console.error('[VideoGen] Error:', error.message);
