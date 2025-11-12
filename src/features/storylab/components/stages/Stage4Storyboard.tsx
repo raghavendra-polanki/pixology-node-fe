@@ -136,7 +136,7 @@ export function Stage4Storyboard({
       }
 
       const generationData = await generationResponse.json();
-      const storyboard = generationData.data || [];
+      const storyboard = generationData.data?.scenes || [];
 
       if (!Array.isArray(storyboard) || storyboard.length === 0) {
         throw new Error('No storyboard returned from generation service');
