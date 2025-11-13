@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Check, Settings } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Logo } from './Logo';
@@ -10,7 +10,6 @@ import { Stage3Narratives } from './stages/Stage3Narratives';
 import { Stage4Storyboard } from './stages/Stage4Storyboard';
 import { Stage5Screenplay } from './stages/Stage5Screenplay';
 import { Stage6GenerateVideo } from './stages/Stage6GenerateVideo';
-import { AdaptorSettingsModal } from './AdaptorSettingsModal';
 
 interface WorkflowViewProps {
   projectId: string;
@@ -46,7 +45,6 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
   } = useStoryLabProject({ autoLoad: true, projectId });
 
   const [currentStage, setCurrentStage] = useState(1);
-  const [isAdaptorSettingsOpen, setIsAdaptorSettingsOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Track if initial sync from backend has happened
@@ -208,16 +206,6 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
               );
             })}
           </div>
-        {/* Footer - Settings Button */}
-        <div className="p-4 border-t border-gray-800">
-          <Button
-            onClick={() => setIsAdaptorSettingsOpen(true)}
-            className="w-full gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            <Settings className="w-4 h-4" />
-            AI Adaptor Settings
-          </Button>
-        </div>
         </ScrollArea>
       </div>
 
@@ -257,15 +245,6 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
           </div>
         )}
       </div>
-      
-      {/* Adaptor Settings Modal */}
-      {project && (
-        <AdaptorSettingsModal
-          projectId={projectId}
-          isOpen={isAdaptorSettingsOpen}
-          onClose={() => setIsAdaptorSettingsOpen(false)}
-        />
-      )}
     </div>
   );
 }
