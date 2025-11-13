@@ -173,6 +173,9 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         throw new Error('imageGcsUri is required (GCS URI format: gs://bucket/path/image.jpg)');
       }
 
+      // Convert HTTPS URL to GCS URI if needed
+      const gcsUri = this._convertToGcsUri(imageGcsUri);
+
       // Validate Veo 3 constraints
       const ALLOWED_DURATIONS = [4, 6, 8];
       if (!ALLOWED_DURATIONS.includes(durationSeconds)) {
@@ -185,7 +188,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       }
 
       console.log(`[GeminiAdaptor] Generating video with Veo 3 for scene ${sceneNumber}`);
-      console.log(`[GeminiAdaptor] Image: ${imageGcsUri}`);
+      console.log(`[GeminiAdaptor] Image: ${gcsUri}`);
       console.log(`[GeminiAdaptor] Duration: ${durationSeconds}s, Resolution: ${resolution}`);
 
       // Get access token
@@ -200,7 +203,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
           {
             prompt: prompt,
             image: {
-              gcsUri: imageGcsUri,
+              gcsUri: gcsUri,
               mimeType: 'image/jpeg',
             },
           },
@@ -274,6 +277,32 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
     } catch (error) {
       throw new Error(`Gemini video generation error: ${error.message}`);
     }
+  }
+
+  /**
+   * Convert HTTPS GCS URL to GCS URI format
+   * Converts: https://storage.googleapis.com/bucket/path/file.ext
+   * To: gs://bucket/path/file.ext
+   * @private
+   */
+  _convertToGcsUri(url) {
+    if (!url) {
+      throw new Error('URL is required for conversion');
+    }
+
+    // If already in GCS URI format, return as-is
+    if (url.startsWith('gs://')) {
+      return url;
+    }
+
+    // Convert HTTPS URL to GCS URI
+    if (url.startsWith('https://storage.googleapis.com/')) {
+      const path = url.replace('https://storage.googleapis.com/', '');
+      return `gs://${path}`;
+    }
+
+    // If not a recognized format, throw error
+    throw new Error(`Invalid GCS URL format: ${url}. Expected gs:// or https://storage.googleapis.com/`);
   }
 
   /**
