@@ -28,6 +28,7 @@ class StoryboardGenerationServiceV2 {
         selectedPersonaName,
         selectedPersonaDescription,
         selectedPersonaImage,
+        productImageUrl,
         narrativeTheme,
         narrativeStructure,
         numberOfScenes = 6,
@@ -104,6 +105,7 @@ class StoryboardGenerationServiceV2 {
         selectedPersonaName,
         selectedPersonaDescription,
         selectedPersonaImage,
+        productImageUrl,
         db,
         AIAdaptorResolver
       );
@@ -139,7 +141,7 @@ class StoryboardGenerationServiceV2 {
    *
    * @private
    */
-  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, selectedPersonaImage, db, AIAdaptorResolver) {
+  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, selectedPersonaImage, productImageUrl, db, AIAdaptorResolver) {
     try {
       // Resolve image generation adaptor
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
@@ -163,14 +165,22 @@ class StoryboardGenerationServiceV2 {
           );
 
           console.log(`[StoryboardGen] Generating image ${i + 1}/${scenes.length}`);
+
+          // Collect reference images (persona and product)
+          const referenceImages = [];
           if (selectedPersonaImage) {
-            console.log(`[StoryboardGen] Using persona image reference: ${selectedPersonaImage}`);
+            referenceImages.push(selectedPersonaImage);
+            console.log(`[StoryboardGen] Using persona image reference`);
+          }
+          if (productImageUrl) {
+            referenceImages.push(productImageUrl);
+            console.log(`[StoryboardGen] Using product image reference`);
           }
 
           const imageResult = await imageAdaptor.adaptor.generateImage(imagePrompt, {
             size: '1024x1024',
             quality: 'standard',
-            referenceImageUrl: selectedPersonaImage, // Pass persona image for visual consistency
+            referenceImageUrl: referenceImages.length > 0 ? referenceImages : undefined, // Pass both persona and product images
           });
 
           // Handle image URL - convert data URLs to GCS URLs
@@ -288,8 +298,9 @@ class StoryboardGenerationServiceV2 {
   static _buildSceneImagePrompt(scene, selectedPersonaName, selectedPersonaDescription) {
     return `Generate a professional UGC-style scene image for a marketing video:
 
-**Reference Image:**
-A reference image of the persona/character "${selectedPersonaName}" is provided for visual consistency. Use this as a guide to maintain character appearance throughout all scenes.
+**Reference Images:**
+- Persona/Character reference image: "${selectedPersonaName}" - Use this to maintain consistent character appearance throughout all scenes
+- Product reference image: The actual product image is provided - Use this exact product wherever the product appears in the scene
 
 **Scene Title:** ${scene.title}
 **Scene Description:** ${scene.description}
@@ -305,12 +316,21 @@ ${scene.cameraWork}
 
 **Character/Persona:**
 ${selectedPersonaName} - ${selectedPersonaDescription}
-IMPORTANT: The character must look exactly like the person in the reference image provided. Maintain consistent facial features, hair, clothing style, and overall appearance.
+IMPORTANT: The character must look exactly like the person in the persona reference image provided. Maintain consistent facial features, hair, clothing style, and overall appearance.
+
+**Product:**
+${scene.product}
+IMPORTANT: Use the exact product from the product reference image. Do not alter the product's appearance, colors, or design. The product should look identical to the reference image.
 
 **Detailed Visual Description:**
 ${scene.keyFrameDescription}
 
-Create a high-quality, cinematic scene that matches the description above while ensuring the character looks identical to the reference image. Use professional cinematography, natural lighting, and authentic styling. The image should be suitable for a professional marketing video and feel like a genuine UGC production.`;
+Create a high-quality, cinematic scene that matches the description above while ensuring:
+1. The character looks identical to the persona reference image
+2. The product looks exactly like the product reference image - maintain its exact appearance
+3. Professional cinematography with natural lighting
+4. Authentic styling suitable for UGC marketing
+5. The scene should feel like a genuine, professional marketing video production`;
   }
 }
 

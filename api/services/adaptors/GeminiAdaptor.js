@@ -68,7 +68,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
    * Generate image using Gemini 2.5 Flash Image model
    * @param {string} prompt - Text prompt for image generation
    * @param {object} options - Options object
-   * @param {string} options.referenceImageUrl - Optional reference image URL to guide generation
+   * @param {string|string[]} options.referenceImageUrl - Optional reference image URL(s) to guide generation
    */
   async generateImage(prompt, options = {}) {
     try {
@@ -80,16 +80,24 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       // Build content parts array
       const contentParts = [{ text: prompt }];
 
-      // Add reference image if provided
+      // Add reference images if provided (supports single URL or array of URLs)
       if (options.referenceImageUrl) {
-        const imageBase64 = await this._fetchImageAsBase64(options.referenceImageUrl);
-        if (imageBase64) {
-          contentParts.push({
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: imageBase64,
-            },
-          });
+        const imageUrls = Array.isArray(options.referenceImageUrl)
+          ? options.referenceImageUrl
+          : [options.referenceImageUrl];
+
+        for (const imageUrl of imageUrls) {
+          if (imageUrl) {
+            const imageBase64 = await this._fetchImageAsBase64(imageUrl);
+            if (imageBase64) {
+              contentParts.push({
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: imageBase64,
+                },
+              });
+            }
+          }
         }
       }
 
