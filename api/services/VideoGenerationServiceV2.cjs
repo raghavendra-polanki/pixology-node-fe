@@ -51,20 +51,25 @@ class VideoGenerationServiceV2 {
 
       // Generate video for each scene
       for (let i = 0; i < screenplayScenes.length; i++) {
-        try {
           const screenplayEntry = screenplayScenes[i];
           const storyboardScene = storyboardScenes[i];
 
+          // Use actual scene number from data, not loop index
+          const actualSceneNumber = screenplayEntry?.sceneNumber || storyboardScene?.sceneNumber || i + 1;
+
+        try {
+
           console.log(`[VideoGen] Generating video ${i + 1}/${screenplayScenes.length}`);
+          console.log(`[VideoGen] Scene number: ${actualSceneNumber}`);
 
           // Validate required scene data
           if (!screenplayEntry) {
-            throw new Error(`Missing screenplay entry for scene ${i + 1}`);
+            throw new Error(`Missing screenplay entry for scene ${actualSceneNumber}`);
           }
 
           // Combine screenplay and storyboard data (following ActionExecutor pattern)
           const combinedSceneData = {
-            title: screenplayEntry.title || storyboardScene?.title || `Scene ${i + 1}`,
+            title: screenplayEntry.title || storyboardScene?.title || `Scene ${actualSceneNumber}`,
             visual: storyboardScene?.description || screenplayEntry.visual || 'Professional video scene',
             cameraFlow: screenplayEntry.cameraFlow || storyboardScene?.cameraWork || 'Smooth camera movement',
             script: screenplayEntry.script || screenplayEntry.dialogue || 'Scene dialogue or narration',
@@ -80,30 +85,30 @@ class VideoGenerationServiceV2 {
           const sceneImageGcsUri = storyboardScene?.image?.gcsUri || null;
 
           if (!sceneImageGcsUri && !sceneImageUrl) {
-            throw new Error(`Missing scene image for scene ${i + 1}`);
+            throw new Error(`Missing scene image for scene ${actualSceneNumber}`);
           }
 
-          console.log(`[VideoGen] Using storyboard image for scene ${i + 1}: ${sceneImageGcsUri || sceneImageUrl}`);
+          console.log(`[VideoGen] Using storyboard image for scene ${actualSceneNumber}: ${sceneImageGcsUri || sceneImageUrl}`);
 
-          // Build video prompt
-          const prompt = this._buildVideoPrompt(combinedSceneData, i);
+          // Build video prompt (pass actualSceneNumber - 1 to maintain 0-based index for prompt builder)
+          const prompt = this._buildVideoPrompt(combinedSceneData, actualSceneNumber - 1);
 
           // Parse duration (remove 's' suffix if present)
           const durationSeconds = parseInt(combinedSceneData.duration.toString().replace('s', ''));
 
           // Generate video using AI adaptor
           const videoResult = await videoAdaptor.adaptor.generateVideo(prompt, {
-            imageGcsUri: sceneImageGcsUri || sceneImageUrl, // TODO: Convert HTTP URLs to GCS URIs if needed
+            imageGcsUri: sceneImageGcsUri || sceneImageUrl,
             durationSeconds: durationSeconds || 6,
             aspectRatio: combinedSceneData.aspectRatio,
             resolution: combinedSceneData.resolution,
             projectId: projectId,
-            sceneNumber: i + 1,
+            sceneNumber: actualSceneNumber,
           });
 
           // Return structured video data
           videos.push({
-            sceneNumber: screenplayEntry.sceneNumber || i + 1,
+            sceneNumber: actualSceneNumber,
             sceneTitle: combinedSceneData.title,
             videoUrl: videoResult.videoUrl,
             videoFormat: videoResult.format || 'mp4',
@@ -125,11 +130,11 @@ class VideoGenerationServiceV2 {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         } catch (videoError) {
-          console.error(`[VideoGen] Video generation failed for scene ${i + 1}: ${videoError.message}`);
+          console.error(`[VideoGen] Video generation failed for scene ${actualSceneNumber}: ${videoError.message}`);
 
           // Continue with next scene, record error
           videos.push({
-            sceneNumber: screenplayScenes[i]?.sceneNumber || i + 1,
+            sceneNumber: actualSceneNumber,
             error: videoError.message,
             generatedAt: new Date().toISOString(),
           });
