@@ -37,7 +37,6 @@ import authRouter from './api/auth.js';
 import allowlistRouter from './api/allowlist.js';
 import projectsRouter from './api/projects.js';
 import personasRouter from './api/personas.js';
-import recipesRouter from './api/recipes.js';
 import videosRouter from './api/videos.js';
 import storyboardRouter from './api/storyboard.js';
 
@@ -165,9 +164,6 @@ app.use('/api/projects', projectsRouter);
 
 // Personas generation API routes
 app.use('/api/personas', personasRouter);
-
-// Recipe management API routes
-app.use('/api/recipes', recipesRouter);
 
 // Video generation API routes
 app.use('/api/videos', videosRouter);
