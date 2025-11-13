@@ -50,10 +50,17 @@ router.post('/edit-image', async (req, res) => {
 
     console.log(`[Storyboard] Generated edit prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
-    // Generate new image using adaptor
+    // Extract original image URL for reference
+    const originalImageUrl = sceneData.image?.url || sceneData.image;
+    if (originalImageUrl) {
+      console.log(`[Storyboard] Using reference image: ${originalImageUrl}`);
+    }
+
+    // Generate new image using adaptor with original image as reference
     const imageResult = await imageAdaptor.adaptor.generateImage(enhancedPrompt, {
       size: '1024x1024',
       quality: 'standard',
+      referenceImageUrl: originalImageUrl, // Pass original image for visual consistency
     });
 
     // Handle image URL - convert data URLs to GCS URLs if needed
@@ -106,7 +113,8 @@ function buildImageEditPrompt(sceneData, editPrompt) {
 
   return `Generate a professional UGC-style scene image for a marketing video with the following modifications:
 
-**Original Scene:**
+**Original Scene Reference:**
+A reference image of the original scene is provided for your visual context.
 Title: ${title}
 Description: ${description}
 Location/Setting: ${location}
@@ -118,13 +126,15 @@ Key Frame Description: ${keyFrameDescription}
 ${editPrompt}
 
 **Instructions:**
-Apply the requested changes while maintaining the overall style and quality of a professional UGC marketing scene. Keep the original scene's essence but incorporate the modifications specified above. The result should be:
-- High-quality and cinematic
-- Professional cinematography with natural lighting
-- Authentic styling suitable for UGC marketing
-- Consistent with the original scene's mood and purpose
+Using the provided reference image as a visual guide, apply the requested changes while maintaining the overall style, composition, and quality of the original scene. The edited image should:
+- Keep the same visual style and cinematography as the reference image
+- Maintain consistent lighting, color grading, and composition
+- Apply ONLY the specific changes requested in the edit prompt
+- Preserve all other elements that are not mentioned in the edit request
+- Remain high-quality, cinematic, and professional
+- Continue to be authentic and suitable for UGC marketing
 
-Generate the edited scene image that incorporates these changes seamlessly.`;
+Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference image.`;
 }
 
 export default router;

@@ -103,6 +103,7 @@ class StoryboardGenerationServiceV2 {
         scenes,
         selectedPersonaName,
         selectedPersonaDescription,
+        selectedPersonaImage,
         db,
         AIAdaptorResolver
       );
@@ -138,7 +139,7 @@ class StoryboardGenerationServiceV2 {
    *
    * @private
    */
-  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, db, AIAdaptorResolver) {
+  static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, selectedPersonaImage, db, AIAdaptorResolver) {
     try {
       // Resolve image generation adaptor
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
@@ -162,10 +163,14 @@ class StoryboardGenerationServiceV2 {
           );
 
           console.log(`[StoryboardGen] Generating image ${i + 1}/${scenes.length}`);
+          if (selectedPersonaImage) {
+            console.log(`[StoryboardGen] Using persona image reference: ${selectedPersonaImage}`);
+          }
 
           const imageResult = await imageAdaptor.adaptor.generateImage(imagePrompt, {
             size: '1024x1024',
             quality: 'standard',
+            referenceImageUrl: selectedPersonaImage, // Pass persona image for visual consistency
           });
 
           // Handle image URL - convert data URLs to GCS URLs
@@ -283,6 +288,9 @@ class StoryboardGenerationServiceV2 {
   static _buildSceneImagePrompt(scene, selectedPersonaName, selectedPersonaDescription) {
     return `Generate a professional UGC-style scene image for a marketing video:
 
+**Reference Image:**
+A reference image of the persona/character "${selectedPersonaName}" is provided for visual consistency. Use this as a guide to maintain character appearance throughout all scenes.
+
 **Scene Title:** ${scene.title}
 **Scene Description:** ${scene.description}
 
@@ -297,11 +305,12 @@ ${scene.cameraWork}
 
 **Character/Persona:**
 ${selectedPersonaName} - ${selectedPersonaDescription}
+IMPORTANT: The character must look exactly like the person in the reference image provided. Maintain consistent facial features, hair, clothing style, and overall appearance.
 
 **Detailed Visual Description:**
 ${scene.keyFrameDescription}
 
-Create a high-quality, cinematic scene that matches the description above. Use professional cinematography, natural lighting, and authentic styling. The image should be suitable for a professional marketing video and feel like a genuine UGC production.`;
+Create a high-quality, cinematic scene that matches the description above while ensuring the character looks identical to the reference image. Use professional cinematography, natural lighting, and authentic styling. The image should be suitable for a professional marketing video and feel like a genuine UGC production.`;
   }
 }
 

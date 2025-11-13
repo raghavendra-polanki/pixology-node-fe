@@ -66,6 +66,9 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
 
   /**
    * Generate image using Gemini 2.5 Flash Image model
+   * @param {string} prompt - Text prompt for image generation
+   * @param {object} options - Options object
+   * @param {string} options.referenceImageUrl - Optional reference image URL to guide generation
    */
   async generateImage(prompt, options = {}) {
     try {
@@ -74,11 +77,27 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         model: 'gemini-2.5-flash-image',
       });
 
+      // Build content parts array
+      const contentParts = [{ text: prompt }];
+
+      // Add reference image if provided
+      if (options.referenceImageUrl) {
+        const imageBase64 = await this._fetchImageAsBase64(options.referenceImageUrl);
+        if (imageBase64) {
+          contentParts.push({
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: imageBase64,
+            },
+          });
+        }
+      }
+
       const result = await imageModel.generateContent({
         contents: [
           {
             role: 'user',
-            parts: [{ text: prompt }],
+            parts: contentParts,
           },
         ],
       });
@@ -105,6 +124,24 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       }
     } catch (error) {
       throw new Error(`Gemini image generation error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Fetch image from URL and convert to base64
+   * @private
+   */
+  async _fetchImageAsBase64(imageUrl) {
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      return Buffer.from(buffer).toString('base64');
+    } catch (error) {
+      console.error(`[GeminiAdaptor] Error fetching image: ${error.message}`);
+      return null;
     }
   }
 
