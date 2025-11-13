@@ -128,6 +128,7 @@ export function Stage4Storyboard({
           selectedPersonaName: selectedPersona.coreIdentity?.name || 'Unknown',
           selectedPersonaDescription: selectedPersona.coreIdentity?.bio || '',
           selectedPersonaImage: selectedPersona.image?.url || '',
+          productImageUrl: project.campaignDetails.productImageUrl || '',
           narrativeTheme: selectedNarrative.title || '',
           narrativeStructure: selectedNarrative.structure || '',
           numberOfScenes: 5,
