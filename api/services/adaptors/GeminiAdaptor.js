@@ -380,7 +380,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
           }
 
           console.log(`[GeminiAdaptor] Operation completed after ${pollCount} polls`);
-          return data;
+          return data.response || data.result;
         }
 
         // Wait before next poll
