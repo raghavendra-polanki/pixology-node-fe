@@ -1,11 +1,9 @@
 /**
  * VideoGenerationServiceV2
  *
- * Generates videos from screenplay scenes using Veo API
- * Follows ActionExecutor pattern for consistency
+ * Generates videos from screenplay scenes using AI Adaptor architecture
+ * Follows adaptor pattern for consistency with other V2 services
  */
-
-const { generateVideoWithVeo } = require('./videoGenerationService');
 
 class VideoGenerationServiceV2 {
   /**
@@ -15,7 +13,7 @@ class VideoGenerationServiceV2 {
    * @param {string} projectId - Project ID
    * @param {object} input - { screenplayScenes, storyboardScenes, videoDuration, aspectRatio, resolution }
    * @param {object} db - Firestore database
-   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance (not currently used)
+   * @param {object} AIAdaptorResolver - AI Adaptor Resolver instance
    * @returns {Promise<object>} { videos }
    */
   static async generateVideos(projectId, input, db, AIAdaptorResolver) {
@@ -40,6 +38,9 @@ class VideoGenerationServiceV2 {
       console.log(
         `[VideoGen] Generating ${screenplayScenes.length} videos for project ${projectId}`
       );
+
+      // Get video generation adaptor (Gemini for Veo API)
+      const videoAdaptor = await AIAdaptorResolver.getAdaptor('video');
 
       const videos = [];
 
@@ -69,31 +70,49 @@ class VideoGenerationServiceV2 {
             resolution,
           };
 
-          // Extract storyboard scene image URL if available
+          // Extract storyboard scene image URL or GCS URI
           const sceneImageUrl = storyboardScene?.image?.url || storyboardScene?.image || null;
-          if (sceneImageUrl) {
-            console.log(`[VideoGen] Using storyboard image for scene ${i + 1}: ${sceneImageUrl}`);
+          const sceneImageGcsUri = storyboardScene?.image?.gcsUri || null;
+
+          if (!sceneImageGcsUri && !sceneImageUrl) {
+            throw new Error(`Missing scene image for scene ${i + 1}`);
           }
 
-          // Generate video using legacy service (Veo API)
-          const videoResult = await generateVideoWithVeo(
-            sceneImageUrl,  // Pass storyboard scene image URL for image-to-video generation
-            combinedSceneData,
-            projectId,
-            i
-          );
+          console.log(`[VideoGen] Using storyboard image for scene ${i + 1}: ${sceneImageGcsUri || sceneImageUrl}`);
+
+          // Build video prompt
+          const prompt = this._buildVideoPrompt(combinedSceneData, i);
+
+          // Parse duration (remove 's' suffix if present)
+          const durationSeconds = parseInt(combinedSceneData.duration.toString().replace('s', ''));
+
+          // Generate video using AI adaptor
+          const videoResult = await videoAdaptor.adaptor.generateVideo(prompt, {
+            imageGcsUri: sceneImageGcsUri || sceneImageUrl, // TODO: Convert HTTP URLs to GCS URIs if needed
+            durationSeconds: durationSeconds || 6,
+            aspectRatio: combinedSceneData.aspectRatio,
+            resolution: combinedSceneData.resolution,
+            projectId: projectId,
+            sceneNumber: i + 1,
+          });
 
           // Return structured video data
           videos.push({
             sceneNumber: screenplayEntry.sceneNumber || i + 1,
             sceneTitle: combinedSceneData.title,
             videoUrl: videoResult.videoUrl,
-            videoId: videoResult.videoId,
-            duration: combinedSceneData.duration,
-            videoFormat: videoResult.videoFormat || 'mp4',
+            videoFormat: videoResult.format || 'mp4',
+            duration: videoResult.duration,
+            resolution: videoResult.resolution,
+            aspectRatio: videoResult.aspectRatio,
             generatedAt: new Date().toISOString(),
-            uploadedToGCS: videoResult.uploadedToGCS,
-            metadata: videoResult.metadata,
+            uploadedToGCS: true,
+            metadata: {
+              model: videoResult.model,
+              backend: videoResult.backend,
+              operationName: videoResult.operationName,
+              prompt: prompt.substring(0, 200),
+            },
           });
 
           // Rate limiting between video generations
@@ -135,6 +154,51 @@ class VideoGenerationServiceV2 {
       console.error('[VideoGen] Error:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Build video generation prompt from scene data
+   * @private
+   */
+  static _buildVideoPrompt(sceneData, sceneIndex) {
+    const {
+      title = `Scene ${sceneIndex + 1}`,
+      visual = 'Professional video scene',
+      cameraFlow = 'Smooth camera movement',
+      script = 'Scene dialogue or narration',
+      backgroundMusic = 'Background music playing',
+      description = 'Scene description',
+    } = sceneData;
+
+    return `
+Create a professional UGC-style marketing video for this scene:
+
+**Scene Title:** ${title}
+**Scene Number:** ${sceneIndex + 1}
+
+**Visual Description:**
+${visual}
+
+**Camera Direction:**
+${cameraFlow}
+
+**Script/Dialogue/Narration:**
+${script}
+
+**Background Audio/Music:**
+${backgroundMusic}
+
+**Overall Scene Description:**
+${description}
+
+**Requirements:**
+- Professional cinematography quality
+- Natural, relatable UGC-style video
+- Smooth camera movements as specified
+- Authentic lighting and atmosphere
+- Include the script/dialogue delivery
+- Background music should enhance the scene
+`.trim();
   }
 }
 

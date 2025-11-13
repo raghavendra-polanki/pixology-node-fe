@@ -1,6 +1,6 @@
 import express from 'express';
 import https from 'https';
-import { generateVideoWithVeo3DirectAPI } from './services/videoGenerationService.js';
+import AIAdaptorResolver from './services/adaptors/AIAdaptorResolver.js';
 
 const router = express.Router();
 
@@ -43,15 +43,17 @@ router.post('/generate-veo3', async (req, res) => {
     console.log(`  Image: ${sceneImageGcsUri}`);
     console.log(`  Duration: ${durationSeconds}s`);
 
-    // Call Veo 3 Direct API
-    const result = await generateVideoWithVeo3DirectAPI({
-      sceneImageGcsUri,
-      prompt,
-      sceneData,
+    // Get video generation adaptor (Gemini for Veo API)
+    const videoAdaptor = await AIAdaptorResolver.getAdaptor('video');
+
+    // Call Veo 3 API via adaptor
+    const result = await videoAdaptor.adaptor.generateVideo(prompt, {
+      imageGcsUri: sceneImageGcsUri,
       durationSeconds,
       aspectRatio,
       resolution,
       projectId,
+      sceneNumber: sceneNumber || sceneData?.sceneNumber || 1,
     });
 
     console.log(`[Videos API] Successfully generated video for Scene ${sceneNumber}`);
@@ -59,16 +61,21 @@ router.post('/generate-veo3', async (req, res) => {
     // Return the result
     return res.status(200).json({
       success: true,
-      sceneNumber: result.sceneNumber,
-      sceneTitle: result.sceneTitle,
+      sceneNumber: sceneNumber || sceneData?.sceneNumber || 1,
+      sceneTitle: sceneData?.title || `Scene ${sceneNumber}`,
       videoUrl: result.videoUrl,
-      videoFormat: result.videoFormat,
+      videoFormat: result.format,
       duration: result.duration,
       resolution: result.resolution,
       aspectRatio: result.aspectRatio,
-      generatedAt: result.generatedAt,
-      uploadedToGCS: result.uploadedToGCS,
-      metadata: result.metadata,
+      generatedAt: new Date().toISOString(),
+      uploadedToGCS: true,
+      metadata: {
+        model: result.model,
+        backend: result.backend,
+        operationName: result.operationName,
+        prompt: prompt.substring(0, 200),
+      },
     });
   } catch (error) {
     console.error('[Videos API] Error generating video:', error);

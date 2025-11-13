@@ -2,11 +2,13 @@
  * GeminiAdaptor
  *
  * Adaptor for Google Gemini API
- * Supports text generation, image generation, and vision capabilities
+ * Supports text generation, image generation, video generation, and vision capabilities
  */
 
 import BaseAIAdaptor from './BaseAIAdaptor.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { google } from 'googleapis';
+import fs from 'fs';
 
 export default class GeminiAdaptor extends BaseAIAdaptor {
   constructor(modelId, config = {}, credentials = {}) {
@@ -136,6 +138,276 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
   }
 
   /**
+   * Generate video using Vertex AI Veo 3.1 API
+   * @param {string} prompt - Text prompt for video generation
+   * @param {object} options - Options object
+   * @param {string} options.imageGcsUri - GCS URI of reference image (gs://bucket/path/image.jpg)
+   * @param {number} options.durationSeconds - Video duration (4, 6, or 8 seconds)
+   * @param {string} options.aspectRatio - Aspect ratio (default: 16:9)
+   * @param {string} options.resolution - Resolution (720p or 1080p)
+   * @param {string} options.projectId - Project ID for organizing output
+   * @param {number} options.sceneNumber - Scene number for path organization
+   */
+  async generateVideo(prompt, options = {}) {
+    try {
+      const {
+        imageGcsUri,
+        durationSeconds = 6,
+        aspectRatio = '16:9',
+        resolution = '720p',
+        projectId = 'default',
+        sceneNumber = 1,
+        storageUri = null,
+      } = options;
+
+      const gcpProjectId = process.env.GCP_PROJECT_ID;
+      const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
+      const gcsBucket = process.env.GCS_BUCKET_NAME || 'pixology-personas';
+      const veoModelId = 'veo-3.1-generate-preview';
+
+      if (!gcpProjectId) {
+        throw new Error('GCP_PROJECT_ID environment variable not set');
+      }
+
+      if (!imageGcsUri) {
+        throw new Error('imageGcsUri is required (GCS URI format: gs://bucket/path/image.jpg)');
+      }
+
+      // Validate Veo 3 constraints
+      const ALLOWED_DURATIONS = [4, 6, 8];
+      if (!ALLOWED_DURATIONS.includes(durationSeconds)) {
+        throw new Error(`Invalid duration: ${durationSeconds}s. Veo 3 only supports: ${ALLOWED_DURATIONS.join(', ')}s`);
+      }
+
+      const ALLOWED_RESOLUTIONS = ['720p', '1080p'];
+      if (!ALLOWED_RESOLUTIONS.includes(resolution)) {
+        throw new Error(`Invalid resolution: ${resolution}. Veo 3 only supports: ${ALLOWED_RESOLUTIONS.join(', ')}`);
+      }
+
+      console.log(`[GeminiAdaptor] Generating video with Veo 3 for scene ${sceneNumber}`);
+      console.log(`[GeminiAdaptor] Image: ${imageGcsUri}`);
+      console.log(`[GeminiAdaptor] Duration: ${durationSeconds}s, Resolution: ${resolution}`);
+
+      // Get access token
+      const accessToken = await this._getAccessToken();
+
+      // Build GCS output path
+      const outputStorageUri = storageUri || `gs://${gcsBucket}/videos/${projectId}/scene_${sceneNumber}/`;
+
+      // Build request payload
+      const requestPayload = {
+        instances: [
+          {
+            prompt: prompt,
+            image: {
+              gcsUri: imageGcsUri,
+              mimeType: 'image/jpeg',
+            },
+          },
+        ],
+        parameters: {
+          durationSeconds: durationSeconds,
+          aspectRatio: aspectRatio,
+          resolution: resolution,
+          enhancePrompt: true,
+          generateAudio: true,
+          storageUri: outputStorageUri,
+        },
+      };
+
+      // Call Veo 3 API
+      const apiEndpoint = `https://${gcpLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${gcpLocation}/publishers/google/models/${veoModelId}:predictLongRunning`;
+
+      console.log(`[GeminiAdaptor] Calling Veo 3 API...`);
+
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestPayload),
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP ${response.status}`;
+
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+          } else {
+            const text = await response.text();
+            errorMessage = text.substring(0, 500);
+          }
+        } catch (parseError) {
+          errorMessage = `Could not parse error response. Status: ${response.status}`;
+        }
+
+        throw new Error(`Veo 3 API error: ${errorMessage}`);
+      }
+
+      const operationData = await response.json();
+      const operationName = operationData.name;
+
+      console.log(`[GeminiAdaptor] Operation started: ${operationName}`);
+
+      // Poll for completion
+      const result = await this._pollVeo3Operation(operationName, gcpLocation, gcpProjectId, veoModelId);
+
+      // Extract video URL
+      const videoUrl = this._extractVideoUrl(result);
+
+      console.log(`[GeminiAdaptor] Video generation completed: ${videoUrl}`);
+
+      return {
+        videoUrl,
+        format: 'mp4',
+        duration: `${durationSeconds}s`,
+        resolution,
+        aspectRatio,
+        model: veoModelId,
+        backend: 'gemini',
+        operationName,
+      };
+    } catch (error) {
+      throw new Error(`Gemini video generation error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get authenticated access token for Vertex AI
+   * @private
+   */
+  async _getAccessToken() {
+    try {
+      const keyFilePath = process.env.VEO3_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+      if (!keyFilePath) {
+        throw new Error('No service account key file configured. Set GOOGLE_APPLICATION_CREDENTIALS or VEO3_SERVICE_ACCOUNT_KEY');
+      }
+
+      const auth = new google.auth.GoogleAuth({
+        keyFile: keyFilePath,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      });
+
+      const client = await auth.getClient();
+      const response = await client.getAccessToken();
+
+      const token = response?.token || response?.access_token || response;
+
+      if (!token || typeof token !== 'string') {
+        throw new Error(`Invalid access token format received`);
+      }
+
+      return token;
+    } catch (error) {
+      throw new Error(`Failed to get access token: ${error.message}`);
+    }
+  }
+
+  /**
+   * Poll Veo 3 long-running operation until completion
+   * @private
+   */
+  async _pollVeo3Operation(operationName, gcpLocation, gcpProjectId, veoModelId, maxWaitMs = 3600000) {
+    const startTime = Date.now();
+    const pollIntervalMs = 15000; // 15 seconds
+    let pollCount = 0;
+
+    console.log(`[GeminiAdaptor] Polling operation for completion...`);
+
+    // Get fresh access token for polling
+    const pollingToken = await this._getAccessToken();
+
+    while (Date.now() - startTime < maxWaitMs) {
+      try {
+        const url = `https://${gcpLocation}-aiplatform.googleapis.com/v1/projects/${gcpProjectId}/locations/${gcpLocation}/publishers/google/models/${veoModelId}:fetchPredictOperation`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${pollingToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            operationName: operationName,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Poll failed: ${response.status} - ${errorText.substring(0, 200)}`);
+        }
+
+        const data = await response.json();
+        pollCount++;
+
+        if (data.done) {
+          if (data.error) {
+            throw new Error(`Operation failed: ${data.error.message}`);
+          }
+
+          console.log(`[GeminiAdaptor] Operation completed after ${pollCount} polls`);
+          return data;
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      } catch (error) {
+        if (error.message.includes('Operation failed')) {
+          throw error;
+        }
+        console.warn(`[GeminiAdaptor] Poll attempt ${pollCount} error: ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      }
+    }
+
+    throw new Error(`Operation timeout after ${maxWaitMs}ms`);
+  }
+
+  /**
+   * Extract video URL from Veo 3 operation result
+   * @private
+   */
+  _extractVideoUrl(result) {
+    // Try multiple paths to find the video URL
+    if (result?.videos?.[0]?.gcsUri) {
+      const gcsUri = result.videos[0].gcsUri;
+      // Convert gs:// to https:// URL
+      return `https://storage.googleapis.com/${gcsUri.substring(5)}`;
+    }
+
+    if (result?.predictions?.[0]?.videoUri) {
+      return result.predictions[0].videoUri;
+    }
+
+    if (result?.predictions?.[0]?.gcsUri) {
+      const gcsUri = result.predictions[0].gcsUri;
+      return `https://storage.googleapis.com/${gcsUri.substring(5)}`;
+    }
+
+    if (result?.videoUri) {
+      return result.videoUri;
+    }
+
+    if (result?.gcsUri) {
+      const gcsUri = result.gcsUri;
+      return `https://storage.googleapis.com/${gcsUri.substring(5)}`;
+    }
+
+    if (typeof result === 'string' && result.startsWith('gs://')) {
+      return `https://storage.googleapis.com/${result.substring(5)}`;
+    }
+
+    throw new Error(
+      `Unable to extract video URL from result. Result structure: ${JSON.stringify(result).substring(0, 200)}`
+    );
+  }
+
+  /**
    * Fetch image from URL and convert to base64
    * @private
    */
@@ -245,7 +517,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         capabilities: {
           textGeneration: true,
           imageGeneration: true,
-          videoGeneration: false,
+          videoGeneration: true,
           vision: true,
           multimodal: true,
         },
@@ -263,7 +535,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         capabilities: {
           textGeneration: true,
           imageGeneration: true,
-          videoGeneration: false,
+          videoGeneration: true,
           vision: true,
           multimodal: true,
         },
@@ -281,7 +553,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         capabilities: {
           textGeneration: true,
           imageGeneration: true,
-          videoGeneration: false,
+          videoGeneration: true,
           vision: true,
           multimodal: true,
         },
