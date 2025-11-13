@@ -1,6 +1,6 @@
 import express from 'express';
 import https from 'https';
-import AIAdaptorResolver from './services/adaptors/AIAdaptorResolver.js';
+import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 
 const router = express.Router();
 
