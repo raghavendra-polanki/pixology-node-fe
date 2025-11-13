@@ -5,7 +5,7 @@ import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
+import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 
 interface Stage6Props {
   project?: any;

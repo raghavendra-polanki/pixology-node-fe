@@ -7,7 +7,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
+import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 
 interface ScreenplayEntry {
   sceneNumber: number;

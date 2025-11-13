@@ -7,7 +7,7 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
+import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 
 // UI representation of persona (different from PersonaData in data model)
 interface Persona {

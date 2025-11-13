@@ -22,7 +22,7 @@ import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
+import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 
 interface Scene {
   id: string;

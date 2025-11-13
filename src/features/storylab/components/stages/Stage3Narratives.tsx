@@ -16,7 +16,7 @@ import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../recipe/PromptTemplateEditor';
+import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 
 interface Narrative {
   id: string;
