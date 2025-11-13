@@ -42,7 +42,6 @@ import storyboardRouter from './api/storyboard.js';
 // New AI Adaptor Architecture routes
 import adaptorsRouter from './api/adaptors.js';
 import promptsRouter from './api/prompts.js';
-import usageRouter from './api/usage.js';
 import generationRouter from './api/generation.js';
 import { initializeAdaptors } from './api/services/adaptors/index.js';
 
@@ -171,9 +170,6 @@ app.use('/api/adaptors', adaptorsRouter);
 
 // Prompt template management API routes
 app.use('/api/prompts', promptsRouter);
-
-// Usage tracking and analytics API routes
-app.use('/api/usage', usageRouter);
 
 // V2 Generation API routes (adaptor-aware generation)
 app.use('/api/generation', generationRouter);

@@ -48,18 +48,6 @@ interface PromptTemplate {
   createdAt?: string;
 }
 
-interface UsageStats {
-  adaptorId: string;
-  modelId: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalRequests: number;
-  successfulRequests: number;
-  failedRequests: number;
-  totalCost: number;
-  lastUsed: string;
-  period: 'day' | 'week' | 'month' | 'all';
-}
 
 class AdaptorService {
   private apiBaseUrl: string;
@@ -187,31 +175,6 @@ class AdaptorService {
       const error = await response.json();
       throw new Error(error.error || 'Failed to save adaptor parameters');
     }
-  }
-
-  /**
-   * Get usage statistics
-   */
-  async getUsageStats(
-    projectId: string,
-    period: 'day' | 'week' | 'month' | 'all' = 'month'
-  ): Promise<UsageStats[]> {
-    const response = await fetch(
-      `${this.apiBaseUrl}/api/usage/stats?projectId=${projectId}&period=${period}`,
-      {
-        method: 'GET',
-        headers: this.getAuthHeader(),
-        credentials: 'include',
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch usage statistics');
-    }
-
-    const data = await response.json();
-    return data.stats || [];
   }
 
   /**
@@ -356,4 +319,4 @@ class AdaptorService {
 }
 
 export default AdaptorService;
-export type { AdaptorInfo, AdaptorConfig, PromptTemplate, UsageStats };
+export type { AdaptorInfo, AdaptorConfig, PromptTemplate };
