@@ -1,6 +1,7 @@
 import express from 'express';
 import https from 'https';
 import AIAdaptorResolver from './services/AIAdaptorResolver.js';
+import { db } from './config/firestore.js';
 
 const router = express.Router();
 
@@ -44,7 +45,12 @@ router.post('/generate-veo3', async (req, res) => {
     console.log(`  Duration: ${durationSeconds}s`);
 
     // Get video generation adaptor (Gemini for Veo API)
-    const videoAdaptor = await AIAdaptorResolver.getAdaptor('video');
+    const videoAdaptor = await AIAdaptorResolver.resolveAdaptor(
+      projectId,
+      'stage_6_video',
+      'videoGeneration',
+      db
+    );
 
     // Call Veo 3 API via adaptor
     const result = await videoAdaptor.adaptor.generateVideo(prompt, {

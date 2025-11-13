@@ -40,7 +40,12 @@ class VideoGenerationServiceV2 {
       );
 
       // Get video generation adaptor (Gemini for Veo API)
-      const videoAdaptor = await AIAdaptorResolver.getAdaptor('video');
+      const videoAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_6_video',
+        'videoGeneration',
+        db
+      );
 
       const videos = [];
 
