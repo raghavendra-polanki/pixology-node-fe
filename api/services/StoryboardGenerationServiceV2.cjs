@@ -7,7 +7,6 @@
  */
 
 const PromptManager = require('./PromptManager.cjs');
-const ImageGenerationService = require('./imageGenerationService');
 const GCSService = require('./gcsService');
 
 class StoryboardGenerationServiceV2 {

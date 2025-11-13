@@ -36,7 +36,6 @@ import helmet from 'helmet';
 import authRouter from './api/auth.js';
 import allowlistRouter from './api/allowlist.js';
 import projectsRouter from './api/projects.js';
-import personasRouter from './api/personas.js';
 import videosRouter from './api/videos.js';
 import storyboardRouter from './api/storyboard.js';
 
@@ -160,9 +159,6 @@ app.use('/api/allowlist', allowlistRouter);
 
 // Projects API routes
 app.use('/api/projects', projectsRouter);
-
-// Personas generation API routes
-app.use('/api/personas', personasRouter);
 
 // Video generation API routes
 app.use('/api/videos', videosRouter);
