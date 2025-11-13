@@ -35,6 +35,11 @@ router.post('/edit-image', async (req, res) => {
     console.log(`[Storyboard] Editing image for scene ${sceneNumber} in project ${projectId}`);
     console.log(`[Storyboard] Edit request: ${editPrompt}`);
 
+    // Fetch project data to get product image
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    const projectData = projectDoc.data();
+    const productImageUrl = projectData?.campaignDetails?.productImageUrl;
+
     // Resolve image generation adaptor
     const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
       projectId,
@@ -50,17 +55,23 @@ router.post('/edit-image', async (req, res) => {
 
     console.log(`[Storyboard] Generated edit prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
-    // Extract original image URL for reference
+    // Collect reference images (original scene and product)
+    const referenceImages = [];
     const originalImageUrl = sceneData.image?.url || sceneData.image;
     if (originalImageUrl) {
-      console.log(`[Storyboard] Using reference image: ${originalImageUrl}`);
+      referenceImages.push(originalImageUrl);
+      console.log(`[Storyboard] Using original scene image reference`);
+    }
+    if (productImageUrl) {
+      referenceImages.push(productImageUrl);
+      console.log(`[Storyboard] Using product image reference`);
     }
 
-    // Generate new image using adaptor with original image as reference
+    // Generate new image using adaptor with reference images
     const imageResult = await imageAdaptor.adaptor.generateImage(enhancedPrompt, {
       size: '1024x1024',
       quality: 'standard',
-      referenceImageUrl: originalImageUrl, // Pass original image for visual consistency
+      referenceImageUrl: referenceImages.length > 0 ? referenceImages : undefined, // Pass original scene and product images
     });
 
     // Handle image URL - convert data URLs to GCS URLs if needed
@@ -113,8 +124,11 @@ function buildImageEditPrompt(sceneData, editPrompt) {
 
   return `Generate a professional UGC-style scene image for a marketing video with the following modifications:
 
-**Original Scene Reference:**
-A reference image of the original scene is provided for your visual context.
+**Reference Images:**
+- Original Scene Reference: The current scene image is provided for visual context and consistency
+- Product Reference Image: The actual product image is provided - maintain exact product appearance
+
+**Original Scene Details:**
 Title: ${title}
 Description: ${description}
 Location/Setting: ${location}
@@ -126,15 +140,18 @@ Key Frame Description: ${keyFrameDescription}
 ${editPrompt}
 
 **Instructions:**
-Using the provided reference image as a visual guide, apply the requested changes while maintaining the overall style, composition, and quality of the original scene. The edited image should:
-- Keep the same visual style and cinematography as the reference image
+Using the provided reference images as visual guides, apply the requested changes while maintaining the overall style, composition, and quality of the original scene. The edited image should:
+- Keep the same visual style and cinematography as the original scene reference
 - Maintain consistent lighting, color grading, and composition
+- Use the exact product from the product reference image - do not alter its appearance
 - Apply ONLY the specific changes requested in the edit prompt
 - Preserve all other elements that are not mentioned in the edit request
 - Remain high-quality, cinematic, and professional
 - Continue to be authentic and suitable for UGC marketing
 
-Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference image.`;
+IMPORTANT: If the product appears in the scene, ensure it looks identical to the product reference image provided. Do not alter the product's colors, design, or features.
+
+Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference images.`;
 }
 
 export default router;
