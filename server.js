@@ -45,7 +45,6 @@ import adaptorsRouter from './api/adaptors.js';
 import promptsRouter from './api/prompts.js';
 import usageRouter from './api/usage.js';
 import generationRouter from './api/generation.js';
-import seedsRouter from './api/seeds.js';
 import { initializeAdaptors } from './api/services/adaptors/index.js';
 
 const app = express();
@@ -182,9 +181,6 @@ app.use('/api/usage', usageRouter);
 
 // V2 Generation API routes (adaptor-aware generation)
 app.use('/api/generation', generationRouter);
-
-// Database seeding API routes
-app.use('/api/seeds', seedsRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {
