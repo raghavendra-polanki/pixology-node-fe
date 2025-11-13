@@ -69,9 +69,15 @@ class VideoGenerationServiceV2 {
             resolution,
           };
 
+          // Extract storyboard scene image URL if available
+          const sceneImageUrl = storyboardScene?.image?.url || storyboardScene?.image || null;
+          if (sceneImageUrl) {
+            console.log(`[VideoGen] Using storyboard image for scene ${i + 1}: ${sceneImageUrl}`);
+          }
+
           // Generate video using legacy service (Veo API)
           const videoResult = await generateVideoWithVeo(
-            null,  // imageBase64 - can be added later if storyboard images available
+            sceneImageUrl,  // Pass storyboard scene image URL for image-to-video generation
             combinedSceneData,
             projectId,
             i

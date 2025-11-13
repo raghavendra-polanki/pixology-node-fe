@@ -147,13 +147,13 @@ Generate a high-quality, professional marketing video that brings this scene to 
 /**
  * Generate video using Vertex AI Veo 3.1 API and save directly to GCS
  *
- * @param {string} imageBase64 - Base64 encoded storyboard image
+ * @param {string} imageUrl - URL of storyboard scene image
  * @param {object} sceneData - Scene data from screenplay
  * @param {string} projectId - Project ID for GCS storage
  * @param {number} sceneIndex - Index of the scene (0-based)
  * @returns {Promise<object>} Generated video info with GCS URL
  */
-export async function generateVideoWithVeo(imageBase64, sceneData, projectId, sceneIndex = 0) {
+export async function generateVideoWithVeo(imageUrl, sceneData, projectId, sceneIndex = 0) {
   try {
     console.log(`Generating video for scene ${sceneIndex + 1}...`);
 
@@ -161,7 +161,7 @@ export async function generateVideoWithVeo(imageBase64, sceneData, projectId, sc
     console.log(`Scene ${sceneIndex + 1} Video Prompt:`, prompt.substring(0, 150) + '...');
 
     // Call Veo API and upload directly to GCS
-    const videoUrl = await callVeoAPIAndUploadToGCS(imageBase64, prompt, projectId, sceneIndex);
+    const videoUrl = await callVeoAPIAndUploadToGCS(imageUrl, prompt, projectId, sceneIndex);
 
     console.log(`Video generated and uploaded for scene ${sceneIndex + 1}: ${videoUrl}`);
 
@@ -344,21 +344,50 @@ async function pollOperationStatus(operationName, accessToken, gcpRegion, maxWai
  * Call Veo 3.1 API directly for video generation and upload to GCS
  * @private
  */
-async function callVeoAPIAndUploadToGCS(imageBase64, description, projectId, sceneIndex) {
+async function callVeoAPIAndUploadToGCS(imageUrl, description, projectId, sceneIndex) {
   try {
     console.log('🎬 Generating video with direct Veo 3.1 API...');
 
-    // Debug image data if provided
-    if (imageBase64) {
-      debugAnalyzeImage(imageBase64);
-      debugSaveImage(imageBase64, sceneIndex, 'original');
-    }
+    let sceneImageGcsUri = null;
 
     // Get GCP configuration
     const gcpProjectId = process.env.GCP_PROJECT_ID;
     const gcpLocation = process.env.GCP_LOCATION || 'us-central1';
     const gcsBucket = process.env.GCS_BUCKET_NAME || 'pixology-personas';
     const veoModelId = 'veo-3.1-generate-preview';
+
+    // If image URL is provided, fetch and upload to GCS for Veo API
+    if (imageUrl) {
+      try {
+        console.log(`📸 Fetching storyboard image from: ${imageUrl}`);
+
+        // Fetch image from URL
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+        }
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+
+        // Upload to GCS
+        const GCSService = await import('./gcsService.js');
+        const sceneNumber = sceneIndex + 1;
+        const sceneImageUrl = await GCSService.uploadImageToGCS(
+          imageBuffer,
+          projectId,
+          `scene_${sceneNumber}_storyboard`
+        );
+
+        // Convert public URL to GCS URI format required by Veo API
+        // From: https://storage.googleapis.com/bucket-name/path/to/file.png
+        // To: gs://bucket-name/path/to/file.png
+        sceneImageGcsUri = sceneImageUrl.replace('https://storage.googleapis.com/', 'gs://');
+
+        console.log(`✓ Uploaded storyboard image to GCS: ${sceneImageGcsUri}`);
+      } catch (uploadError) {
+        console.warn(`⚠️  Failed to upload storyboard image: ${uploadError.message}`);
+        console.warn('   Continuing with text-to-video generation');
+      }
+    }
 
     if (!gcpProjectId) {
       throw new Error('GCP_PROJECT_ID environment variable not set');
@@ -392,18 +421,24 @@ async function callVeoAPIAndUploadToGCS(imageBase64, description, projectId, sce
 
     console.log(`   Output location: ${outputStorageUri}`);
 
-    // Build request payload (without image for now - text-to-video)
-    // TODO: Add image support by uploading imageBase64 to GCS first
+    // Build request payload
+    const instance = {
+      prompt: description,
+    };
+
+    // Add image if available (image-to-video)
+    if (sceneImageGcsUri) {
+      instance.image = {
+        gcsUri: sceneImageGcsUri,
+        mimeType: 'image/png',
+      };
+      console.log(`🎨 Using image-to-video generation with: ${sceneImageGcsUri}`);
+    } else {
+      console.log(`📝 Using text-to-video generation`);
+    }
+
     const requestPayload = {
-      instances: [
-        {
-          prompt: description,
-          // image: {
-          //   gcsUri: sceneImageGcsUri,
-          //   mimeType: 'image/jpeg',
-          // },
-        },
-      ],
+      instances: [instance],
       parameters: {
         durationSeconds: durationSeconds,
         aspectRatio: '16:9',
