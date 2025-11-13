@@ -1,5 +1,5 @@
 /**
- * StoryboardGenerationServiceV2
+ * StoryboardGenerationService
  *
  * Refactored for adaptor-aware operations
  * Generates storyboard scenes using configured AI adaptor with prompt templates
@@ -9,7 +9,7 @@
 const PromptManager = require('./PromptManager.cjs');
 const GCSService = require('./gcsService');
 
-class StoryboardGenerationServiceV2 {
+class StoryboardGenerationService {
   /**
    * Generate storyboard scenes for a project
    *
@@ -333,4 +333,4 @@ Create a high-quality, cinematic scene that matches the description above while 
   }
 }
 
-module.exports = StoryboardGenerationServiceV2;
+module.exports = StoryboardGenerationService;

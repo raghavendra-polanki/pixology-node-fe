@@ -1,6 +1,6 @@
 /**
  * Generation API
- * Exposes V2 generation services that use AI adaptor architecture
+ * Exposes generation services that use AI adaptor architecture
  * Replaces recipe-based generation with adaptor-aware services
  */
 
@@ -10,11 +10,11 @@ import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const PersonaGenerationServiceV2 = require('./services/PersonaGenerationServiceV2.cjs');
-const NarrativeGenerationServiceV2 = require('./services/NarrativeGenerationServiceV2.cjs');
-const StoryboardGenerationServiceV2 = require('./services/StoryboardGenerationServiceV2.cjs');
-const ScreenplayGenerationServiceV2 = require('./services/ScreenplayGenerationServiceV2.cjs');
-const VideoGenerationServiceV2 = require('./services/VideoGenerationServiceV2.cjs');
+const PersonaGenerationService = require('./services/PersonaGenerationService.cjs');
+const NarrativeGenerationService = require('./services/NarrativeGenerationService.cjs');
+const StoryboardGenerationService = require('./services/StoryboardGenerationService.cjs');
+const ScreenplayGenerationService = require('./services/ScreenplayGenerationService.cjs');
+const VideoGenerationService = require('./services/VideoGenerationService.cjs');
 
 const router = express.Router();
 
@@ -47,7 +47,7 @@ router.post('/personas', async (req, res) => {
       productImageUrl,
     };
 
-    const result = await PersonaGenerationServiceV2.generatePersonas(projectId, input, db, AIAdaptorResolver);
+    const result = await PersonaGenerationService.generatePersonas(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -93,7 +93,7 @@ router.post('/narratives', async (req, res) => {
       selectedPersonas,
     };
 
-    const result = await NarrativeGenerationServiceV2.generateNarratives(projectId, input, db, AIAdaptorResolver);
+    const result = await NarrativeGenerationService.generateNarratives(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -158,7 +158,7 @@ router.post('/storyboard', async (req, res) => {
       videoDuration,
     };
 
-    const result = await StoryboardGenerationServiceV2.generateStoryboardScenes(projectId, input, db, AIAdaptorResolver);
+    const result = await StoryboardGenerationService.generateStoryboardScenes(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -202,7 +202,7 @@ router.post('/screenplay', async (req, res) => {
       selectedPersonaName,
     };
 
-    const result = await ScreenplayGenerationServiceV2.generateScreenplay(projectId, input, db, AIAdaptorResolver);
+    const result = await ScreenplayGenerationService.generateScreenplay(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,
@@ -250,7 +250,7 @@ router.post('/video', async (req, res) => {
       resolution,
     };
 
-    const result = await VideoGenerationServiceV2.generateVideos(projectId, input, db, AIAdaptorResolver);
+    const result = await VideoGenerationService.generateVideos(projectId, input, db, AIAdaptorResolver);
 
     res.json({
       success: true,

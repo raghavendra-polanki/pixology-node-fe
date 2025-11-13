@@ -1,11 +1,11 @@
 /**
- * VideoGenerationServiceV2
+ * VideoGenerationService
  *
  * Generates videos from screenplay scenes using AI Adaptor architecture
  * Follows adaptor pattern for consistency with other V2 services
  */
 
-class VideoGenerationServiceV2 {
+class VideoGenerationService {
   /**
    * Generate videos for screenplay scenes
    * Combines screenplay and storyboard data to create videos
@@ -212,4 +212,4 @@ ${description}
   }
 }
 
-module.exports = VideoGenerationServiceV2;
+module.exports = VideoGenerationService;

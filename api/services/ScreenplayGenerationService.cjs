@@ -1,5 +1,5 @@
 /**
- * ScreenplayGenerationServiceV2
+ * ScreenplayGenerationService
  *
  * Refactored for adaptor-aware operations
  * Generates screenplay with detailed timings from storyboard scenes
@@ -7,7 +7,7 @@
 
 const PromptManager = require('./PromptManager.cjs');
 
-class ScreenplayGenerationServiceV2 {
+class ScreenplayGenerationService {
   /**
    * Generate screenplay from storyboard scenes
    *
@@ -170,4 +170,4 @@ Camera Work: ${scene.cameraWork || ''}`;
   }
 }
 
-module.exports = ScreenplayGenerationServiceV2;
+module.exports = ScreenplayGenerationService;

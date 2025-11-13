@@ -85,14 +85,14 @@ project_ai_config/
 
 #### Files Created:
 - `/api/services/ActionExecutorV2.js` - Refactored action execution
-- `/api/services/PersonaGenerationServiceV2.js` - Adaptor-aware personas
-- `/api/services/NarrativeGenerationServiceV2.js` - Adaptor-aware narratives
-- `/api/services/StoryboardGenerationServiceV2.js` - Adaptor-aware storyboards
-- `/api/services/ScreenplayGenerationServiceV2.js` - Adaptor-aware screenplays
-- `/api/services/VideoGenerationServiceV2.js` - Adaptor-aware video generation
+- `/api/services/PersonaGenerationService.js` - Adaptor-aware personas
+- `/api/services/NarrativeGenerationService.js` - Adaptor-aware narratives
+- `/api/services/StoryboardGenerationService.js` - Adaptor-aware storyboards
+- `/api/services/ScreenplayGenerationService.js` - Adaptor-aware screenplays
+- `/api/services/VideoGenerationService.js` - Adaptor-aware video generation
 
 #### Service Pattern:
-All V2 services follow this pattern:
+All services follow this pattern:
 ```javascript
 1. Resolve appropriate adaptor via AIAdaptorResolver
 2. Get prompt template via PromptManager
@@ -228,8 +228,8 @@ await fetch('/api/adaptors/config', {
   })
 });
 
-// Backend: PersonaGenerationServiceV2
-const result = await PersonaGenerationServiceV2.generatePersonas(
+// Backend: PersonaGenerationService
+const result = await PersonaGenerationService.generatePersonas(
   'project123',
   {
     productDescription: '...',
@@ -318,7 +318,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 The old system (hardcoded GeminiService calls) is gradually replaced:
 
-1. New recipes use V2 services (PersonaGenerationServiceV2, etc.)
+1. New recipes use services (PersonaGenerationService, etc.)
 2. Old recipes can coexist but won't benefit from multi-provider support
 3. Complete migration happens when recipes are updated to use ActionExecutorV2
 

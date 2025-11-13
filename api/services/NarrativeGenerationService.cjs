@@ -1,5 +1,5 @@
 /**
- * NarrativeGenerationServiceV2
+ * NarrativeGenerationService
  *
  * Refactored for adaptor-aware operations
  * Generates narrative themes using configured AI adaptor with prompt templates
@@ -7,7 +7,7 @@
 
 const PromptManager = require('./PromptManager.cjs');
 
-class NarrativeGenerationServiceV2 {
+class NarrativeGenerationService {
   /**
    * Generate narrative themes for a project
    *
@@ -156,4 +156,4 @@ class NarrativeGenerationServiceV2 {
   }
 }
 
-module.exports = NarrativeGenerationServiceV2;
+module.exports = NarrativeGenerationService;

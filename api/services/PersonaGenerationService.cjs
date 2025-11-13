@@ -1,5 +1,5 @@
 /**
- * PersonaGenerationServiceV2
+ * PersonaGenerationService
  *
  * Refactored for adaptor-aware operations
  * Generates personas using configured AI adaptor with prompt templates
@@ -8,7 +8,7 @@
 const PromptManager = require('./PromptManager.cjs');
 const GCSService = require('./gcsService');
 
-class PersonaGenerationServiceV2 {
+class PersonaGenerationService {
   /**
    * Generate personas for a project
    *
@@ -263,4 +263,4 @@ Create a high-quality, diverse, and relatable portrait. Use natural lighting, au
   }
 }
 
-module.exports = PersonaGenerationServiceV2;
+module.exports = PersonaGenerationService;
