@@ -13,9 +13,11 @@ const require = createRequire(import.meta.url);
 const PersonaGenerationService = require('./services/PersonaGenerationService.cjs');
 const PersonaStreamingService = require('./services/PersonaStreamingService.cjs');
 const NarrativeGenerationService = require('./services/NarrativeGenerationService.cjs');
+const NarrativeStreamingService = require('./services/NarrativeStreamingService.cjs');
 const StoryboardGenerationService = require('./services/StoryboardGenerationService.cjs');
 const StoryboardStreamingService = require('./services/StoryboardStreamingService.cjs');
 const ScreenplayGenerationService = require('./services/ScreenplayGenerationService.cjs');
+const ScreenplayStreamingService = require('./services/ScreenplayStreamingService.cjs');
 const VideoGenerationService = require('./services/VideoGenerationService.cjs');
 
 const router = express.Router();
@@ -214,6 +216,105 @@ router.post('/narratives', async (req, res) => {
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
+  }
+});
+
+/**
+ * POST /api/generation/narratives-stream
+ * Generate narratives with Server-Sent Events (SSE) streaming
+ * Provides real-time updates as narratives are generated
+ */
+router.post('/narratives-stream', async (req, res) => {
+  try {
+    const {
+      projectId,
+      productDescription,
+      targetAudience,
+      numberOfNarratives = 6,
+      selectedPersonas = [],
+    } = req.body;
+
+    if (!projectId || !productDescription || !targetAudience) {
+      return res.status(400).json({
+        error: 'projectId, productDescription, and targetAudience are required',
+      });
+    }
+
+    console.log(`[Generation] Starting streaming narrative generation for project ${projectId}`);
+
+    // Bypass compression for SSE
+    req.shouldCompress = false;
+
+    // Setup Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Content-Encoding', 'none');
+
+    // Ensure response is not buffered
+    res.flushHeaders();
+
+    // Helper to send SSE events
+    const sendEvent = (eventType, data) => {
+      const eventData = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+      res.write(eventData);
+
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    };
+
+    // Send initial start event
+    sendEvent('start', {
+      message: 'Starting narrative generation',
+      projectId,
+      numberOfNarratives,
+    });
+
+    const input = {
+      productDescription,
+      targetAudience,
+      numberOfNarratives,
+      selectedPersonas,
+    };
+
+    // Start progressive generation with callbacks
+    await NarrativeStreamingService.generateNarrativesProgressive(
+      projectId,
+      input,
+      db,
+      AIAdaptorResolver,
+      {
+        onNarrativeParsed: (data) => {
+          sendEvent('narrative', data);
+        },
+        onProgress: (data) => {
+          sendEvent('progress', data);
+        },
+        onComplete: (data) => {
+          sendEvent('complete', data);
+          res.end();
+        },
+        onError: (data) => {
+          sendEvent('error', data);
+          res.end();
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Error in streaming narrative generation:', error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to start narrative streaming',
+        message: error.message,
+      });
+    } else {
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ message: error.message, stage: 'initialization' })}\n\n`);
+      res.end();
+    }
   }
 });
 
@@ -447,6 +548,103 @@ router.post('/screenplay', async (req, res) => {
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
+  }
+});
+
+/**
+ * POST /api/generation/screenplay-stream
+ * Generate screenplay with Server-Sent Events (SSE) streaming
+ * Provides real-time updates as screenplay entries are generated
+ */
+router.post('/screenplay-stream', async (req, res) => {
+  try {
+    const {
+      projectId,
+      storyboardScenes,
+      videoDuration = '30s',
+      selectedPersonaName,
+    } = req.body;
+
+    if (!projectId || !storyboardScenes || storyboardScenes.length === 0) {
+      return res.status(400).json({
+        error: 'projectId and storyboardScenes array are required',
+      });
+    }
+
+    console.log(`[Generation] Starting streaming screenplay generation for project ${projectId}`);
+
+    // Bypass compression for SSE
+    req.shouldCompress = false;
+
+    // Setup Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Content-Encoding', 'none');
+
+    // Ensure response is not buffered
+    res.flushHeaders();
+
+    // Helper to send SSE events
+    const sendEvent = (eventType, data) => {
+      const eventData = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+      res.write(eventData);
+
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    };
+
+    // Send initial start event
+    sendEvent('start', {
+      message: 'Starting screenplay generation',
+      projectId,
+      numberOfEntries: storyboardScenes.length,
+    });
+
+    const input = {
+      storyboardScenes,
+      videoDuration,
+      selectedPersonaName,
+    };
+
+    // Start progressive generation with callbacks
+    await ScreenplayStreamingService.generateScreenplayProgressive(
+      projectId,
+      input,
+      db,
+      AIAdaptorResolver,
+      {
+        onScreenplayEntryParsed: (data) => {
+          sendEvent('entry', data);
+        },
+        onProgress: (data) => {
+          sendEvent('progress', data);
+        },
+        onComplete: (data) => {
+          sendEvent('complete', data);
+          res.end();
+        },
+        onError: (data) => {
+          sendEvent('error', data);
+          res.end();
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Error in streaming screenplay generation:', error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to start screenplay streaming',
+        message: error.message,
+      });
+    } else {
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ message: error.message, stage: 'initialization' })}\n\n`);
+      res.end();
+    }
   }
 });
 

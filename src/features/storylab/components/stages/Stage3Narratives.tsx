@@ -17,6 +17,7 @@ import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 interface Narrative {
   id: string;
@@ -194,6 +195,8 @@ export function Stage3Narratives({
   const [isGenerating, setIsGenerating] = useState(false);
   const [narrativeUpdateTrigger, setNarrativeUpdateTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
 
   // All refs SECOND
   const generatedNarrativesRef = useRef<HTMLDivElement>(null);
@@ -266,11 +269,13 @@ export function Stage3Narratives({
 
   const handleGenerateNarratives = async () => {
     setIsGenerating(true);
+    setGenerationProgress(0);
+    setGenerationStatus('Initializing...');
+
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
 
-      // Generate narratives using adaptor-based V2 service
-      const generationResponse = await fetch('/api/generation/narratives', {
+      const response = await fetch('/api/generation/narratives-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -285,42 +290,63 @@ export function Stage3Narratives({
         }),
       });
 
-      if (!generationResponse.ok) {
-        const errorData = await generationResponse.json();
-        throw new Error(errorData.error || 'Failed to generate narratives');
+      if (!response.ok) {
+        throw new Error('Failed to start narrative generation');
       }
 
-      const generationData = await generationResponse.json();
-      const narratives = generationData.data?.narratives || [];
-
-      if (!Array.isArray(narratives) || narratives.length === 0) {
-        throw new Error('No narratives returned from generation service');
+      if (!response.body) {
+        throw new Error('Response body is null');
       }
 
-      // Save generated narratives to project
-      const narrativesPayload = {
-        narratives,
-        generatedAt: new Date(),
-        model: 'narrative-generation-v2',
-        count: narratives.length,
-      };
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEventType = '';
+      let savedNarrativesData: any = null;
 
-      console.log('Saving narratives to project...', {
-        projectId: project.id,
-        narrativeCount: narratives.length,
-      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const savedProject = await updateAINarratives(narrativesPayload, project.id);
-      console.log('Narratives saved successfully');
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
 
-      // Small delay to ensure database write completes, then reload project
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          if (line.startsWith('event:')) {
+            currentEventType = line.substring(7).trim();
+          } else if (line.startsWith('data:')) {
+            try {
+              const data = JSON.parse(line.substring(5).trim());
+
+              if (currentEventType === 'narrative') {
+                // Narrative parsed - trigger re-render
+                setNarrativeUpdateTrigger(prev => prev + 1);
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'progress') {
+                setGenerationStatus(data.message || '');
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'complete') {
+                setGenerationStatus('Complete!');
+                setGenerationProgress(100);
+                savedNarrativesData = data;
+              } else if (currentEventType === 'error') {
+                throw new Error(data.message || 'Generation failed');
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE event:', parseError);
+            }
+          }
+        }
+      }
+
+      // Reload project after completion
       await new Promise(resolve => setTimeout(resolve, 1500));
       const reloadedProject = await hookResult.loadProject(project.id);
-
-      console.log('Project reloaded from DB:', {
-        hasAIGeneratedNarratives: !!reloadedProject?.aiGeneratedNarratives,
-        narrativesCount: reloadedProject?.aiGeneratedNarratives?.narratives?.length,
-      });
 
       // Scroll to the generated narratives section
       setTimeout(() => {
@@ -332,8 +358,13 @@ export function Stage3Narratives({
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate narratives';
       console.error('Error generating narratives:', errorMessage);
       alert(`Failed to generate narratives: ${errorMessage}`);
+      setGenerationStatus('Failed');
     } finally {
       setIsGenerating(false);
+      setTimeout(() => {
+        setGenerationProgress(0);
+        setGenerationStatus('');
+      }, 2000);
     }
   };
 
@@ -435,25 +466,35 @@ export function Stage3Narratives({
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={handleEditPrompts}
-              variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-              size="lg"
-            >
-              <SettingsIcon className="w-5 h-5 mr-2" />
-              Edit Prompts
-            </Button>
-            <Button
-              onClick={handleGenerateNarratives}
-              disabled={isGenerating}
-              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-              size="lg"
-            >
-              <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
-              {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
-            </Button>
+          <div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleEditPrompts}
+                variant="outline"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+                size="lg"
+              >
+                <SettingsIcon className="w-5 h-5 mr-2" />
+                Edit Prompts
+              </Button>
+              <Button
+                onClick={handleGenerateNarratives}
+                disabled={isGenerating}
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+                size="lg"
+              >
+                <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
+                {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
+              </Button>
+            </div>
+
+            {/* Progress Indicator */}
+            <GenerationProgressIndicator
+              isGenerating={isGenerating}
+              progress={generationProgress}
+              status={generationStatus}
+            />
+
             <style>{`
               @keyframes sparkIntense {
                 0%, 100% { opacity: 1; transform: scale(1); }

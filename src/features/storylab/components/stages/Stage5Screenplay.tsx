@@ -8,6 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 interface ScreenplayEntry {
   sceneNumber: number;
@@ -145,6 +146,8 @@ export function Stage5Screenplay({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
 
   // Sync screenplay with project data when loaded
   useEffect(() => {
@@ -156,9 +159,12 @@ export function Stage5Screenplay({
   }, [project?.aiGeneratedScreenplay]);
 
   const handleGenerate = async () => {
-    try {
-      setIsGenerating(true);
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setGenerationStatus('Initializing...');
+    setScreenplay([]);
 
+    try {
       // Validate required project data
       if (!project?.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
         throw new Error('No storyboard scenes found. Please generate storyboard first.');
@@ -175,10 +181,7 @@ export function Stage5Screenplay({
       const selectedPersonaName = selectedPersona.coreIdentity?.name || 'Character';
       const videoDuration = project?.campaignDetails?.videoDuration || '30s';
 
-      console.log('Generating screenplay for scenes:', project.aiGeneratedStoryboard.scenes.length);
-
-      // Generate screenplay using adaptor-based V2 service
-      const generationResponse = await fetch('/api/generation/screenplay', {
+      const response = await fetch('/api/generation/screenplay-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -189,39 +192,96 @@ export function Stage5Screenplay({
         }),
       });
 
-      if (!generationResponse.ok) {
-        const errorData = await generationResponse.json();
-        throw new Error(errorData.error || 'Failed to generate screenplay');
+      if (!response.ok) {
+        throw new Error('Failed to start screenplay generation');
       }
 
-      const generationData = await generationResponse.json();
-      const screenplayEntries: ScreenplayEntry[] = generationData.data?.screenplay || [];
-
-      if (screenplayEntries.length === 0) {
-        throw new Error('No screenplay entries returned from generation service');
+      if (!response.body) {
+        throw new Error('Response body is null');
       }
 
-      console.log('Screenplay generation completed');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEventType = '';
+      const tempEntries = new Map<number, ScreenplayEntry>();
+      let savedScreenplayData: any = null;
 
-      // Update screenplay state
-      setScreenplay(screenplayEntries);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // Save to project
-      await updateAIScreenplay(
-        {
-          screenplay: screenplayEntries,
-          generatedAt: new Date(),
-          model: 'screenplay-generation-v2',
-        },
-        project?.id || projectId || ''
-      );
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
 
-      console.log('Screenplay saved successfully');
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          if (line.startsWith('event:')) {
+            currentEventType = line.substring(7).trim();
+          } else if (line.startsWith('data:')) {
+            try {
+              const data = JSON.parse(line.substring(5).trim());
+
+              if (currentEventType === 'entry') {
+                // Screenplay entry parsed
+                const entry: ScreenplayEntry = {
+                  sceneNumber: data.entry.sceneNumber || data.entryNumber,
+                  timeStart: data.entry.timeStart || '0:00',
+                  timeEnd: data.entry.timeEnd || '0:00',
+                  visual: data.entry.visual || '',
+                  cameraFlow: data.entry.cameraFlow || '',
+                  script: data.entry.script || '',
+                  backgroundMusic: data.entry.backgroundMusic || '',
+                  transition: data.entry.transition || 'Cut',
+                };
+
+                tempEntries.set(data.entryNumber, entry);
+                const updatedEntries = Array.from(tempEntries.values()).sort((a, b) => a.sceneNumber - b.sceneNumber);
+                setScreenplay([...updatedEntries]);
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'progress') {
+                setGenerationStatus(data.message || '');
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'complete') {
+                setGenerationStatus('Complete!');
+                setGenerationProgress(100);
+                savedScreenplayData = data;
+              } else if (currentEventType === 'error') {
+                throw new Error(data.message || 'Generation failed');
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE event:', parseError);
+            }
+          }
+        }
+      }
+
+      // Save to project after completion
+      if (savedScreenplayData) {
+        await updateAIScreenplay(
+          {
+            screenplay: savedScreenplayData.screenplay || [],
+            generatedAt: new Date(),
+            model: savedScreenplayData.model || 'unknown',
+            adaptor: savedScreenplayData.adaptor || 'unknown',
+          },
+          project?.id || projectId || ''
+        );
+      }
     } catch (error) {
       console.error('Error generating screenplay:', error);
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setGenerationStatus('Failed');
     } finally {
       setIsGenerating(false);
+      setTimeout(() => {
+        setGenerationProgress(0);
+        setGenerationStatus('');
+      }, 2000);
     }
   };
 
@@ -344,6 +404,14 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
               </>
             )}
           </Button>
+
+          {/* Progress Indicator */}
+          <GenerationProgressIndicator
+            isGenerating={isGenerating}
+            progress={generationProgress}
+            status={generationStatus}
+          />
+
           <style>{`
             @keyframes sparkIntense {
               0%, 100% { opacity: 1; transform: scale(1); }
