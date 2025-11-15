@@ -43,9 +43,10 @@ class ScreenplayGenerationService {
 
       console.log(`[ScreenplayGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
 
-      // 2. Get prompt template
-      const promptTemplate = await PromptManager.getPromptTemplate(
+      // 2. Get prompt template for text generation capability
+      const textPrompt = await PromptManager.getPromptByCapability(
         'stage_5_screenplay',
+        'textGeneration',
         projectId,
         db
       );
@@ -69,7 +70,7 @@ Camera Work: ${scene.cameraWork || ''}`;
       };
 
       const resolvedPrompt = PromptManager.resolvePrompt(
-        promptTemplate.prompts.textGeneration,
+        textPrompt,
         variables
       );
 

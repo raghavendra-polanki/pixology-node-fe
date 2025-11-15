@@ -40,9 +40,10 @@ class NarrativeGenerationService {
 
       console.log(`[NarrativeGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
 
-      // 2. Get prompt template
-      const promptTemplate = await PromptManager.getPromptTemplate(
+      // 2. Get prompt template for text generation capability
+      const textPrompt = await PromptManager.getPromptByCapability(
         'stage_3_narratives',
+        'textGeneration',
         projectId,
         db
       );
@@ -56,7 +57,7 @@ class NarrativeGenerationService {
       };
 
       const resolvedPrompt = PromptManager.resolvePrompt(
-        promptTemplate.prompts.textGeneration,
+        textPrompt,
         variables
       );
 

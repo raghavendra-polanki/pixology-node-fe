@@ -18,11 +18,12 @@ class PromptManager {
 
   /**
    * Get prompt template for a stage with project-specific overrides
+   * NEW: Returns the full stage template with array of prompts
    *
    * @param {string} stageType - Stage type (e.g., "stage_2_personas")
    * @param {string} projectId - Project ID (optional for global defaults)
    * @param {object} db - Firestore database instance
-   * @returns {Promise<object>} { templateId, prompts, version, source, ... }
+   * @returns {Promise<object>} { id, stageType, prompts: [...], source }
    */
   async getPromptTemplate(stageType, projectId = null, db = null) {
     try {
@@ -33,56 +34,70 @@ class PromptManager {
         if (override) {
           return {
             source: 'project_override',
-            templateId: 'custom',
-            prompts: override.prompts,
-            version: override.version || 1,
+            id: stageType,
+            stageType,
+            prompts: override.prompts || [],
           };
-        }
-
-        // 2. Check project's preferred template version
-        const projectConfig = await db.collection('project_ai_config').doc(projectId).get();
-
-        if (projectConfig.exists) {
-          const templateId = projectConfig.data().promptVersions?.[stageType];
-
-          if (templateId) {
-            const template = await this._getTemplate(templateId, db);
-
-            if (template) {
-              return {
-                source: 'project_version',
-                templateId,
-                prompts: template.prompts,
-                version: template.version,
-              };
-            }
-          }
         }
       }
 
-      // 3. Fall back to global default template
+      // 2. Fall back to global default template (now uses stageType as document ID)
       if (db) {
         const defaultTemplate = await this._getDefaultTemplate(stageType, db);
 
         if (defaultTemplate) {
           return {
             source: 'default',
-            templateId: defaultTemplate.id,
-            prompts: defaultTemplate.prompts,
-            version: defaultTemplate.version,
+            ...defaultTemplate,
           };
         }
       }
 
-      // 4. Return empty template (shouldn't happen if seeded properly)
+      // 3. Return empty template (shouldn't happen if seeded properly)
       return {
         source: 'empty',
-        templateId: null,
-        prompts: {},
-        version: 1,
+        id: stageType,
+        stageType,
+        prompts: [],
       };
     } catch (error) {
       console.error(`Failed to get prompt template for ${stageType}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific prompt by capability from stage template
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} capability - Capability (e.g., "textGeneration")
+   * @param {string} projectId - Project ID (optional)
+   * @param {object} db - Firestore database instance
+   * @returns {Promise<object>} Prompt object for the capability
+   */
+  async getPromptByCapability(stageType, capability, projectId = null, db = null) {
+    try {
+      const template = await this.getPromptTemplate(stageType, projectId, db);
+
+      // Find the first active prompt with matching capability
+      const prompt = template.prompts.find(
+        p => p.capability === capability && p.isActive !== false
+      );
+
+      if (!prompt) {
+        console.warn(`No active prompt found for ${stageType}:${capability}`);
+        // Return empty prompt structure to avoid breaking generation
+        return {
+          capability,
+          systemPrompt: '',
+          userPromptTemplate: '',
+          outputFormat: 'json',
+        };
+      }
+
+      return prompt;
+    } catch (error) {
+      console.error(`Failed to get prompt by capability: ${error.message}`);
       throw error;
     }
   }
@@ -198,27 +213,21 @@ class PromptManager {
   }
 
   /**
-   * List available prompt templates for a stage
+   * List available prompts for a stage
+   * NEW: Returns array of prompts from the stage template
    *
    * @param {string} stageType - Stage type
    * @param {object} db - Firestore database
-   * @returns {Promise<Array>} Array of template objects
+   * @returns {Promise<Array>} Array of prompt objects
    */
   async listAvailableTemplates(stageType, db) {
     try {
-      const snapshot = await db
-        .collection('prompt_templates')
-        .where('stageType', '==', stageType)
-        .where('active', '==', true)
-        .orderBy('isDefault', 'desc')
-        .get();
+      const template = await this.getPromptTemplate(stageType, null, db);
 
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      // Return only active prompts
+      return (template.prompts || []).filter(p => p.isActive !== false);
     } catch (error) {
-      console.error(`Failed to list templates for ${stageType}: ${error.message}`);
+      console.error(`Failed to list prompts for ${stageType}: ${error.message}`);
       throw error;
     }
   }
@@ -296,6 +305,7 @@ class PromptManager {
 
   /**
    * Get default template for a stage
+   * NEW: Uses stageType as document ID directly
    *
    * @private
    * @param {string} stageType - Stage type
@@ -303,43 +313,31 @@ class PromptManager {
    * @returns {Promise<object|null>} Default template or null
    */
   async _getDefaultTemplate(stageType, db) {
+    // Check cache
+    if (this.templateCache.has(stageType)) {
+      return this.templateCache.get(stageType);
+    }
+
     try {
-      // First try to find a template marked as default and active
-      let snapshot = await db
-        .collection('prompt_templates')
-        .where('stageType', '==', stageType)
-        .where('isDefault', '==', true)
-        .where('active', '==', true)
-        .limit(1)
-        .get();
+      // NEW: Document ID is now the stageType itself
+      const doc = await db.collection('prompt_templates').doc(stageType).get();
 
-      // If not found, try without the isDefault filter
-      if (snapshot.empty) {
-        snapshot = await db
-          .collection('prompt_templates')
-          .where('stageType', '==', stageType)
-          .where('active', '==', true)
-          .limit(1)
-          .get();
-      }
-
-      // If still not found, just get any template with matching stageType
-      if (snapshot.empty) {
-        snapshot = await db
-          .collection('prompt_templates')
-          .where('stageType', '==', stageType)
-          .limit(1)
-          .get();
-      }
-
-      if (snapshot.empty) {
+      if (!doc.exists) {
         console.warn(`No prompt template found for stageType: ${stageType}`);
         return null;
       }
 
-      const doc = snapshot.docs[0];
-      console.log(`Found prompt template for ${stageType}:`, { id: doc.id, stageType: doc.data().stageType });
-      return { id: doc.id, ...doc.data() };
+      const template = { id: doc.id, ...doc.data() };
+
+      // Cache result
+      this.templateCache.set(stageType, template);
+
+      console.log(`Found prompt template for ${stageType}:`, {
+        id: doc.id,
+        promptCount: template.prompts?.length || 0
+      });
+
+      return template;
     } catch (error) {
       console.warn(`Failed to get default template for ${stageType}: ${error.message}`);
       return null;

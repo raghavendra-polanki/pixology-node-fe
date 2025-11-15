@@ -2,45 +2,88 @@
  * PromptTemplateService
  *
  * CRUD operations for prompt templates stored in Firestore
- * Handles template versioning and lifecycle management
+ * New structure: One document per stage with an array of prompts
+ * Document ID = stage name (e.g., "stage_2_personas")
  */
 
 import { v4 as uuidv4 } from 'uuid';
 
 class PromptTemplateService {
   /**
-   * Create a new prompt template
+   * Get stage template (contains all prompts for a stage)
    *
-   * @param {object} templateData - { stageType, name, description, prompts, isDefault }
-   * @param {string} userId - User creating the template
+   * @param {string} stageType - Stage type (e.g., "stage_2_personas")
    * @param {object} db - Firestore database
-   * @returns {Promise<string>} Template ID
+   * @returns {Promise<object>} Stage template with prompts array
    */
-  async createTemplate(templateData, userId, db) {
+  async getStageTemplate(stageType, db) {
     try {
-      const {
-        stageType,
-        name,
-        description = '',
-        prompts = {},
-        isDefault = false,
-      } = templateData;
+      const doc = await db.collection('prompt_templates').doc(stageType).get();
 
-      if (!stageType || !name || !prompts) {
-        throw new Error('stageType, name, and prompts are required');
+      if (!doc.exists) {
+        // Return default empty structure if not found
+        return {
+          id: stageType,
+          stageType,
+          prompts: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
       }
 
-      // Generate ID: pt_stage_version
-      const version = 1;
-      const templateId = `pt_${stageType}_v${version}_${uuidv4().slice(0, 8)}`;
+      return { id: doc.id, ...doc.data() };
+    } catch (error) {
+      console.error(`Failed to get stage template: ${error.message}`);
+      throw error;
+    }
+  }
 
-      const template = {
-        id: templateId,
-        stageType,
+  /**
+   * Add a new prompt to a stage
+   *
+   * @param {string} stageType - Stage type
+   * @param {object} promptData - { capability, name, description, systemPrompt, userPromptTemplate, outputFormat, variables }
+   * @param {string} userId - User creating the prompt
+   * @param {object} db - Firestore database
+   * @returns {Promise<string>} Prompt ID
+   */
+  async addPrompt(stageType, promptData, userId, db) {
+    try {
+      const {
+        capability,
+        name,
+        description = '',
+        systemPrompt = '',
+        userPromptTemplate = '',
+        outputFormat = 'json',
+        variables = [],
+        isDefault = false,
+      } = promptData;
+
+      if (!capability || !name) {
+        throw new Error('capability and name are required');
+      }
+
+      if (!systemPrompt && !userPromptTemplate) {
+        throw new Error('At least one of systemPrompt or userPromptTemplate is required');
+      }
+
+      // Get existing stage template
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+
+      // Generate unique prompt ID
+      const promptId = `prompt_${capability}_${uuidv4().slice(0, 8)}`;
+
+      // Create new prompt object
+      const newPrompt = {
+        id: promptId,
+        capability,
         name,
         description,
-        version,
-        prompts,
+        systemPrompt,
+        userPromptTemplate,
+        outputFormat,
+        variables,
         isDefault,
         isActive: true,
         createdBy: userId,
@@ -48,235 +91,230 @@ class PromptTemplateService {
         updatedAt: new Date().toISOString(),
       };
 
-      await db.collection('prompt_templates').doc(templateId).set(template);
+      // Add to prompts array
+      const updatedPrompts = [...(stageTemplate.prompts || []), newPrompt];
 
-      console.log(`Created prompt template: ${templateId}`);
-      return templateId;
+      // Update stage document
+      await db.collection('prompt_templates').doc(stageType).set({
+        id: stageType,
+        stageType,
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      }, { merge: true });
+
+      console.log(`Added prompt ${promptId} to stage ${stageType}`);
+      return promptId;
     } catch (error) {
-      console.error(`Failed to create template: ${error.message}`);
+      console.error(`Failed to add prompt: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Get a prompt template by ID
-   *
-   * @param {string} templateId - Template ID
-   * @param {object} db - Firestore database
-   * @returns {Promise<object>} Template data
-   */
-  async getTemplate(templateId, db) {
-    try {
-      const doc = await db.collection('prompt_templates').doc(templateId).get();
-
-      if (!doc.exists) {
-        throw new Error(`Template '${templateId}' not found`);
-      }
-
-      return { id: doc.id, ...doc.data() };
-    } catch (error) {
-      console.error(`Failed to get template: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Update a prompt template
-   *
-   * @param {string} templateId - Template ID
-   * @param {object} updates - Fields to update
-   * @param {object} db - Firestore database
-   */
-  async updateTemplate(templateId, updates, db) {
-    try {
-      // Don't allow direct version changes
-      const { version, id, ...safeUpdates } = updates;
-
-      safeUpdates.updatedAt = new Date().toISOString();
-
-      await db.collection('prompt_templates').doc(templateId).update(safeUpdates);
-
-      console.log(`Updated template: ${templateId}`);
-    } catch (error) {
-      console.error(`Failed to update template: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a prompt template
-   *
-   * @param {string} templateId - Template ID
-   * @param {object} db - Firestore database
-   */
-  async deleteTemplate(templateId, db) {
-    try {
-      // Only allow deletion of non-default templates
-      const template = await this.getTemplate(templateId, db);
-
-      if (template.isDefault) {
-        throw new Error('Cannot delete default templates');
-      }
-
-      await db.collection('prompt_templates').doc(templateId).delete();
-
-      console.log(`Deleted template: ${templateId}`);
-    } catch (error) {
-      console.error(`Failed to delete template: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * List all templates for a stage
+   * Get a specific prompt by ID from a stage
    *
    * @param {string} stageType - Stage type
-   * @param {object} options - { activeOnly: boolean, limit: number }
+   * @param {string} promptId - Prompt ID
    * @param {object} db - Firestore database
-   * @returns {Promise<Array>} Array of templates
+   * @returns {Promise<object>} Prompt data
+   */
+  async getPrompt(stageType, promptId, db) {
+    try {
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+      const prompt = stageTemplate.prompts.find(p => p.id === promptId);
+
+      if (!prompt) {
+        throw new Error(`Prompt '${promptId}' not found in stage '${stageType}'`);
+      }
+
+      return prompt;
+    } catch (error) {
+      console.error(`Failed to get prompt: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get prompts by capability from a stage
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} capability - Capability (e.g., "textGeneration")
+   * @param {object} db - Firestore database
+   * @returns {Promise<Array>} Array of prompts for the capability
+   */
+  async getPromptsByCapability(stageType, capability, db) {
+    try {
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+      return stageTemplate.prompts.filter(p => p.capability === capability && p.isActive);
+    } catch (error) {
+      console.error(`Failed to get prompts by capability: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a specific prompt in a stage
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {object} updates - Fields to update
+   * @param {string} userId - User making the update
+   * @param {object} db - Firestore database
+   */
+  async updatePrompt(stageType, promptId, updates, userId, db) {
+    try {
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+
+      const promptIndex = stageTemplate.prompts.findIndex(p => p.id === promptId);
+      if (promptIndex === -1) {
+        throw new Error(`Prompt '${promptId}' not found in stage '${stageType}'`);
+      }
+
+      // Don't allow changing ID or capability
+      const { id, capability, createdAt, createdBy, ...safeUpdates } = updates;
+
+      // Update the prompt
+      const updatedPrompts = [...stageTemplate.prompts];
+      updatedPrompts[promptIndex] = {
+        ...updatedPrompts[promptIndex],
+        ...safeUpdates,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      };
+
+      // Update stage document
+      await db.collection('prompt_templates').doc(stageType).update({
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      });
+
+      console.log(`Updated prompt ${promptId} in stage ${stageType}`);
+    } catch (error) {
+      console.error(`Failed to update prompt: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a prompt from a stage
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {string} userId - User deleting the prompt
+   * @param {object} db - Firestore database
+   */
+  async deletePrompt(stageType, promptId, userId, db) {
+    try {
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+
+      const prompt = stageTemplate.prompts.find(p => p.id === promptId);
+      if (!prompt) {
+        throw new Error(`Prompt '${promptId}' not found in stage '${stageType}'`);
+      }
+
+      // Don't allow deletion of default prompts
+      if (prompt.isDefault) {
+        throw new Error('Cannot delete default prompts');
+      }
+
+      // Remove the prompt from array
+      const updatedPrompts = stageTemplate.prompts.filter(p => p.id !== promptId);
+
+      // Update stage document
+      await db.collection('prompt_templates').doc(stageType).update({
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      });
+
+      console.log(`Deleted prompt ${promptId} from stage ${stageType}`);
+    } catch (error) {
+      console.error(`Failed to delete prompt: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * List all prompts for a stage (backward compatibility)
+   *
+   * @param {string} stageType - Stage type
+   * @param {object} options - { activeOnly: boolean }
+   * @param {object} db - Firestore database
+   * @returns {Promise<Array>} Array of prompts
    */
   async listTemplatesByStage(stageType, options = {}, db) {
     try {
-      const { activeOnly = true, limit = 50 } = options;
+      const { activeOnly = true } = options;
 
-      console.log(`[PromptTemplateService] Querying templates for stage: ${stageType}`, { activeOnly, limit });
+      console.log(`[PromptTemplateService] Querying prompts for stage: ${stageType}`, { activeOnly });
 
-      let query = db
-        .collection('prompt_templates')
-        .where('stageType', '==', stageType);
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+
+      let prompts = stageTemplate.prompts || [];
 
       if (activeOnly) {
-        query = query.where('active', '==', true);
+        prompts = prompts.filter(p => p.isActive);
       }
 
-      // Try with composite ordering, fall back to simple ordering if it fails
-      try {
-        query = query.orderBy('isDefault', 'desc').orderBy('createdAt', 'desc').limit(limit);
-      } catch (orderError) {
-        console.warn('[PromptTemplateService] Composite orderBy not available, using simple orderBy');
-        query = query.orderBy('createdAt', 'desc').limit(limit);
-      }
+      console.log(`[PromptTemplateService] Found ${prompts.length} prompts for stage: ${stageType}`);
 
-      const snapshot = await query.get();
-
-      console.log(`[PromptTemplateService] Found ${snapshot.docs.length} templates for stage: ${stageType}`);
-
-      const results = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      return results;
+      return prompts;
     } catch (error) {
-      console.error(`[PromptTemplateService] Failed to list templates for ${stageType}: ${error.message}`);
+      console.error(`[PromptTemplateService] Failed to list prompts for ${stageType}: ${error.message}`);
       // Don't throw - return empty array to allow UI to show proper error message
       return [];
     }
   }
 
   /**
-   * Create a new version of a template
+   * Get all stage templates
    *
-   * @param {string} baseTemplateId - ID of template to version
-   * @param {object} changes - Changes for new version
-   * @param {string} userId - User creating version
    * @param {object} db - Firestore database
-   * @returns {Promise<string>} New template ID
+   * @returns {Promise<Array>} Array of stage templates
    */
-  async createVersion(baseTemplateId, changes = {}, userId, db) {
+  async getAllStageTemplates(db) {
     try {
-      const baseTemplate = await this.getTemplate(baseTemplateId, db);
+      const snapshot = await db.collection('prompt_templates').get();
 
-      const newVersion = baseTemplate.version + 1;
-      const newId = `${baseTemplate.stageType}_v${newVersion}_${uuidv4().slice(0, 8)}`;
-
-      const versionedTemplate = {
-        ...baseTemplate,
-        id: newId,
-        version: newVersion,
-        ...changes,
-        baseTemplateId,
-        createdBy: userId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        // New versions are not default
-        isDefault: false,
-      };
-
-      delete versionedTemplate.id; // Let Firestore set the ID
-
-      await db.collection('prompt_templates').doc(newId).set(versionedTemplate);
-
-      console.log(`Created version ${newVersion} of template: ${newId}`);
-      return newId;
-    } catch (error) {
-      console.error(`Failed to create version: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get version history for a template
-   *
-   * @param {string} stageType - Stage type (to get all versions of that stage)
-   * @param {object} db - Firestore database
-   * @returns {Promise<Array>} Array of versions ordered by version number
-   */
-  async getVersionHistory(stageType, db) {
-    try {
-      const snapshot = await db
-        .collection('prompt_templates')
-        .where('stageType', '==', stageType)
-        .orderBy('version', 'desc')
-        .get();
-
-      return snapshot.docs.map((doc) => ({
+      const templates = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      console.log(`[PromptTemplateService] Found ${templates.length} stage templates`);
+      return templates;
     } catch (error) {
-      console.error(`Failed to get version history: ${error.message}`);
+      console.error(`[PromptTemplateService] Failed to get all stage templates: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * Validate prompt template structure
+   * Validate prompt structure
    *
-   * @param {object} template - Template to validate
+   * @param {object} prompt - Prompt to validate
    * @returns {object} { isValid: boolean, errors: Array<string> }
    */
-  validateTemplate(template) {
+  validatePrompt(prompt) {
     const errors = [];
 
     // Check required fields
-    if (!template.stageType) {
-      errors.push('stageType is required');
+    if (!prompt.capability) {
+      errors.push('capability is required');
     }
 
-    if (!template.name) {
+    if (!prompt.name) {
       errors.push('name is required');
     }
 
-    if (!template.prompts || typeof template.prompts !== 'object') {
-      errors.push('prompts object is required');
+    if (!prompt.systemPrompt && !prompt.userPromptTemplate) {
+      errors.push('At least one of systemPrompt or userPromptTemplate is required');
     }
 
-    // Check prompts structure
-    if (template.prompts) {
-      Object.entries(template.prompts).forEach(([key, promptSet]) => {
-        if (!promptSet.systemPrompt) {
-          errors.push(`${key}: systemPrompt is required`);
-        }
-
-        if (!promptSet.userPromptTemplate) {
-          errors.push(`${key}: userPromptTemplate is required`);
-        }
-
-        if (!promptSet.outputFormat) {
-          errors.push(`${key}: outputFormat is required`);
-        }
-      });
+    if (!prompt.outputFormat) {
+      errors.push('outputFormat is required');
     }
 
     return {
@@ -286,27 +324,47 @@ class PromptTemplateService {
   }
 
   /**
-   * Deactivate a template
+   * Deactivate a prompt
    *
-   * @param {string} templateId - Template ID
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {string} userId - User deactivating the prompt
    * @param {object} db - Firestore database
    */
-  async deactivateTemplate(templateId, db) {
+  async deactivatePrompt(stageType, promptId, userId, db) {
     try {
-      const template = await this.getTemplate(templateId, db);
+      const stageTemplate = await this.getStageTemplate(stageType, db);
 
-      if (template.isDefault) {
-        throw new Error('Cannot deactivate default template');
+      const promptIndex = stageTemplate.prompts.findIndex(p => p.id === promptId);
+      if (promptIndex === -1) {
+        throw new Error(`Prompt '${promptId}' not found in stage '${stageType}'`);
       }
 
-      await db.collection('prompt_templates').doc(templateId).update({
+      const prompt = stageTemplate.prompts[promptIndex];
+
+      if (prompt.isDefault) {
+        throw new Error('Cannot deactivate default prompt');
+      }
+
+      // Update the prompt
+      const updatedPrompts = [...stageTemplate.prompts];
+      updatedPrompts[promptIndex] = {
+        ...updatedPrompts[promptIndex],
         isActive: false,
         updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      };
+
+      // Update stage document
+      await db.collection('prompt_templates').doc(stageType).update({
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
       });
 
-      console.log(`Deactivated template: ${templateId}`);
+      console.log(`Deactivated prompt ${promptId} in stage ${stageType}`);
     } catch (error) {
-      console.error(`Failed to deactivate template: ${error.message}`);
+      console.error(`Failed to deactivate prompt: ${error.message}`);
       throw error;
     }
   }

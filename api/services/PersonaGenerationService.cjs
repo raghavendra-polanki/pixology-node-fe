@@ -34,9 +34,10 @@ class PersonaGenerationService {
 
       console.log(`[PersonaGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
 
-      // 2. Get prompt template
-      const promptTemplate = await PromptManager.getPromptTemplate(
+      // 2. Get prompt template for text generation capability
+      const textPrompt = await PromptManager.getPromptByCapability(
         'stage_2_personas',
+        'textGeneration',
         projectId,
         db
       );
@@ -50,7 +51,7 @@ class PersonaGenerationService {
       };
 
       const resolvedPrompt = PromptManager.resolvePrompt(
-        promptTemplate.prompts.textGeneration,
+        textPrompt,
         variables
       );
 
