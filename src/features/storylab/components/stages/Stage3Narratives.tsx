@@ -372,7 +372,6 @@ export function Stage3Narratives({
       } : undefined);
 
       console.log('Stage completed successfully. Advancing to next stage...');
-      alert('Narrative preferences saved! Moving to next stage...');
 
       // Navigate to the next stage (Stage 4 - Storyboard)
       if (navigateToStage) {
