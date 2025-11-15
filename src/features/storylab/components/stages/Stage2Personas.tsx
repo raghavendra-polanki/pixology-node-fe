@@ -282,34 +282,43 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
       </div>
 
       {/* Generate & Edit Buttons */}
-      <div className="mb-8 flex gap-4">
-        <Button
-          onClick={handleGenerate}
-          disabled={isGenerating}
-          className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-          size="lg"
-        >
-          {isGenerating ? (
-            <>
-              <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
-              Generating Personas...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              Generate Personas
-            </>
-          )}
-        </Button>
-        <Button
-          onClick={handleEditPrompts}
-          variant="outline"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-          size="lg"
-        >
-          <Edit2 className="w-5 h-5 mr-2" />
-          Edit Prompts
-        </Button>
+      <div className="mb-8">
+        <div className="flex gap-4">
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+            size="lg"
+          >
+            {isGenerating ? (
+              <>
+                <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                Generating Personas...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Generate Personas
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleEditPrompts}
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+            size="lg"
+          >
+            <Edit2 className="w-5 h-5 mr-2" />
+            Edit Prompts
+          </Button>
+        </div>
+
+        {/* Progress Indicator */}
+        <GenerationProgressIndicator
+          isGenerating={isGenerating}
+          progress={generationProgress}
+          status={generationStatus}
+        />
 
         <style>{`
           @keyframes sparkIntense {
@@ -321,13 +330,6 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           }
         `}</style>
       </div>
-
-      {/* Progress Indicator */}
-      <GenerationProgressIndicator
-        isGenerating={isGenerating}
-        progress={generationProgress}
-        status={generationStatus}
-      />
 
       {/* Empty State - No Personas Generated Yet */}
       {!hasGenerated && personas.length === 0 && (
