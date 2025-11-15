@@ -448,6 +448,19 @@
   line-height: 1.5;
 }
 
+/* Prompt Editor Textarea */
+.prompt-editor-textarea {
+  outline: none !important;
+  background: transparent !important;
+  border: none !important;
+  color: #e0e0e0 !important;
+}
+
+.prompt-editor-textarea::placeholder {
+  color: #666666 !important;
+  opacity: 0.6 !important;
+}
+
 /* Scrollbar Styling */
 .output-content::-webkit-scrollbar,
 .prompt-text::-webkit-scrollbar {
