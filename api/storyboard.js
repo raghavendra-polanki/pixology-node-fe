@@ -10,6 +10,7 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const GCSService = require('./services/gcsService');
+const PromptManager = require('./services/PromptManager.cjs');
 
 const router = express.Router();
 
@@ -50,8 +51,34 @@ router.post('/edit-image', async (req, res) => {
 
     console.log(`[Storyboard] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`);
 
-    // Build enhanced prompt that combines original scene with edit request
-    const enhancedPrompt = buildImageEditPrompt(sceneData, editPrompt);
+    // Get prompt template for image editing capability
+    const imageEditPromptTemplate = await PromptManager.getPromptByCapability(
+      'stage_4_storyboard',
+      'imageEditing',
+      projectId,
+      db
+    );
+
+    // Build variables for the prompt
+    const variables = {
+      title: sceneData.title || '',
+      description: sceneData.description || '',
+      location: sceneData.location || '',
+      visualElements: sceneData.visualElements || '',
+      cameraWork: sceneData.cameraWork || '',
+      keyFrameDescription: sceneData.keyFrameDescription || '',
+      editPrompt: editPrompt,
+    };
+
+    // Resolve prompt template with variables
+    const resolvedPrompt = PromptManager.resolvePrompt(
+      imageEditPromptTemplate,
+      variables
+    );
+
+    const enhancedPrompt = resolvedPrompt.systemPrompt
+      ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
+      : resolvedPrompt.userPrompt;
 
     console.log(`[Storyboard] Generated edit prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
@@ -107,51 +134,5 @@ router.post('/edit-image', async (req, res) => {
     });
   }
 });
-
-/**
- * Build image edit prompt by combining original scene data with edit request
- * @private
- */
-function buildImageEditPrompt(sceneData, editPrompt) {
-  const {
-    title = '',
-    description = '',
-    location = '',
-    visualElements = '',
-    cameraWork = '',
-    keyFrameDescription = '',
-  } = sceneData;
-
-  return `Generate a professional UGC-style scene image for a marketing video with the following modifications:
-
-**Reference Images:**
-- Original Scene Reference: The current scene image is provided for visual context and consistency
-- Product Reference Image: The actual product image is provided - maintain exact product appearance
-
-**Original Scene Details:**
-Title: ${title}
-Description: ${description}
-Location/Setting: ${location}
-Visual Elements: ${visualElements}
-Camera Work: ${cameraWork}
-Key Frame Description: ${keyFrameDescription}
-
-**Requested Changes:**
-${editPrompt}
-
-**Instructions:**
-Using the provided reference images as visual guides, apply the requested changes while maintaining the overall style, composition, and quality of the original scene. The edited image should:
-- Keep the same visual style and cinematography as the original scene reference
-- Maintain consistent lighting, color grading, and composition
-- Use the exact product from the product reference image - do not alter its appearance
-- Apply ONLY the specific changes requested in the edit prompt
-- Preserve all other elements that are not mentioned in the edit request
-- Remain high-quality, cinematic, and professional
-- Continue to be authentic and suitable for UGC marketing
-
-IMPORTANT: If the product appears in the scene, ensure it looks identical to the product reference image provided. Do not alter the product's colors, design, or features.
-
-Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference images.`;
-}
 
 export default router;

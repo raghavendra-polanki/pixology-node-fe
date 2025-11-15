@@ -48,9 +48,10 @@ class StoryboardGenerationService {
 
       console.log(`[StoryboardGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
 
-      // 2. Get prompt template
-      const promptTemplate = await PromptManager.getPromptTemplate(
+      // 2. Get prompt template for text generation capability
+      const textPrompt = await PromptManager.getPromptByCapability(
         'stage_4_storyboard',
+        'textGeneration',
         projectId,
         db
       );
@@ -69,7 +70,7 @@ class StoryboardGenerationService {
       };
 
       const resolvedPrompt = PromptManager.resolvePrompt(
-        promptTemplate.prompts.textGeneration,
+        textPrompt,
         variables
       );
 
@@ -152,16 +153,42 @@ class StoryboardGenerationService {
 
       console.log(`[StoryboardGen] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`);
 
+      // Get prompt template for image generation capability
+      const imagePromptTemplate = await PromptManager.getPromptByCapability(
+        'stage_4_storyboard',
+        'imageGeneration',
+        projectId,
+        db
+      );
+
       const scenesWithImages = [];
 
       for (let i = 0; i < scenes.length; i++) {
         try {
           const scene = scenes[i];
-          const imagePrompt = this._buildSceneImagePrompt(
-            scene,
+
+          // Build variables for this scene
+          const variables = {
             selectedPersonaName,
-            selectedPersonaDescription
+            selectedPersonaDescription,
+            title: scene.title || '',
+            description: scene.description || '',
+            location: scene.location || '',
+            visualElements: scene.visualElements || '',
+            cameraWork: scene.cameraWork || '',
+            product: scene.product || '',
+            keyFrameDescription: scene.keyFrameDescription || '',
+          };
+
+          // Resolve prompt template with variables
+          const resolvedPrompt = PromptManager.resolvePrompt(
+            imagePromptTemplate,
+            variables
           );
+
+          const imagePrompt = resolvedPrompt.systemPrompt
+            ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
+            : resolvedPrompt.userPrompt;
 
           console.log(`[StoryboardGen] Generating image ${i + 1}/${scenes.length}`);
 
@@ -289,48 +316,6 @@ class StoryboardGenerationService {
     );
   }
 
-  /**
-   * Build image generation prompt from scene
-   *
-   * @private
-   */
-  static _buildSceneImagePrompt(scene, selectedPersonaName, selectedPersonaDescription) {
-    return `Generate a professional UGC-style scene image for a marketing video:
-
-**Reference Images:**
-- Persona/Character reference image: "${selectedPersonaName}" - Use this to maintain consistent character appearance throughout all scenes
-- Product reference image: The actual product image is provided - Use this exact product wherever the product appears in the scene
-
-**Scene Title:** ${scene.title}
-**Scene Description:** ${scene.description}
-
-**Location/Setting:**
-${scene.location}
-
-**Visual Elements:**
-${scene.visualElements}
-
-**Camera Work:**
-${scene.cameraWork}
-
-**Character/Persona:**
-${selectedPersonaName} - ${selectedPersonaDescription}
-IMPORTANT: The character must look exactly like the person in the persona reference image provided. Maintain consistent facial features, hair, clothing style, and overall appearance.
-
-**Product:**
-${scene.product}
-IMPORTANT: Use the exact product from the product reference image. Do not alter the product's appearance, colors, or design. The product should look identical to the reference image.
-
-**Detailed Visual Description:**
-${scene.keyFrameDescription}
-
-Create a high-quality, cinematic scene that matches the description above while ensuring:
-1. The character looks identical to the persona reference image
-2. The product looks exactly like the product reference image - maintain its exact appearance
-3. Professional cinematography with natural lighting
-4. Authentic styling suitable for UGC marketing
-5. The scene should feel like a genuine, professional marketing video production`;
-  }
 }
 
 module.exports = StoryboardGenerationService;
