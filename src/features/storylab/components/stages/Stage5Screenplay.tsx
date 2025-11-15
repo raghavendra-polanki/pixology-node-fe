@@ -144,6 +144,7 @@ export function Stage5Screenplay({
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync screenplay with project data when loaded
   useEffect(() => {
@@ -230,6 +231,7 @@ export function Stage5Screenplay({
 
   const handleSubmit = async () => {
     try {
+      setIsSubmitting(true);
       console.log('handleSubmit: Starting screenplay finalization');
 
       // Prepare screenplay customizations if any
@@ -253,6 +255,8 @@ export function Stage5Screenplay({
       console.error('Failed to save screenplay:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       alert(`Error finalizing screenplay: ${errorMessage}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -573,11 +577,11 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={screenplay.length === 0 || isSaving}
+              disabled={screenplay.length === 0 || isSaving || isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
               size="lg"
             >
-              {isSaving ? (
+              {isSaving || isSubmitting ? (
                 <>
                   <div className="animate-spin mr-2">⏳</div>
                   Saving...

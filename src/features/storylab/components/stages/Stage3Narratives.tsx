@@ -193,6 +193,7 @@ export function Stage3Narratives({
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [narrativeUpdateTrigger, setNarrativeUpdateTrigger] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // All refs SECOND
   const generatedNarrativesRef = useRef<HTMLDivElement>(null);
@@ -342,6 +343,7 @@ export function Stage3Narratives({
 
   const handleSubmit = async () => {
     try {
+      setIsSubmitting(true);
       if (!project?.id) {
         throw new Error('No project loaded. Please go back and reload the project.');
       }
@@ -379,6 +381,8 @@ export function Stage3Narratives({
     } catch (error) {
       console.error('Failed to save narrative preferences:', error);
       alert(`Failed to save narrative preferences: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -635,11 +639,11 @@ export function Stage3Narratives({
       <div className="flex justify-end">
         <Button
           onClick={handleSubmit}
-          disabled={!canProceed || isSaving}
+          disabled={!canProceed || isSaving || isSubmitting}
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
           size="lg"
         >
-          {isSaving ? (
+          {isSaving || isSubmitting ? (
             <>
               <div className="animate-spin mr-2">⏳</div>
               Saving...

@@ -78,6 +78,7 @@ export function Stage4Storyboard({
   const [aiEditingScene, setAiEditingScene] = useState<Scene | null>(null);
   const [aiEditPrompt, setAiEditPrompt] = useState('');
   const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newGeneratedImage, setNewGeneratedImage] = useState<string | null>(null);
 
   // Sync scenes with project data when loaded
@@ -341,6 +342,7 @@ export function Stage4Storyboard({
 
   const handleSubmit = async () => {
     try {
+      setIsSubmitting(true);
       // Prepare storyboard customizations if any
       const additionalUpdates = scenes.length > 0 ? {
         storyboardCustomizations: {
@@ -358,6 +360,8 @@ export function Stage4Storyboard({
       }
     } catch (error) {
       console.error('Failed to save storyboard:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -590,11 +594,11 @@ export function Stage4Storyboard({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={scenes.length === 0 || isSaving}
+              disabled={scenes.length === 0 || isSaving || isSubmitting}
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
               size="lg"
             >
-              {isSaving ? (
+              {isSaving || isSubmitting ? (
                 <>
                   <div className="animate-spin mr-2">⏳</div>
                   Saving...
