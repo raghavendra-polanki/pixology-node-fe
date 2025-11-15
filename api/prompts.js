@@ -46,14 +46,14 @@ router.get('/templates', async (req, res) => {
 });
 
 /**
- * GET /api/prompts/templates/:templateId
- * Get a specific prompt template
+ * GET /api/prompts/templates/:stageType
+ * Get a specific stage template (now uses stageType as ID)
  */
-router.get('/templates/:templateId', async (req, res) => {
+router.get('/templates/:stageType', async (req, res) => {
   try {
-    const { templateId } = req.params;
+    const { stageType } = req.params;
 
-    const template = await PromptTemplateService.getTemplate(templateId, db);
+    const template = await PromptTemplateService.getStageTemplate(stageType, db);
 
     if (!template) {
       return res.status(404).json({
@@ -73,87 +73,83 @@ router.get('/templates/:templateId', async (req, res) => {
 
 /**
  * POST /api/prompts/templates
- * Create or update prompt template
+ * Add a new prompt to a stage
  */
 router.post('/templates', async (req, res) => {
   try {
-    const { projectId, stageType, template } = req.body;
+    const { stageType, prompt } = req.body;
 
-    if (!template || !stageType) {
+    if (!prompt || !stageType) {
       return res.status(400).json({
-        error: 'template and stageType are required',
+        error: 'prompt and stageType are required',
       });
     }
 
-    // Validate template structure
-    const validation = PromptTemplateService.validateTemplate(template);
+    // Validate prompt structure
+    const validation = PromptTemplateService.validatePrompt(prompt);
     if (!validation.isValid) {
       return res.status(400).json({
-        error: 'Invalid template structure',
+        error: 'Invalid prompt structure',
         errors: validation.errors,
       });
     }
 
-    const templateId = await PromptTemplateService.createTemplate(
-      {
-        stageType,
-        name: template.name || `${stageType} template`,
-        description: template.description || '',
-        prompts: template.prompts,
-        isDefault: false,
-      },
+    const promptId = await PromptTemplateService.addPrompt(
+      stageType,
+      prompt,
       'system',
       db
     );
 
+    // Clear the PromptManager cache to ensure fresh data on next load
+    PromptManager.clearCache();
+    console.log('[API] Cleared PromptManager cache after adding prompt');
+
     res.json({
       success: true,
-      message: 'Template created',
-      templateId,
+      message: 'Prompt added',
+      promptId,
     });
   } catch (error) {
-    console.error('Error saving prompt template:', error);
+    console.error('Error saving prompt:', error);
     res.status(500).json({
-      error: 'Failed to save prompt template',
+      error: 'Failed to save prompt',
       message: error.message,
     });
   }
 });
 
 /**
- * PUT /api/prompts/templates/:templateId
- * Update an existing template
+ * PUT /api/prompts/templates/:stageType/:promptId
+ * Update a specific prompt in a stage
  */
-router.put('/templates/:templateId', async (req, res) => {
+router.put('/templates/:stageType/:promptId', async (req, res) => {
   try {
-    const { templateId } = req.params;
-    const body = req.body;
+    const { stageType, promptId } = req.params;
+    const { updates } = req.body;
 
-    // Support both formats: { updates: {...} } and direct template object
-    const updates = body.updates || {
-      stageType: body.stageType,
-      name: body.name,
-      description: body.description,
-      prompts: body.prompts,
-    };
-
-    if (!updates || !updates.prompts) {
+    if (!updates) {
       return res.status(400).json({
-        error: 'prompts are required',
+        error: 'updates are required',
       });
     }
 
-    await PromptTemplateService.updateTemplate(templateId, updates, db);
+    await PromptTemplateService.updatePrompt(stageType, promptId, updates, 'system', db);
+
+    // Clear the PromptManager cache to ensure fresh data on next load
+    PromptManager.clearCache();
+    console.log('[API] Cleared PromptManager cache after updating prompt');
 
     res.json({
       success: true,
-      message: 'Template updated',
-      templateId,
+      message: 'Prompt updated',
+      stageType,
+      promptId,
     });
   } catch (error) {
-    console.error('Error updating prompt template:', error);
+    console.error('Error updating prompt:', error);
     res.status(500).json({
-      error: 'Failed to update prompt template',
+      error: 'Failed to update prompt',
       message: error.message,
     });
   }
@@ -174,6 +170,10 @@ router.post('/override', async (req, res) => {
     }
 
     await PromptManager.savePromptOverride(projectId, stageType, promptTemplate, db);
+
+    // Clear the PromptManager cache to ensure fresh data on next load
+    PromptManager.clearCache();
+    console.log('[API] Cleared PromptManager cache after saving prompt override');
 
     res.json({
       success: true,
@@ -242,16 +242,19 @@ router.post('/test', async (req, res) => {
 
     console.log(`[API] /test: Testing prompt for ${stageType}/${capability}`);
 
-    // Get the template
-    const template = await PromptManager.getPromptTemplate(stageType, projectId, db);
+    // Get the prompt for the specific capability
+    const promptConfig = await PromptManager.getPromptByCapability(
+      stageType,
+      capability,
+      projectId,
+      db
+    );
 
-    if (!template || !template.prompts[capability]) {
+    if (!promptConfig) {
       return res.status(404).json({
         error: `No prompt found for ${stageType}/${capability}`,
       });
     }
-
-    const promptConfig = template.prompts[capability];
 
     // Resolve prompt template with variables
     const resolvedPrompt = PromptManager.resolvePrompt(
@@ -279,22 +282,55 @@ router.post('/test', async (req, res) => {
 
     console.log(`[API] /test: Using adaptor '${resolution.adaptorId}' with model '${resolution.modelId}'`);
 
-    // Call the AI adaptor to generate output
-    const result = await resolution.adaptor.generateText(fullPrompt, {
-      temperature: 0.7,
-      maxTokens: 2048,
-    });
+    // Call the appropriate AI adaptor method based on capability
+    let result;
+    let output;
 
-    console.log(`[API] /test: AI generation completed. Tokens used - Input: ${result.usage?.inputTokens}, Output: ${result.usage?.outputTokens}`);
+    if (capability === 'textGeneration') {
+      result = await resolution.adaptor.generateText(fullPrompt, {
+        temperature: 0.7,
+        maxTokens: 2048,
+      });
+      output = result.text;
+      console.log(`[API] /test: Text generation completed. Tokens - Input: ${result.usage?.inputTokens}, Output: ${result.usage?.outputTokens}`);
+    } else if (capability === 'imageGeneration') {
+      // Collect reference images from variables (persona and product images)
+      const referenceImages = [];
+      if (variables.personaImageUrl) {
+        referenceImages.push(variables.personaImageUrl);
+        console.log(`[API] /test: Using persona image reference: ${variables.personaImageUrl}`);
+      }
+      if (variables.productImageUrl) {
+        referenceImages.push(variables.productImageUrl);
+        console.log(`[API] /test: Using product image reference: ${variables.productImageUrl}`);
+      }
+
+      result = await resolution.adaptor.generateImage(fullPrompt, {
+        size: '1024x1024',
+        quality: 'standard',
+        referenceImageUrl: referenceImages.length > 0 ? referenceImages : undefined,
+      });
+      output = result.imageUrl;
+      console.log(`[API] /test: Image generation completed. Image URL: ${result.imageUrl}`);
+    } else if (capability === 'videoGeneration') {
+      result = await resolution.adaptor.generateVideo(fullPrompt, {
+        duration: 5,
+        quality: 'standard',
+      });
+      output = result.videoUrl;
+      console.log(`[API] /test: Video generation completed. Video URL: ${result.videoUrl}`);
+    } else {
+      throw new Error(`Unsupported capability: ${capability}`);
+    }
 
     // Return the actual AI-generated output (stateless - not saved)
     res.json({
       success: true,
-      output: result.text,
+      output: output,
       model: result.model,
       adaptorId: resolution.adaptorId,
       usage: result.usage,
-      message: 'Prompt test completed with AI generation',
+      message: `Prompt test completed with ${capability}`,
     });
   } catch (error) {
     console.error('[API] /test: Error testing prompt:', error);
