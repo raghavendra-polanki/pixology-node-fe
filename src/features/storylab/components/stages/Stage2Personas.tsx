@@ -69,6 +69,7 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     setGenerationProgress(0);
     setGenerationStatus('Initializing...');
     setPersonas([]);
+    setHasGenerated(false);
 
     try {
       const response = await fetch('/api/generation/personas-stream', {
@@ -134,10 +135,13 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
                 };
 
                 tempPersonas.set(data.personaNumber, persona);
-                const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) =>
-                  parseInt(a.id.split('_')[1]) - parseInt(b.id.split('_')[1])
-                );
-                setPersonas(updatedPersonas);
+                const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) => {
+                  // Extract number from id (handles both "persona_1" and custom ids)
+                  const aNum = a.id.includes('_') ? parseInt(a.id.split('_').pop() || '0') : parseInt(a.id) || 0;
+                  const bNum = b.id.includes('_') ? parseInt(b.id.split('_').pop() || '0') : parseInt(b.id) || 0;
+                  return aNum - bNum;
+                });
+                setPersonas([...updatedPersonas]); // Force new array reference
                 setGenerationProgress(data.progress || 0);
               } else if (currentEventType === 'image') {
                 // Persona image generated
@@ -147,9 +151,12 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
                     // Create a new object instead of mutating to trigger React re-render
                     const updatedPersona = { ...persona, image: data.imageUrl };
                     tempPersonas.set(data.personaNumber, updatedPersona);
-                    const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) =>
-                      parseInt(a.id.split('_')[1]) - parseInt(b.id.split('_')[1])
-                    );
+                    const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) => {
+                      // Extract number from id (handles both "persona_1" and custom ids)
+                      const aNum = a.id.includes('_') ? parseInt(a.id.split('_').pop() || '0') : parseInt(a.id) || 0;
+                      const bNum = b.id.includes('_') ? parseInt(b.id.split('_').pop() || '0') : parseInt(b.id) || 0;
+                      return aNum - bNum;
+                    });
                     setPersonas([...updatedPersonas]); // Force new array reference
                   }
                 }
