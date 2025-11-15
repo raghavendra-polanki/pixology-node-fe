@@ -23,6 +23,7 @@ import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 interface Scene {
   id: string;
@@ -514,30 +515,11 @@ export function Stage4Storyboard({
         </Button>
 
         {/* Progress Indicator */}
-        {isGenerating && (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span
-                className="gradient-shimmer-text animate-status-fade font-medium"
-                key={generationStatus}
-              >
-                {generationStatus}
-              </span>
-              <span className="text-blue-400 font-medium animate-pulse-subtle">
-                {generationProgress}%
-              </span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden relative">
-              <div
-                className="progress-bar-animated h-2 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
-                style={{ width: `${generationProgress}%` }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600" />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
-              </div>
-            </div>
-          </div>
-        )}
+        <GenerationProgressIndicator
+          isGenerating={isGenerating}
+          progress={generationProgress}
+          status={generationStatus}
+        />
 
         <style>{`
           @keyframes sparkIntense {
@@ -546,74 +528,6 @@ export function Stage4Storyboard({
           }
           .animate-spark-intense {
             animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          }
-
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          .animate-shimmer {
-            animation: shimmer 2s ease-in-out infinite;
-          }
-
-          @keyframes statusFade {
-            0% {
-              opacity: 0;
-              transform: translateY(-4px);
-            }
-            100% {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          .animate-status-fade {
-            animation: statusFade 0.4s ease-out;
-          }
-
-          @keyframes pulseSubtle {
-            0%, 100% {
-              opacity: 1;
-              transform: scale(1);
-            }
-            50% {
-              opacity: 0.8;
-              transform: scale(1.05);
-            }
-          }
-          .animate-pulse-subtle {
-            animation: pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          }
-
-          @keyframes gradientShift {
-            0% {
-              background-position: 0% 50%;
-            }
-            50% {
-              background-position: 100% 50%;
-            }
-            100% {
-              background-position: 0% 50%;
-            }
-          }
-
-          .gradient-shimmer-text {
-            background: linear-gradient(
-              90deg,
-              #60a5fa 0%,
-              #93c5fd 25%,
-              #dbeafe 50%,
-              #93c5fd 75%,
-              #60a5fa 100%
-            );
-            background-size: 200% auto;
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: gradientShift 3s ease-in-out infinite;
-          }
-
-          .progress-bar-animated {
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
           }
         `}</style>
       </div>
@@ -642,8 +556,15 @@ export function Stage4Storyboard({
                       alt={scene.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
+                  ) : isGenerating ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="relative">
+                        <div className="w-16 h-16 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+                        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-blue-400/30 rounded-full animate-ping" />
+                      </div>
+                    </div>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
+                    <div className="w-full h-full flex items-center justify-center">
                       <ImageIcon className="w-16 h-16 text-gray-700" />
                     </div>
                   )}

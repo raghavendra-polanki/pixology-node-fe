@@ -8,6 +8,7 @@ import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 // UI representation of persona (different from PersonaData in data model)
 interface Persona {
@@ -143,12 +144,13 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
                 if (!data.error && data.imageUrl) {
                   const persona = tempPersonas.get(data.personaNumber);
                   if (persona) {
-                    persona.image = data.imageUrl;
-                    tempPersonas.set(data.personaNumber, persona);
+                    // Create a new object instead of mutating to trigger React re-render
+                    const updatedPersona = { ...persona, image: data.imageUrl };
+                    tempPersonas.set(data.personaNumber, updatedPersona);
                     const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) =>
                       parseInt(a.id.split('_')[1]) - parseInt(b.id.split('_')[1])
                     );
-                    setPersonas(updatedPersonas);
+                    setPersonas([...updatedPersonas]); // Force new array reference
                   }
                 }
                 setGenerationProgress(data.progress || 0);
@@ -279,24 +281,6 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         </div>
       </div>
 
-      {/* Progress Indicator */}
-      {isGenerating && (
-        <div className="mb-6 p-6 bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-700/50 rounded-xl backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium gradient-shimmer-text animate-fade-in">{generationStatus}</p>
-            <p className="text-sm font-medium text-blue-400 animate-pulse">{generationProgress}%</p>
-          </div>
-          <div className="relative h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner">
-            <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out shadow-lg shadow-blue-500/50"
-              style={{ width: `${generationProgress}%` }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Generate & Edit Buttons */}
       <div className="mb-8 flex gap-4">
         <Button
@@ -317,50 +301,6 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
             </>
           )}
         </Button>
-        <style>{`
-          @keyframes sparkIntense {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.2); }
-          }
-          .animate-spark-intense {
-            animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          }
-          @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-          }
-          .gradient-shimmer-text {
-            background: linear-gradient(
-              90deg,
-              #60a5fa 0%,
-              #93c5fd 25%,
-              #dbeafe 50%,
-              #93c5fd 75%,
-              #60a5fa 100%
-            );
-            background-size: 200% auto;
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: gradientShift 3s ease-in-out infinite;
-          }
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          .animate-shimmer {
-            animation: shimmer 2s infinite;
-          }
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fade-in {
-            animation: fadeIn 0.3s ease-out;
-          }
-        `}</style>
-
         <Button
           onClick={handleEditPrompts}
           variant="outline"
@@ -370,7 +310,24 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           <Edit2 className="w-5 h-5 mr-2" />
           Edit Prompts
         </Button>
+
+        <style>{`
+          @keyframes sparkIntense {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+          }
+          .animate-spark-intense {
+            animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        `}</style>
       </div>
+
+      {/* Progress Indicator */}
+      <GenerationProgressIndicator
+        isGenerating={isGenerating}
+        progress={generationProgress}
+        status={generationStatus}
+      />
 
       {/* Empty State - No Personas Generated Yet */}
       {!hasGenerated && personas.length === 0 && (
@@ -403,12 +360,23 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
 
             {/* Persona Image */}
             <div className="relative h-96 overflow-hidden bg-gray-900">
-              <ImageWithFallback
-                src={persona.image}
-                alt={persona.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#151515] via-transparent to-transparent opacity-80" />
+              {persona.image ? (
+                <>
+                  <ImageWithFallback
+                    src={persona.image}
+                    alt={persona.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#151515] via-transparent to-transparent opacity-80" />
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+                    <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-blue-400/30 rounded-full animate-ping" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Persona Details */}
