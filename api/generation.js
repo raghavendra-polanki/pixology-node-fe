@@ -11,6 +11,7 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const PersonaGenerationService = require('./services/PersonaGenerationService.cjs');
+const PersonaStreamingService = require('./services/PersonaStreamingService.cjs');
 const NarrativeGenerationService = require('./services/NarrativeGenerationService.cjs');
 const StoryboardGenerationService = require('./services/StoryboardGenerationService.cjs');
 const StoryboardStreamingService = require('./services/StoryboardStreamingService.cjs');
@@ -62,6 +63,111 @@ router.post('/personas', async (req, res) => {
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
+  }
+});
+
+/**
+ * POST /api/generation/personas-stream
+ * Generate personas with Server-Sent Events (SSE) streaming
+ * Provides real-time updates as personas and images are generated
+ */
+router.post('/personas-stream', async (req, res) => {
+  try {
+    const {
+      projectId,
+      productDescription,
+      targetAudience,
+      numberOfPersonas = 3,
+      productImageUrl,
+    } = req.body;
+
+    if (!projectId || !productDescription || !targetAudience) {
+      return res.status(400).json({
+        error: 'projectId, productDescription, and targetAudience are required',
+      });
+    }
+
+    console.log(`[Generation] Starting streaming persona generation for project ${projectId}`);
+
+    // Bypass compression for SSE
+    req.shouldCompress = false;
+
+    // Setup Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    res.setHeader('Content-Encoding', 'none'); // Disable compression
+
+    // Ensure response is not buffered
+    res.flushHeaders();
+
+    // Helper to send SSE events
+    const sendEvent = (eventType, data) => {
+      const eventData = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+      res.write(eventData);
+
+      // Explicitly flush if available
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    };
+
+    // Send initial start event
+    sendEvent('start', {
+      message: 'Starting persona generation',
+      projectId,
+      numberOfPersonas,
+    });
+
+    const input = {
+      productDescription,
+      targetAudience,
+      numberOfPersonas,
+      productImageUrl,
+    };
+
+    // Start progressive generation with callbacks
+    await PersonaStreamingService.generatePersonasProgressive(
+      projectId,
+      input,
+      db,
+      AIAdaptorResolver,
+      {
+        onPersonaParsed: (data) => {
+          sendEvent('persona', data);
+        },
+        onImageGenerated: (data) => {
+          sendEvent('image', data);
+        },
+        onProgress: (data) => {
+          sendEvent('progress', data);
+        },
+        onComplete: (data) => {
+          sendEvent('complete', data);
+          res.end();
+        },
+        onError: (data) => {
+          sendEvent('error', data);
+          res.end();
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Error in streaming persona generation:', error);
+
+    // Try to send error event if headers haven't been sent
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to start persona streaming',
+        message: error.message,
+      });
+    } else {
+      // Send error event via SSE
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ message: error.message, stage: 'initialization' })}\n\n`);
+      res.end();
+    }
   }
 });
 

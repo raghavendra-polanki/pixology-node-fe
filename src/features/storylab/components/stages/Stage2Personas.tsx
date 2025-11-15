@@ -37,6 +37,8 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
 
   // Sync personas with project data when loaded - only if they've been generated
   useEffect(() => {
@@ -63,11 +65,12 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    try {
-      console.log('[V2] Generating personas using AI adaptor...');
+    setGenerationProgress(0);
+    setGenerationStatus('Initializing...');
+    setPersonas([]);
 
-      // Call V2 generation endpoint (adaptor-aware)
-      const generationResponse = await fetch('/api/generation/personas', {
+    try {
+      const response = await fetch('/api/generation/personas-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,73 +84,116 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         }),
       });
 
-      if (!generationResponse.ok) {
-        const errorData = await generationResponse.json();
-        throw new Error(errorData.message || errorData.error || 'Failed to generate personas');
+      if (!response.ok) {
+        throw new Error('Failed to start persona generation');
       }
 
-      const generationData = await generationResponse.json();
-      console.log('[V2] Generation response:', generationData);
-
-      if (!generationData.success || !generationData.data) {
-        throw new Error('Invalid response from generation service');
+      if (!response.body) {
+        throw new Error('Response body is null');
       }
 
-      // Extract personas from V2 response
-      const generatedData = generationData.data;
-      const finalPersonas = generatedData.personas || [];
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEventType = '';
+      const tempPersonas = new Map<number, Persona>();
+      let savedPersonasData: any = null;
 
-      if (!Array.isArray(finalPersonas) || finalPersonas.length === 0) {
-        throw new Error('No personas returned from generation service');
-      }
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // Convert personas to UI format
-      const generatedPersonas: Persona[] = finalPersonas.map((p: any) => {
-        // Extract image URL from nested structure or coreIdentity
-        let imageUrl = '';
-        if (p.image && typeof p.image === 'object') {
-          imageUrl = p.image.url || '';
-        } else if (p.imageUrl) {
-          imageUrl = p.imageUrl;
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          if (line.startsWith('event:')) {
+            currentEventType = line.substring(7).trim();
+          } else if (line.startsWith('data:')) {
+            try {
+              const data = JSON.parse(line.substring(5).trim());
+
+              if (currentEventType === 'persona') {
+                // Persona text parsed
+                const personaData = data.persona;
+                const persona: Persona = {
+                  id: personaData.id || `persona_${data.personaNumber}`,
+                  name: personaData.coreIdentity?.name || 'Unknown',
+                  age: String(personaData.coreIdentity?.age || ''),
+                  demographic: personaData.coreIdentity?.demographic || '',
+                  motivation: personaData.coreIdentity?.motivation || '',
+                  bio: personaData.coreIdentity?.bio || '',
+                  image: '',
+                  selected: false,
+                };
+
+                tempPersonas.set(data.personaNumber, persona);
+                const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) =>
+                  parseInt(a.id.split('_')[1]) - parseInt(b.id.split('_')[1])
+                );
+                setPersonas(updatedPersonas);
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'image') {
+                // Persona image generated
+                if (!data.error && data.imageUrl) {
+                  const persona = tempPersonas.get(data.personaNumber);
+                  if (persona) {
+                    persona.image = data.imageUrl;
+                    tempPersonas.set(data.personaNumber, persona);
+                    const updatedPersonas = Array.from(tempPersonas.values()).sort((a, b) =>
+                      parseInt(a.id.split('_')[1]) - parseInt(b.id.split('_')[1])
+                    );
+                    setPersonas(updatedPersonas);
+                  }
+                }
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'progress') {
+                setGenerationStatus(data.message || '');
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'complete') {
+                setGenerationStatus('Complete!');
+                setGenerationProgress(100);
+                setHasGenerated(true);
+                savedPersonasData = data;
+              } else if (currentEventType === 'error') {
+                throw new Error(data.message || 'Generation failed');
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE event:', parseError);
+            }
+          }
         }
+      }
 
-        return {
-          id: p.id || `persona_${Math.random().toString(36).substr(2, 9)}`,
-          name: (p.coreIdentity as any)?.name || p.name || 'Unknown',
-          age: String((p.coreIdentity as any)?.age || p.age || ''),
-          demographic: (p.coreIdentity as any)?.demographic || p.demographic || '',
-          motivation: (p.coreIdentity as any)?.motivation || p.motivation || '',
-          bio: (p.coreIdentity as any)?.bio || p.bio || '',
-          image: imageUrl,
-          selected: false,
-        };
-      });
-
-      console.log(`[V2] Generated ${generatedPersonas.length} personas`);
-      generatedPersonas.forEach((p, idx) => {
-        console.log(`  Persona ${idx + 1}: ${p.name} - Image: ${p.image ? '✓' : '✗'}`);
-      });
-
-      setPersonas(generatedPersonas);
-      setHasGenerated(true);
-
-      // Step 5: Save generated personas to project
-      console.log('Saving personas to project...');
-      await updateAIPersonas({
-        personas: finalPersonas,
-        generatedAt: new Date(),
-        model: 'multi-modal-pipeline',
-        temperature: 0.7,
-        count: generatedPersonas.length,
-      });
-
-      console.log('Personas generated and saved successfully!');
+      // Save to project after completion
+      if (savedPersonasData) {
+        await updateAIPersonas({
+          personas: savedPersonasData.personas || [],
+          generatedAt: new Date(),
+          model: savedPersonasData.textModel || 'unknown',
+          adaptor: savedPersonasData.textAdaptor || 'unknown',
+          imageAdaptor: savedPersonasData.imageAdaptor,
+          imageModel: savedPersonasData.imageModel,
+          temperature: 0.7,
+          count: savedPersonasData.totalCount || 0,
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate personas';
       console.error('Error generating personas:', errorMessage);
       alert(`Failed to generate personas: ${errorMessage}`);
+      setGenerationStatus('Failed');
     } finally {
       setIsGenerating(false);
+      setTimeout(() => {
+        setGenerationProgress(0);
+        setGenerationStatus('');
+      }, 2000);
     }
   };
 
@@ -233,6 +279,24 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
         </div>
       </div>
 
+      {/* Progress Indicator */}
+      {isGenerating && (
+        <div className="mb-6 p-6 bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-700/50 rounded-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium gradient-shimmer-text animate-fade-in">{generationStatus}</p>
+            <p className="text-sm font-medium text-blue-400 animate-pulse">{generationProgress}%</p>
+          </div>
+          <div className="relative h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner">
+            <div
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out shadow-lg shadow-blue-500/50"
+              style={{ width: `${generationProgress}%` }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Generate & Edit Buttons */}
       <div className="mb-8 flex gap-4">
         <Button
@@ -260,6 +324,40 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           }
           .animate-spark-intense {
             animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+          @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+          }
+          .gradient-shimmer-text {
+            background: linear-gradient(
+              90deg,
+              #60a5fa 0%,
+              #93c5fd 25%,
+              #dbeafe 50%,
+              #93c5fd 75%,
+              #60a5fa 100%
+            );
+            background-size: 200% auto;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 3s ease-in-out infinite;
+          }
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+          .animate-shimmer {
+            animation: shimmer 2s infinite;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in {
+            animation: fadeIn 0.3s ease-out;
           }
         `}</style>
 
