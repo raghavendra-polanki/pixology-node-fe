@@ -383,7 +383,6 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
         status: status as any,
         data,
       });
-      // Reload project to get updated stage executions
       await loadProject(project.id);
     },
     [project, loadProject],
@@ -391,77 +390,87 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
 
   // Mark stage as completed
   const markStageCompleted = useCallback(
-    async (stageName: string, data?: any): Promise<StoryLabProject | null> => {
+    async (stageName: string, data?: any, additionalUpdates?: UpdateProjectInput): Promise<StoryLabProject | null> => {
+      if (!project) return null;
+
       // First, find the index of the stage being completed
       const stageIndex = DEFAULT_WORKFLOW_STAGES.findIndex(s => s.name === stageName);
+      if (stageIndex === -1) return null;
 
-      // Update stage status
-      const updatedAfterStatus = await updateStageStatus(stageName, 'completed', data);
+      console.log(`markStageCompleted: Completed stage '${stageName}' (index=${stageIndex}), current=${project.currentStageIndex}`);
 
-      // Find the highest stage the user has reached
-      if (stageIndex !== -1 && project) {
-        console.log(`markStageCompleted: Completed stage '${stageName}' (index=${stageIndex}), current=${project.currentStageIndex}`);
+      // Build the updated stageExecutions object
+      const updatedStageExecutions = { ...project.stageExecutions };
 
-        // Only advance currentStageIndex if completing a stage AT or PAST current position
-        // This handles two cases:
-        // 1. Normal progression: completing current stage moves to next
-        // 2. Re-editing: completing a previous stage doesn't change currentStageIndex
+      // Mark the current stage as completed
+      updatedStageExecutions[stageName] = {
+        ...updatedStageExecutions[stageName],
+        stageName,
+        status: 'completed' as const,
+        startedAt: updatedStageExecutions[stageName]?.startedAt || new Date(),
+        completedAt: new Date(),
+        ...(data && { data }),
+      };
 
-        let shouldAdvance = false;
+      // Determine if we should advance and handle downstream stages
+      let shouldUpdateStageIndex = false;
+      let nextStageIndex = project.currentStageIndex;
 
-        // If we just completed a stage that's at the current index, we can advance
-        if (stageIndex === project.currentStageIndex) {
-          shouldAdvance = true;
-          console.log(`markStageCompleted: Stage ${stageIndex} is current, advancing to next`);
-        } else if (stageIndex > project.currentStageIndex) {
-          // Completing a future stage (shouldn't happen normally)
-          shouldAdvance = true;
-          console.log(`markStageCompleted: Stage ${stageIndex} is ahead of current, advancing`);
-        } else {
-          // Editing a PREVIOUS stage - mark all downstream stages as "pending" (need regeneration)
-          // IMPORTANT: Previously generated data (videos, storyboards, etc.) are PRESERVED
-          // Only stage status is marked as pending - users don't lose their generated work
-          console.log(`markStageCompleted: Editing previous stage ${stageIndex}, marking downstream stages as pending for regeneration`);
+      if (stageIndex === project.currentStageIndex) {
+        // Normal progression: completing the current stage, advance to next
+        shouldUpdateStageIndex = true;
+        nextStageIndex = Math.min(stageIndex + 1, DEFAULT_WORKFLOW_STAGES.length - 1);
+        console.log(`markStageCompleted: Stage ${stageIndex} is current, advancing to ${nextStageIndex}`);
+      } else if (stageIndex > project.currentStageIndex) {
+        // Completing a future stage (shouldn't happen normally), advance to next
+        shouldUpdateStageIndex = true;
+        nextStageIndex = Math.min(stageIndex + 1, DEFAULT_WORKFLOW_STAGES.length - 1);
+        console.log(`markStageCompleted: Stage ${stageIndex} is ahead of current, advancing to ${nextStageIndex}`);
+      } else {
+        // Editing a PREVIOUS stage - mark all downstream stages as "pending" but DON'T change currentStageIndex
+        console.log(`markStageCompleted: Re-editing previous stage ${stageIndex} (current is ${project.currentStageIndex}), marking downstream stages as pending`);
 
-          // Mark all stages AFTER this one as pending since upstream data changed
-          for (let i = stageIndex + 1; i < DEFAULT_WORKFLOW_STAGES.length; i++) {
-            const downstreamStageName = DEFAULT_WORKFLOW_STAGES[i].name;
-            console.log(`markStageCompleted: Marking stage ${i} (${downstreamStageName}) as pending`);
+        for (let i = stageIndex + 1; i < DEFAULT_WORKFLOW_STAGES.length; i++) {
+          const downstreamStageName = DEFAULT_WORKFLOW_STAGES[i].name;
+          console.log(`markStageCompleted: Marking stage ${i} (${downstreamStageName}) as pending`);
 
-            try {
-              await projectService.current.updateStageExecution(project.id, {
-                stageName: downstreamStageName,
-                status: 'pending',
-                // Generated data is preserved by backend - not cleared here
-              });
-            } catch (error) {
-              console.error(`Error marking stage ${downstreamStageName} as pending:`, error);
-            }
-          }
-
-          // When re-editing a previous stage, we should advance from THIS stage, not the original position
-          // So set shouldAdvance = true and set currentStageIndex to this stage
-          shouldAdvance = true;
-          console.log(`markStageCompleted: Re-editing previous stage, will advance from stage ${stageIndex}`);
+          updatedStageExecutions[downstreamStageName] = {
+            ...updatedStageExecutions[downstreamStageName],
+            stageName: downstreamStageName,
+            status: 'pending' as const,
+            startedAt: updatedStageExecutions[downstreamStageName]?.startedAt || new Date(),
+            // Preserve existing data - not cleared
+          };
         }
 
-        if (shouldAdvance) {
-          const updatedProject = await updateProject(
-            {
-              currentStageIndex: stageIndex,
-            },
-            project.id
-          );
-          console.log(`markStageCompleted: Advanced currentStageIndex to ${stageIndex}`);
-          return updatedProject;
-        } else {
-          // Return the project after status update but without advancing
-          return project;
-        }
+        // Don't advance currentStageIndex when re-editing previous stages
+        shouldUpdateStageIndex = false;
+        console.log(`markStageCompleted: Keeping currentStageIndex at ${project.currentStageIndex} (not advancing)`);
       }
-      return null;
+
+      // Single batched update with all changes
+      const updates: any = {
+        ...additionalUpdates, // Include any additional updates (like screenplayCustomizations)
+        stageExecutions: updatedStageExecutions,
+      };
+
+      if (shouldUpdateStageIndex) {
+        updates.currentStageIndex = nextStageIndex;
+      }
+
+      console.log(`markStageCompleted: Performing single batched update with:`, {
+        hasCustomizations: !!additionalUpdates,
+        stageExecutionsKeys: Object.keys(updatedStageExecutions),
+        willUpdateStageIndex: shouldUpdateStageIndex,
+        currentStageIndex: updates.currentStageIndex,
+        updateKeys: Object.keys(updates),
+      });
+      const updatedProject = await updateProject(updates, project.id);
+      console.log(`markStageCompleted: Batched update complete. Stage index ${shouldUpdateStageIndex ? `advanced from ${stageIndex} to ${nextStageIndex}` : `kept at ${project.currentStageIndex}`}. New project currentStageIndex:`, updatedProject.currentStageIndex);
+
+      return updatedProject;
     },
-    [updateStageStatus, updateProject, project],
+    [updateProject, project],
   );
 
   // Mark stage as failed

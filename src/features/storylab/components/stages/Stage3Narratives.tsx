@@ -35,6 +35,7 @@ interface Stage3Props {
   updateAINarratives?: (narratives: any) => Promise<void>;
   markStageCompleted?: (stage: string) => Promise<void>;
   advanceToNextStage?: () => Promise<void>;
+  navigateToStage?: (stageId: number) => void;
 }
 
 const narrativeOptions: Narrative[] = [
@@ -182,6 +183,7 @@ export function Stage3Narratives({
   updateAINarratives: propUpdateAINarratives,
   markStageCompleted: propMarkStageCompleted,
   advanceToNextStage: propAdvanceToNextStage,
+  navigateToStage: propNavigateToStage,
 }: Stage3Props) {
   // All state declarations FIRST
   const [selectedNarrative, setSelectedNarrative] = useState<string>('');
@@ -207,6 +209,7 @@ export function Stage3Narratives({
   const updateAINarratives = propUpdateAINarratives || hookResult.updateAINarratives;
   const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
   const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
+  const navigateToStage = propNavigateToStage;
   const isSaving = hookResult.isSaving;
 
   // DEBUG: Log project state for troubleshooting
@@ -361,15 +364,17 @@ export function Stage3Narratives({
         }, project.id);
       }
 
-      // Mark stage as completed and get updated project
+      // Mark stage as completed
       console.log('Marking narrative stage as completed...');
-      const updatedProject = await markStageCompleted('narrative');
+      await markStageCompleted('narrative');
 
       console.log('Stage completed successfully. Advancing to next stage...');
       alert('Narrative preferences saved! Moving to next stage...');
 
-      // Advance to the next stage (Stage 4 - Storyboard) with updated project
-      await advanceToNextStage(updatedProject || undefined);
+      // Navigate to the next stage (Stage 4 - Storyboard)
+      if (navigateToStage) {
+        navigateToStage(4);
+      }
     } catch (error) {
       console.error('Failed to save narrative preferences:', error);
       alert(`Failed to save narrative preferences: ${error instanceof Error ? error.message : String(error)}`);

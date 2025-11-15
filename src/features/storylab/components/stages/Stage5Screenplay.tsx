@@ -27,13 +27,34 @@ interface Stage5Props {
   updateScreenplayCustomizations?: (customizations: any, projectId: string) => Promise<void>;
   markStageCompleted?: (stage: string) => Promise<void>;
   advanceToNextStage?: () => Promise<void>;
+  navigateToStage?: (stageId: number) => void;
 }
 
 // Helper function to format script/dialogue content
 function formatScriptContent(script: any): string {
+  // Handle arrays - join with newlines
+  if (Array.isArray(script)) {
+    return script.map(item => formatScriptContent(item)).join('\n');
+  }
+
+  // Handle strings - try to parse if it looks like JSON
   if (typeof script === 'string') {
+    // Check if string is a JSON array
+    const trimmed = script.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.join('\n');
+        }
+      } catch (e) {
+        // Not valid JSON, return as is
+      }
+    }
     return script;
   }
+
+  // Handle objects with specific structure
   if (typeof script === 'object' && script !== null) {
     // Handle script objects with {type, speaker, text} structure
     if (script.speaker && script.text) {
@@ -45,7 +66,57 @@ function formatScriptContent(script: any): string {
     // Fallback: convert object to string
     return JSON.stringify(script);
   }
+
   return String(script);
+}
+
+// Helper function to parse and format content with timecodes
+function parseTimecodeContent(content: string): { timecode: string; text: string }[] | null {
+  if (!content || typeof content !== 'string') return null;
+
+  // Pattern to match timecode entries like "0:00-0:01: text" or "SFX 0:00-0:01: text" or "VO 0:02-0:03: text"
+  const timecodePattern = /(?:^|\n)(?:(SFX|VO|Text)\s+)?(\d+:\d+(?:\.\d+)?)\s*[-–]\s*(\d+:\d+(?:\.\d+)?)\s*:\s*(.+?)(?=(?:\n(?:SFX|VO|Text)?\s*\d+:\d+|\n\n|$))/gis;
+
+  const matches = Array.from(content.matchAll(timecodePattern));
+
+  if (matches.length === 0) return null;
+
+  return matches.map(match => ({
+    timecode: `${match[1] ? match[1] + ' ' : ''}${match[2]}-${match[3]}`,
+    text: match[4].trim()
+  }));
+}
+
+// Component to render formatted timecode content
+function TimecodeContent({ content }: { content: string }) {
+  const parsed = parseTimecodeContent(content);
+
+  if (!parsed) {
+    // No timecodes found, render as plain text with line breaks
+    return (
+      <div className="space-y-1">
+        {content.split('\n').filter(line => line.trim()).map((line, idx) => (
+          <p key={idx} className="text-gray-300 text-sm leading-relaxed">{line}</p>
+        ))}
+      </div>
+    );
+  }
+
+  // Render with timecode formatting
+  return (
+    <div className="space-y-2">
+      {parsed.map((item, idx) => (
+        <div key={idx} className="flex gap-2">
+          <span className="text-blue-400 text-xs font-mono whitespace-nowrap flex-shrink-0 mt-0.5">
+            {item.timecode}
+          </span>
+          <span className="text-gray-300 text-sm leading-relaxed flex-1">
+            {item.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function Stage5Screenplay({
@@ -55,6 +126,7 @@ export function Stage5Screenplay({
   updateScreenplayCustomizations: propUpdateScreenplayCustomizations,
   markStageCompleted: propMarkStageCompleted,
   advanceToNextStage: propAdvanceToNextStage,
+  navigateToStage: propNavigateToStage,
 }: Stage5Props) {
   // Load project using hook, but prefer passed props from WorkflowView
   const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
@@ -66,6 +138,7 @@ export function Stage5Screenplay({
   const updateScreenplayCustomizations = propUpdateScreenplayCustomizations || hookResult.updateScreenplayCustomizations;
   const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
   const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
+  const navigateToStage = propNavigateToStage;
 
   const [screenplay, setScreenplay] = useState<ScreenplayEntry[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -159,28 +232,23 @@ export function Stage5Screenplay({
     try {
       console.log('handleSubmit: Starting screenplay finalization');
 
-      // Save screenplay customizations
-      if (screenplay.length > 0) {
-        console.log('handleSubmit: Saving screenplay customizations...');
-        await updateScreenplayCustomizations({
+      // Prepare screenplay customizations if any
+      const additionalUpdates = screenplay.length > 0 ? {
+        screenplayCustomizations: {
           editedText: screenplay,
           lastEditedAt: new Date(),
-        });
-        console.log('handleSubmit: Screenplay customizations saved');
+        }
+      } : undefined;
+
+      // Mark stage as completed with batched updates (includes customizations, stage execution, and stage advancement)
+      console.log('handleSubmit: Marking screenplay stage as completed with batched updates...');
+      await markStageCompleted('screenplay', undefined, additionalUpdates);
+      console.log('handleSubmit: Screenplay stage completed and advanced to next stage (single save operation)');
+
+      // Navigate to next stage (Generate Video = stage 6)
+      if (navigateToStage) {
+        navigateToStage(6);
       }
-
-      // Mark stage as completed and get updated project
-      console.log('handleSubmit: Marking screenplay stage as completed...');
-      const updatedProject = await markStageCompleted('screenplay');
-      console.log('handleSubmit: Stage marked as completed, updated project:', {
-        currentStageIndex: updatedProject?.currentStageIndex,
-      });
-
-      // Advance to next stage using the updated project
-      // This ensures we're using the latest state
-      console.log('handleSubmit: Advancing to next stage...');
-      await advanceToNextStage(updatedProject || undefined);
-      console.log('handleSubmit: Successfully advanced to next stage');
     } catch (error) {
       console.error('Failed to save screenplay:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -194,13 +262,31 @@ export function Stage5Screenplay({
 
   // Show prompt editor if requested
   if (showPromptEditor) {
+    // Get selected persona
+    const selectedPersona = project?.aiGeneratedPersonas?.personas?.find(
+      (p: any) => p.id === project?.userPersonaSelection?.selectedPersonaIds?.[0]
+    );
+    const selectedPersonaName = selectedPersona?.coreIdentity?.name || 'Character';
+
+    // Format storyboard scenes for the prompt
+    const storyboardScenes = project?.aiGeneratedStoryboard?.scenes || [];
+    const storyboardScenesText = storyboardScenes.map((scene: any, index: number) => {
+      return `Scene ${index + 1}: ${scene.title || 'Untitled'}
+Description: ${scene.description || 'No description'}
+Location: ${scene.location || 'Not specified'}
+Visual Elements: ${scene.visualElements || 'Not specified'}
+Camera Work: ${scene.cameraWork || 'Not specified'}`;
+    }).join('\n\n');
+
     return (
       <PromptTemplateEditor
         stageType="stage_5_screenplay"
         projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
         stageData={{
-          videoDuration: project?.campaignDetails?.videoDuration || '',
+          storyboardScenes: storyboardScenesText || 'No storyboard scenes available',
+          selectedPersonaName: selectedPersonaName,
+          videoDuration: project?.campaignDetails?.videoDuration || '30s',
         }}
       />
     );
@@ -356,7 +442,7 @@ export function Stage5Screenplay({
                               className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-16 text-sm"
                             />
                           ) : (
-                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.visual)}</p>
+                            <TimecodeContent content={formatScriptContent(entry.visual)} />
                           )}
                         </div>
 
@@ -370,7 +456,7 @@ export function Stage5Screenplay({
                               className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-12 text-sm"
                             />
                           ) : (
-                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.cameraFlow)}</p>
+                            <TimecodeContent content={formatScriptContent(entry.cameraFlow)} />
                           )}
                         </div>
 
@@ -384,7 +470,7 @@ export function Stage5Screenplay({
                               className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-12 text-sm"
                             />
                           ) : (
-                            <p className="text-gray-300 text-sm leading-relaxed">{formatScriptContent(entry.script)}</p>
+                            <TimecodeContent content={formatScriptContent(entry.script)} />
                           )}
                         </div>
 

@@ -40,6 +40,7 @@ interface Stage4Props {
   updateStoryboardCustomizations?: (customizations: any, projectId: string) => Promise<void>;
   markStageCompleted?: (stage: string) => Promise<void>;
   advanceToNextStage?: () => Promise<void>;
+  navigateToStage?: (stageId: number) => void;
 }
 
 type ViewMode = 'grid';
@@ -51,6 +52,7 @@ export function Stage4Storyboard({
   updateStoryboardCustomizations: propUpdateStoryboardCustomizations,
   markStageCompleted: propMarkStageCompleted,
   advanceToNextStage: propAdvanceToNextStage,
+  navigateToStage: propNavigateToStage,
 }: Stage4Props) {
   // Load project using hook, but prefer passed props from WorkflowView
   const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
@@ -62,6 +64,7 @@ export function Stage4Storyboard({
   const updateStoryboardCustomizations = propUpdateStoryboardCustomizations || hookResult.updateStoryboardCustomizations;
   const markStageCompleted = propMarkStageCompleted || hookResult.markStageCompleted;
   const advanceToNextStage = propAdvanceToNextStage || hookResult.advanceToNextStage;
+  const navigateToStage = propNavigateToStage;
   const loadProject = hookResult.loadProject;
 
   const generatedScenesRef = useRef<HTMLDivElement>(null);
@@ -338,17 +341,21 @@ export function Stage4Storyboard({
 
   const handleSubmit = async () => {
     try {
-      // Save storyboard customizations
-      if (scenes.length > 0) {
-        await updateStoryboardCustomizations({
+      // Prepare storyboard customizations if any
+      const additionalUpdates = scenes.length > 0 ? {
+        storyboardCustomizations: {
           editedScenes: scenes,
           lastEditedAt: new Date(),
-        });
+        }
+      } : undefined;
+
+      // Mark stage as completed with batched updates (includes customizations, stage execution, and stage advancement)
+      await markStageCompleted('storyboard', undefined, additionalUpdates);
+
+      // Navigate to next stage (Screenplay = stage 5)
+      if (navigateToStage) {
+        navigateToStage(5);
       }
-      // Mark stage as completed and get updated project
-      const updatedProject = await markStageCompleted('storyboard');
-      // Advance to next stage with updated project
-      await advanceToNextStage(updatedProject || undefined);
     } catch (error) {
       console.error('Failed to save storyboard:', error);
     }

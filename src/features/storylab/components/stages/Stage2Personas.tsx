@@ -27,9 +27,10 @@ interface Stage2Props {
   updatePersonaSelection: (selection: any) => Promise<void>;
   markStageCompleted: (stageName: string, data?: any) => Promise<void>;
   advanceToNextStage: (projectToAdvance?: any) => Promise<void>;
+  navigateToStage?: (stageId: number) => void;
 }
 
-export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, markStageCompleted, advanceToNextStage }: Stage2Props) {
+export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, markStageCompleted, advanceToNextStage, navigateToStage }: Stage2Props) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -181,10 +182,12 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           selectedPersonaIds: selectedPersonas.map(p => p.id),
           primaryPersonaId: selectedPersonas[0]?.id,
         });
-        // Mark stage as completed and get updated project
-        const updatedProject = await markStageCompleted('personas');
-        // Advance to next stage with updated project
-        await advanceToNextStage(updatedProject || undefined);
+        // Mark stage as completed
+        await markStageCompleted('personas');
+        // Navigate to next stage (Stage 3 - Narratives)
+        if (navigateToStage) {
+          navigateToStage(3);
+        }
       } catch (error) {
         console.error('Failed to save persona selection:', error);
       } finally {

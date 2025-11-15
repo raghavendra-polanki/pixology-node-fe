@@ -97,11 +97,28 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
     return project.stageExecutions?.[stageName]?.status === 'completed';
   };
 
+  const wasStageCompletedBefore = (stageIndex: number) => {
+    if (!project) return false;
+    const stageName = STAGE_NAMES[stageIndex - 1];
+    // A stage was completed before if it has a completedAt timestamp, regardless of current status
+    return !!project.stageExecutions?.[stageName]?.completedAt;
+  };
+
   const isStageAccessible = (stageIndex: number) => {
     if (!project) return stageIndex === 1; // Only stage 1 accessible before project loads
+
     // Can access current stage and all completed stages before it
     if (stageIndex <= currentStage) return true;
-    // Check if all previous stages are completed
+
+    // Always allow navigation to the next stage (currentStage + 1)
+    // This enables progression even when downstream stages are pending due to re-editing
+    if (stageIndex === currentStage + 1) return true;
+
+    // Allow access to any stage that was previously completed, even if now pending
+    // This lets users view generated content that needs regeneration
+    if (wasStageCompletedBefore(stageIndex)) return true;
+
+    // Check if all previous stages are completed (for stages further ahead)
     for (let i = 1; i < stageIndex; i++) {
       if (!isStageCompleted(i)) return false;
     }
@@ -241,6 +258,7 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
               updateScreenplayCustomizations={updateScreenplayCustomizations}
               markStageCompleted={markStageCompleted}
               advanceToNextStage={advanceToNextStage}
+              navigateToStage={handleStageNavigation}
             />
           </div>
         )}

@@ -17,6 +17,7 @@ interface Stage1Props {
   updateCampaignDetails: (details: Partial<UserInputCampaignDetails>) => Promise<void>;
   markStageCompleted: (stageName: string, data?: any) => Promise<void>;
   advanceToNextStage: (projectToAdvance?: StoryLabProject) => Promise<void>;
+  navigateToStage?: (stageId: number) => void;
 }
 
 export function Stage1CampaignDetails({
@@ -26,6 +27,7 @@ export function Stage1CampaignDetails({
   updateCampaignDetails,
   markStageCompleted,
   advanceToNextStage,
+  navigateToStage,
 }: Stage1Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -83,17 +85,21 @@ export function Stage1CampaignDetails({
         });
         // After creating, reload the project to get full data with stage executions
         if (newProject) {
-          const loadedProject = await loadProject(newProject.id);
-          // Advance to next stage - pass the loaded project to avoid timing issues
-          await advanceToNextStage(loadedProject);
+          await loadProject(newProject.id);
+          // Navigate to next stage (Stage 2 - Personas)
+          if (navigateToStage) {
+            navigateToStage(2);
+          }
         }
       } else {
         // Update campaign details for existing projects
         await updateCampaignDetails(formData);
-        // Mark stage as completed for existing projects and get updated project
-        const updatedProject = await markStageCompleted('campaign-details');
-        // Advance to next stage with updated project to avoid stale state
-        await advanceToNextStage(updatedProject || undefined);
+        // Mark stage as completed for existing projects
+        await markStageCompleted('campaign-details');
+        // Navigate to next stage (Stage 2 - Personas)
+        if (navigateToStage) {
+          navigateToStage(2);
+        }
       }
     } catch (error) {
       console.error('Failed to save campaign details:', error);
