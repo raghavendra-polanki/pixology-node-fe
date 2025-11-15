@@ -10,16 +10,16 @@ admin.initializeApp({
   projectId: 'core-silicon-476114-i0',
 });
 
-// Get Firestore instance for pixology-v2 database
+// Get Firestore instance for configured database
 const db = admin.firestore();
 db.settings({
   ignoreUndefinedProperties: true,
-  databaseId: 'pixology-v2',
+  databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2',
 });
 
 async function migrateProjects() {
   try {
-    console.log('\n📊 Exploring pixology-v2 database...\n');
+    console.log(`\n📊 Exploring ${process.env.FIRESTORE_DATABASE_ID || 'pixology-v2'} database...\n`);
 
     // Get all projects
     const projectsSnapshot = await db.collection('projects').get();

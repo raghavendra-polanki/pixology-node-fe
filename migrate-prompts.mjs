@@ -16,7 +16,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-db.settings({ databaseId: 'pixology-v2' });
+db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2' });
 
 // Import the recipe data to extract prompts
 const RecipeSeedDataPath = path.join(__dirname, 'api/services/RecipeSeedData.js');

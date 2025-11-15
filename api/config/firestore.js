@@ -57,7 +57,7 @@ try {
 const db = admin.firestore();
 
 // Try to set database ID via settings (supported in some versions)
-const databaseId = process.env.FIRESTORE_DATABASE_ID || 'pixology-v2';
+const databaseId = process.env.FIRESTORE_DATABASE_ID;
 try {
   db.settings({
     ignoreUndefinedProperties: true,

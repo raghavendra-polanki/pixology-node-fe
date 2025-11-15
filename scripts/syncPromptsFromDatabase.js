@@ -38,7 +38,7 @@ try {
 }
 
 const db = admin.firestore();
-db.settings({ databaseId: 'pixology-v2' });
+db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2' });
 
 /**
  * Convert a template object to formatted JavaScript code
@@ -115,7 +115,7 @@ function escapeTemplate(str) {
 async function syncPromptsFromDatabase() {
   try {
     console.log('🔄 Syncing prompts from Firestore to PromptTemplateSeedData.js...\n');
-    console.log('Database: pixology-v2\n');
+    console.log(`Database: ${process.env.FIRESTORE_DATABASE_ID || 'pixology-v2'}\n`);
 
     // Fetch all prompt templates from Firestore
     const templatesSnapshot = await db.collection('prompt_templates').get();
