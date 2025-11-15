@@ -67,6 +67,86 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
   }
 
   /**
+   * Check if Gemini supports streaming
+   */
+  supportsStreaming() {
+    return true;
+  }
+
+  /**
+   * Generate text with streaming support using Gemini's native streaming API
+   */
+  async generateTextStream(prompt, options = {}, onChunk = null) {
+    const mergedConfig = { ...this.config, ...options };
+
+    try {
+      const model = this.client.getGenerativeModel({
+        model: this.modelId,
+      });
+
+      const result = await model.generateContentStream({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: mergedConfig.temperature !== undefined ? mergedConfig.temperature : 0.7,
+          topK: mergedConfig.topK,
+          topP: mergedConfig.topP,
+          maxOutputTokens: mergedConfig.maxOutputTokens || 8192,
+        },
+      });
+
+      let fullText = '';
+      let usageMetadata = null;
+
+      // Stream chunks
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullText += chunkText;
+
+        // Call onChunk callback for real-time processing
+        if (onChunk) {
+          onChunk({
+            type: 'chunk',
+            text: chunkText,
+            fullText: fullText,
+            done: false,
+          });
+        }
+      }
+
+      // Get final response with usage metadata
+      const response = await result.response;
+      usageMetadata = response.usageMetadata || {};
+
+      // Final callback
+      if (onChunk) {
+        onChunk({
+          type: 'complete',
+          text: fullText,
+          done: true,
+        });
+      }
+
+      return {
+        text: fullText,
+        model: this.modelId,
+        backend: 'gemini',
+        usage: {
+          inputTokens: usageMetadata.promptTokenCount || 0,
+          outputTokens: usageMetadata.candidatesTokenCount || 0,
+          totalTokens: usageMetadata.totalTokenCount || 0,
+        },
+      };
+    } catch (error) {
+      throw new Error(`Gemini streaming generation error: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate image using Gemini 2.5 Flash Image model
    * @param {string} prompt - Text prompt for image generation
    * @param {object} options - Options object

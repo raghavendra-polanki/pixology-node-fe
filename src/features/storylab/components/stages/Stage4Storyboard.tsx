@@ -80,6 +80,8 @@ export function Stage4Storyboard({
   const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newGeneratedImage, setNewGeneratedImage] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
 
   // Sync scenes with project data when loaded
   useEffect(() => {
@@ -100,6 +102,10 @@ export function Stage4Storyboard({
 
   const handleGenerateStoryboard = async () => {
     setIsGenerating(true);
+    setGenerationProgress(0);
+    setGenerationStatus('Initializing...');
+    setScenes([]); // Clear existing scenes for progressive loading
+
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
 
@@ -121,8 +127,8 @@ export function Stage4Storyboard({
         throw new Error('No persona selected. Please select a persona first.');
       }
 
-      // Generate storyboard using adaptor-based V2 service
-      const generationResponse = await fetch('/api/generation/storyboard', {
+      // Generate storyboard using streaming endpoint
+      const response = await fetch('/api/generation/storyboard-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,63 +146,106 @@ export function Stage4Storyboard({
         }),
       });
 
-      if (!generationResponse.ok) {
-        const errorData = await generationResponse.json();
-        throw new Error(errorData.error || 'Failed to generate storyboard');
+      if (!response.ok) {
+        throw new Error('Failed to start storyboard generation');
       }
 
-      const generationData = await generationResponse.json();
-      const storyboard = generationData.data?.scenes || [];
-
-      if (!Array.isArray(storyboard) || storyboard.length === 0) {
-        throw new Error('No storyboard returned from generation service');
+      if (!response.body) {
+        throw new Error('No response body for streaming');
       }
 
-      // Map API response to Scene interface
-      const generatedScenes: Scene[] = storyboard.map((scene: any, index: number) => ({
-        id: scene.sceneNumber?.toString() || `scene_${index}`,
-        number: scene.sceneNumber || index + 1,
-        title: scene.title || `Scene ${index + 1}`,
-        description: scene.description || '',
-        visualNote: scene.cameraWork || scene.keyFrameDescription || scene.cameraInstructions || '',
-        image: scene.image?.url || scene.referenceImage?.url || scene.referenceImage || '',
-      }));
+      // Read SSE stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEventType = '';
+      const tempScenes = new Map<number, Scene>();
 
-      console.log('Setting generated scenes:', generatedScenes);
-      setScenes(generatedScenes);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // Save generated storyboard to project
-      const storyboardPayload = {
-        scenes: storyboard,
-        generatedAt: new Date(),
-        model: 'storyboard-generation-v2',
-        count: storyboard.length,
-      };
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
 
-      console.log('Saving storyboard to project...', {
-        projectId: project.id,
-        sceneCount: storyboard.length,
-      });
+        // Split by newlines to process SSE events
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
-      const savedProject = await updateAIStoryboard(storyboardPayload, project.id);
-      console.log('Storyboard saved successfully');
+        for (const line of lines) {
+          if (!line.trim()) continue; // Skip empty lines
 
-      // Reload project to ensure we have latest data
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      await loadProject(project.id);
+          if (line.startsWith('event:')) {
+            currentEventType = line.substring(7).trim();
+          } else if (line.startsWith('data:')) {
+            try {
+              const data = JSON.parse(line.substring(5).trim());
 
-      // Scroll to the generated scenes section
-      setTimeout(() => {
-        if (generatedScenesRef.current) {
-          generatedScenesRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // Handle different event types
+              if (currentEventType === 'start') {
+                setGenerationStatus(data.message || 'Starting generation...');
+              } else if (currentEventType === 'progress') {
+                setGenerationStatus(data.message || '');
+                if (data.progress !== undefined) {
+                  setGenerationProgress(data.progress);
+                }
+              } else if (currentEventType === 'scene') {
+                // Add scene to temp map and update UI immediately
+                const scene: Scene = {
+                  id: data.scene.sceneNumber?.toString() || data.sceneNumber.toString(),
+                  number: data.sceneNumber,
+                  title: data.scene.title || `Scene ${data.sceneNumber}`,
+                  description: data.scene.description || '',
+                  visualNote: data.scene.cameraWork || data.scene.keyFrameDescription || '',
+                  image: '', // Will be filled when image is generated
+                };
+
+                tempScenes.set(data.sceneNumber, scene);
+
+                // Update scenes array progressively
+                const updatedScenes = Array.from(tempScenes.values()).sort((a, b) => a.number - b.number);
+                setScenes(updatedScenes);
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'image') {
+                // Update scene with image URL
+                const existingScene = tempScenes.get(data.sceneNumber);
+                if (existingScene) {
+                  existingScene.image = data.imageUrl || '';
+                  tempScenes.set(data.sceneNumber, existingScene);
+                  const updatedScenes = Array.from(tempScenes.values()).sort((a, b) => a.number - b.number);
+                  setScenes(updatedScenes);
+                }
+
+                setGenerationProgress(data.progress || 0);
+              } else if (currentEventType === 'complete') {
+                setGenerationStatus('Storyboard complete!');
+                setGenerationProgress(100);
+
+                // Reload project to get latest data from Firestore
+                await loadProject(project.id);
+
+                // Scroll to generated scenes
+                setTimeout(() => {
+                  if (generatedScenesRef.current) {
+                    generatedScenesRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 500);
+              } else if (currentEventType === 'error') {
+                throw new Error(data.message || 'Generation failed');
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE event:', parseError);
+            }
+          }
         }
-      }, 500);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate storyboard';
       console.error('Error generating storyboard:', errorMessage);
       alert(`Failed to generate storyboard: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
+      setGenerationStatus('');
     }
   };
 
@@ -463,6 +512,33 @@ export function Stage4Storyboard({
             </>
           )}
         </Button>
+
+        {/* Progress Indicator */}
+        {isGenerating && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span
+                className="gradient-shimmer-text animate-status-fade font-medium"
+                key={generationStatus}
+              >
+                {generationStatus}
+              </span>
+              <span className="text-blue-400 font-medium animate-pulse-subtle">
+                {generationProgress}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden relative">
+              <div
+                className="progress-bar-animated h-2 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                style={{ width: `${generationProgress}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer" />
+              </div>
+            </div>
+          </div>
+        )}
+
         <style>{`
           @keyframes sparkIntense {
             0%, 100% { opacity: 1; transform: scale(1); }
@@ -470,6 +546,74 @@ export function Stage4Storyboard({
           }
           .animate-spark-intense {
             animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+          .animate-shimmer {
+            animation: shimmer 2s ease-in-out infinite;
+          }
+
+          @keyframes statusFade {
+            0% {
+              opacity: 0;
+              transform: translateY(-4px);
+            }
+            100% {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .animate-status-fade {
+            animation: statusFade 0.4s ease-out;
+          }
+
+          @keyframes pulseSubtle {
+            0%, 100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 0.8;
+              transform: scale(1.05);
+            }
+          }
+          .animate-pulse-subtle {
+            animation: pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+
+          @keyframes gradientShift {
+            0% {
+              background-position: 0% 50%;
+            }
+            50% {
+              background-position: 100% 50%;
+            }
+            100% {
+              background-position: 0% 50%;
+            }
+          }
+
+          .gradient-shimmer-text {
+            background: linear-gradient(
+              90deg,
+              #60a5fa 0%,
+              #93c5fd 25%,
+              #dbeafe 50%,
+              #93c5fd 75%,
+              #60a5fa 100%
+            );
+            background-size: 200% auto;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 3s ease-in-out infinite;
+          }
+
+          .progress-bar-animated {
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
           }
         `}</style>
       </div>

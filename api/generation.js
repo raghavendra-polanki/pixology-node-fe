@@ -13,6 +13,7 @@ const require = createRequire(import.meta.url);
 const PersonaGenerationService = require('./services/PersonaGenerationService.cjs');
 const NarrativeGenerationService = require('./services/NarrativeGenerationService.cjs');
 const StoryboardGenerationService = require('./services/StoryboardGenerationService.cjs');
+const StoryboardStreamingService = require('./services/StoryboardStreamingService.cjs');
 const ScreenplayGenerationService = require('./services/ScreenplayGenerationService.cjs');
 const VideoGenerationService = require('./services/VideoGenerationService.cjs');
 
@@ -172,6 +173,130 @@ router.post('/storyboard', async (req, res) => {
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
+  }
+});
+
+/**
+ * POST /api/generation/storyboard-stream
+ * Generate storyboard with Server-Sent Events (SSE) streaming
+ * Provides real-time updates as scenes and images are generated
+ */
+router.post('/storyboard-stream', async (req, res) => {
+  try {
+    const {
+      projectId,
+      productDescription,
+      targetAudience,
+      selectedPersonaName,
+      selectedPersonaDescription,
+      selectedPersonaImage,
+      productImageUrl,
+      narrativeTheme,
+      narrativeStructure,
+      numberOfScenes = 5,
+      videoDuration = '30s',
+    } = req.body;
+
+    if (
+      !projectId ||
+      !productDescription ||
+      !targetAudience ||
+      !selectedPersonaName ||
+      !narrativeTheme
+    ) {
+      return res.status(400).json({
+        error:
+          'projectId, productDescription, targetAudience, selectedPersonaName, and narrativeTheme are required',
+      });
+    }
+
+    console.log(`[Generation] Starting streaming storyboard generation for project ${projectId}`);
+
+    // Bypass compression for SSE
+    req.shouldCompress = false;
+
+    // Setup Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    res.setHeader('Content-Encoding', 'none'); // Disable compression
+
+    // Ensure response is not buffered
+    res.flushHeaders();
+
+    // Helper to send SSE events
+    const sendEvent = (eventType, data) => {
+      const eventData = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+      res.write(eventData);
+
+      // Explicitly flush if available
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    };
+
+    // Send initial start event
+    sendEvent('start', {
+      message: 'Starting storyboard generation',
+      projectId,
+      numberOfScenes,
+    });
+
+    const input = {
+      productDescription,
+      targetAudience,
+      selectedPersonaName,
+      selectedPersonaDescription,
+      selectedPersonaImage,
+      productImageUrl,
+      narrativeTheme,
+      narrativeStructure,
+      numberOfScenes,
+      videoDuration,
+    };
+
+    // Start progressive generation with callbacks
+    await StoryboardStreamingService.generateStoryboardProgressive(
+      projectId,
+      input,
+      db,
+      AIAdaptorResolver,
+      {
+        onSceneParsed: (data) => {
+          sendEvent('scene', data);
+        },
+        onImageGenerated: (data) => {
+          sendEvent('image', data);
+        },
+        onProgress: (data) => {
+          sendEvent('progress', data);
+        },
+        onComplete: (data) => {
+          sendEvent('complete', data);
+          res.end();
+        },
+        onError: (data) => {
+          sendEvent('error', data);
+          res.end();
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Error in streaming storyboard generation:', error);
+
+    // Try to send error event if headers haven't been sent
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to start storyboard streaming',
+        message: error.message,
+      });
+    } else {
+      // Send error event via SSE
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ message: error.message, stage: 'initialization' })}\n\n`);
+      res.end();
+    }
   }
 });
 

@@ -38,6 +38,33 @@ export default class BaseAIAdaptor {
   }
 
   /**
+   * Generate text with streaming support
+   *
+   * @param {string} prompt - The prompt to send to AI
+   * @param {object} options - Generation options (temperature, maxTokens, etc.)
+   * @param {function} onChunk - Callback for each chunk: (chunk) => void
+   *   chunk format: { type: 'chunk' | 'complete', text: string, fullText?: string, done: boolean }
+   * @returns {Promise<object>} Final result with full text and usage
+   */
+  async generateTextStream(prompt, options = {}, onChunk = null) {
+    // Default implementation: fall back to non-streaming
+    const result = await this.generateText(prompt, options);
+    if (onChunk) {
+      onChunk({ type: 'complete', text: result.text, done: true });
+    }
+    return result;
+  }
+
+  /**
+   * Check if this adaptor supports streaming
+   *
+   * @returns {boolean} True if streaming is supported
+   */
+  supportsStreaming() {
+    return false;
+  }
+
+  /**
    * Generate an image from a prompt
    *
    * @param {string} prompt - The image description
