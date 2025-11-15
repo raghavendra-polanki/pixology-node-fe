@@ -466,53 +466,50 @@ export function Stage4Storyboard({
     <div className="max-w-7xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
-              <Film className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <h2 className="text-white">Build Storyboard</h2>
-              <p className="text-gray-400">
-                Visualize the main scenes based on your chosen narrative
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
+            <Film className="w-6 h-6 text-blue-500" />
           </div>
-
-          <div className="flex gap-3">
-            <Button
-              onClick={handleEditPrompts}
-              variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-              size="lg"
-            >
-              <SettingsIcon className="w-5 h-5 mr-2" />
-              Edit Prompts
-            </Button>
+          <div>
+            <h2 className="text-white">Build Storyboard</h2>
+            <p className="text-gray-400">
+              Visualize the main scenes based on your chosen narrative
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Generate Button - Always Visible for Regeneration */}
+      {/* Generate & Edit Buttons */}
       <div className="mb-8">
-        <Button
-          onClick={handleGenerateStoryboard}
-          disabled={isGenerating}
-          className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-          size="lg"
-        >
-          {isGenerating ? (
-            <>
-              <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
-              Generating Storyboard...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 mr-2" />
-              {scenes.length > 0 ? 'Regenerate Storyboard' : 'Generate Storyboard'}
-            </>
-          )}
-        </Button>
+        <div className="flex gap-4">
+          <Button
+            onClick={handleGenerateStoryboard}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+            size="lg"
+          >
+            {isGenerating ? (
+              <>
+                <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                Generating Storyboard...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                {scenes.length > 0 ? 'Regenerate Storyboard' : 'Generate Storyboard'}
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleEditPrompts}
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+            size="lg"
+          >
+            <SettingsIcon className="w-5 h-5 mr-2" />
+            Edit Prompts
+          </Button>
+        </div>
 
         {/* Progress Indicator */}
         <GenerationProgressIndicator

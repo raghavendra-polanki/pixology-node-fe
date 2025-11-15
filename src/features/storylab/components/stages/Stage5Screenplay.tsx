@@ -149,14 +149,17 @@ export function Stage5Screenplay({
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
 
-  // Sync screenplay with project data when loaded
+  // Sync screenplay with project data when loaded (but not during generation)
   useEffect(() => {
+    // Don't sync from project if we're actively generating
+    if (isGenerating) return;
+
     if (project?.aiGeneratedScreenplay?.screenplay && Array.isArray(project.aiGeneratedScreenplay.screenplay)) {
       setScreenplay(project.aiGeneratedScreenplay.screenplay);
     } else {
       setScreenplay([]);
     }
-  }, [project?.aiGeneratedScreenplay]);
+  }, [project?.aiGeneratedScreenplay, isGenerating]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -272,11 +275,20 @@ export function Stage5Screenplay({
           project?.id || projectId || ''
         );
       }
+
+      // Wait a moment to ensure React has finished all state updates and renders
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Hide the progress bar
+      setIsGenerating(false);
+      setTimeout(() => {
+        setGenerationProgress(0);
+        setGenerationStatus('');
+      }, 2000);
     } catch (error) {
       console.error('Error generating screenplay:', error);
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setGenerationStatus('Failed');
-    } finally {
       setIsGenerating(false);
       setTimeout(() => {
         setGenerationProgress(0);
@@ -360,50 +372,51 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <h2 className="text-white">Create Screenplay</h2>
-              <p className="text-gray-400">
-                Convert your storyboard into a detailed, timed script
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
+            <FileText className="w-6 h-6 text-blue-500" />
           </div>
-          <Button
-            onClick={handleEditPrompts}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-          >
-            <SettingsIcon className="w-4 h-4 mr-2" />
-            Edit Prompts
-          </Button>
+          <div>
+            <h2 className="text-white">Create Screenplay</h2>
+            <p className="text-gray-400">
+              Convert your storyboard into a detailed, timed script
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Generate Button */}
+      {/* Generate & Edit Buttons */}
       {screenplay.length === 0 && (
         <div className="mb-8">
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-            size="lg"
-          >
-            {isGenerating ? (
-              <>
-                <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
-                Generating Screenplay...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate Screenplay
-              </>
-            )}
-          </Button>
+          <div className="flex gap-4">
+            <Button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+              size="lg"
+            >
+              {isGenerating ? (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                  Generating Screenplay...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Generate Screenplay
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleEditPrompts}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
+            >
+              <SettingsIcon className="w-5 h-5 mr-2" />
+              Edit Prompts
+            </Button>
+          </div>
 
           {/* Progress Indicator */}
           <GenerationProgressIndicator
@@ -427,25 +440,45 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
       {/* Screenplay Table */}
       {screenplay.length > 0 && (
         <>
-          {/* Regenerate Button */}
-          <div className="mb-6 flex gap-2">
-            <Button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              {isGenerating ? (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2 animate-spark-intense" />
-                  Regenerating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Regenerate Screenplay
-                </>
-              )}
-            </Button>
+          {/* Regenerate & Edit Buttons */}
+          <div className="mb-6">
+            <div className="flex gap-4">
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+                size="lg"
+              >
+                {isGenerating ? (
+                  <>
+                    <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    Regenerate Screenplay
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleEditPrompts}
+                variant="outline"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+                size="lg"
+              >
+                <SettingsIcon className="w-5 h-5 mr-2" />
+                Edit Prompts
+              </Button>
+            </div>
+
+            {/* Progress Indicator */}
+            <GenerationProgressIndicator
+              isGenerating={isGenerating}
+              progress={generationProgress}
+              status={generationStatus}
+            />
+
             <style>{`
               @keyframes sparkIntense {
                 0%, 100% { opacity: 1; transform: scale(1); }

@@ -197,6 +197,7 @@ export function Stage3Narratives({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
+  const [streamingNarratives, setStreamingNarratives] = useState<Narrative[]>([]);
 
   // All refs SECOND
   const generatedNarrativesRef = useRef<HTMLDivElement>(null);
@@ -271,6 +272,7 @@ export function Stage3Narratives({
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus('Initializing...');
+    setStreamingNarratives([]); // Clear narratives on regeneration
 
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
@@ -324,8 +326,18 @@ export function Stage3Narratives({
               const data = JSON.parse(line.substring(5).trim());
 
               if (currentEventType === 'narrative') {
-                // Narrative parsed - trigger re-render
-                setNarrativeUpdateTrigger(prev => prev + 1);
+                // Narrative parsed - add to streaming narratives
+                const colors = getColorForNarrative(data.narrativeNumber - 1);
+                const narrative: Narrative = {
+                  id: data.narrative.id,
+                  title: data.narrative.title,
+                  description: data.narrative.description,
+                  structure: data.narrative.structure,
+                  gradient: colors.gradient,
+                  patternColor: colors.patternColor,
+                  ringColor: colors.ringColor,
+                };
+                setStreamingNarratives(prev => [...prev, narrative]);
                 setGenerationProgress(data.progress || 0);
               } else if (currentEventType === 'progress') {
                 setGenerationStatus(data.message || '');
@@ -509,19 +521,30 @@ export function Stage3Narratives({
       </div>
 
       {/* AI-Generated Narratives Section */}
-      {project?.aiGeneratedNarratives?.narratives && project.aiGeneratedNarratives.narratives.length > 0 && (
-        <>
-      <div ref={generatedNarrativesRef} className="mb-8">
-            <div className="flex items-center gap-2 mb-6">
-              <Lightbulb className="w-5 h-5 text-purple-500" />
-              <h3 className="text-white">AI-Generated Narrative Themes</h3>
-              <span className="text-xs text-gray-500 ml-2">
-                Generated on {new Date(project.aiGeneratedNarratives.generatedAt).toLocaleDateString()}
-              </span>
-            </div>
+      {(() => {
+        const displayNarratives = isGenerating
+          ? streamingNarratives
+          : (project?.aiGeneratedNarratives?.narratives || []);
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {project.aiGeneratedNarratives.narratives.map((narrative: any, index: number) => {
+        const hasNarratives = displayNarratives.length > 0;
+
+        if (!hasNarratives) return null;
+
+        return (
+          <>
+            <div ref={generatedNarrativesRef} className="mb-8">
+              <div className="flex items-center gap-2 mb-6">
+                <Lightbulb className="w-5 h-5 text-purple-500" />
+                <h3 className="text-white">AI-Generated Narrative Themes</h3>
+                {!isGenerating && project?.aiGeneratedNarratives?.generatedAt && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    Generated on {new Date(project.aiGeneratedNarratives.generatedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                {displayNarratives.map((narrative: any, index: number) => {
                 const colors = getColorForNarrative(index);
                 const shapes = getShapeForNarrative(index);
                 const isSelected = selectedNarrative === narrative.id && !useCustom;
@@ -612,10 +635,11 @@ export function Stage3Narratives({
             </div>
           </div>
         </>
-      )}
+        );
+      })()}
 
       {/* Show message if no narratives generated yet */}
-      {(!project?.aiGeneratedNarratives?.narratives || project.aiGeneratedNarratives.narratives.length === 0) && (
+      {!isGenerating && (!project?.aiGeneratedNarratives?.narratives || project.aiGeneratedNarratives.narratives.length === 0) && (
         <div className="mb-8 p-6 bg-blue-600/10 border border-blue-600/30 rounded-xl">
           <div className="flex items-center gap-3">
             <Lightbulb className="w-5 h-5 text-blue-400 flex-shrink-0" />
@@ -629,8 +653,8 @@ export function Stage3Narratives({
         </div>
       )}
 
-      {/* Separator - only show if we have generated narratives */}
-      {project?.aiGeneratedNarratives?.narratives && project.aiGeneratedNarratives.narratives.length > 0 && (
+      {/* Separator - only show if we have generated narratives and not generating */}
+      {!isGenerating && project?.aiGeneratedNarratives?.narratives && project.aiGeneratedNarratives.narratives.length > 0 && (
         <div className="relative my-8">
           <Separator className="bg-gray-800" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0a] px-4">
