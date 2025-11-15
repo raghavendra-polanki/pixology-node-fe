@@ -407,13 +407,46 @@ Generate a high-quality, professional marketing video that brings this scene to 
 
   // Show prompt editor if requested
   if (showPromptEditor) {
+    // Prepare screenplay and storyboard data for prompt editor
+    const screenplay = project?.aiGeneratedScreenplay?.screenplay || [];
+    const storyboardScenes = project?.aiGeneratedStoryboard?.scenes || [];
+
+    // Format screenplay entries for the prompt editor
+    const screenplayText = screenplay.map((entry: any, index: number) => {
+      return `Scene ${entry.sceneNumber || index + 1} (${entry.timeStart || '0:00'} - ${entry.timeEnd || '0:00'}):
+Visual: ${entry.visual || 'No visual description'}
+Camera Flow: ${entry.cameraFlow || 'No camera direction'}
+Script: ${entry.script || 'No script'}
+Background Music: ${entry.backgroundMusic || 'No music specified'}`;
+    }).join('\n\n');
+
+    // Format storyboard scenes for the prompt editor
+    const storyboardText = storyboardScenes.map((scene: any, index: number) => {
+      return `Scene ${scene.sceneNumber || index + 1}: ${scene.title || 'Untitled'}
+Description: ${scene.description || 'No description'}
+Location: ${scene.location || 'Not specified'}
+Visual Elements: ${scene.visualElements || 'Not specified'}
+Camera Work: ${scene.cameraWork || 'Not specified'}`;
+    }).join('\n\n');
+
+    // Get first screenplay entry as example data for variables
+    const firstScreenplay = screenplay[0] || {};
+
     return (
       <PromptTemplateEditor
         stageType="stage_6_video"
         projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
         stageData={{
-          videoDuration: project?.campaignDetails?.videoDuration || '',
+          sceneNumber: firstScreenplay.sceneNumber || '1',
+          visual: firstScreenplay.visual || 'No visual description available',
+          cameraFlow: firstScreenplay.cameraFlow || 'No camera flow available',
+          script: firstScreenplay.script || 'No script available',
+          backgroundMusic: firstScreenplay.backgroundMusic || 'No background music specified',
+          duration: firstScreenplay.timeEnd || project?.campaignDetails?.videoDuration || '6s',
+          videoDuration: project?.campaignDetails?.videoDuration || '30s',
+          screenplay: screenplayText || 'No screenplay available',
+          storyboard: storyboardText || 'No storyboard available',
         }}
       />
     );

@@ -424,49 +424,38 @@ export const STAGE_6_VIDEO_TEMPLATE = {
       name: 'Default Video Production Specification',
       description: 'Generates detailed video production specifications from screenplay',
       systemPrompt: 'You are a professional video production director.',
-      userPromptTemplate: `You are a **Lead AI Video Production Engineer** and a **Post-Production Supervisor**. Your task is to translate the provided screenplay beat into precise, quantitative, and qualitative specifications ready for a dedicated video generation model, ensuring the output maintains the authentic, high-impact style of Athlete-Generated Content (AGC).
+      userPromptTemplate: `You are an **Elite Cinematic Director** providing the single, descriptive brief for a **Hyperrealistic, Athlete-Generated Content (AGC)** video generation model (e.g., Veo, Sora). Your goal is to generate a short, high-impact video segment based on the following precise, time-coded specifications.
 
 ## 🎯 SCENE CONTEXT & INPUTS
-All specifications must strictly adhere to the temporal and artistic constraints defined below.
 * **SCENE NUMBER:** {{sceneNumber}}
-* **VISUAL (Timecode-based Action):** {{visual}} (The full second-by-second action and look.)
-* **CAMERA FLOW (Timecode-based Moves):** {{cameraFlow}} (The full second-by-second camera movements.)
-* **SCRIPT (Timecode-based Audio):** {{script}} (The exact dialogue, VO, and SFX cues.)
-* **BACKGROUND MUSIC:** {{backgroundMusic}} (The suggested track type and energy.)
-* **DURATION:** {{duration}} (The total running time for this scene, matching \`timeEnd\` - \`timeStart\`.)
+* **DURATION:** {{duration}}
+* **VISUAL (Timecode-based Action):** {{visual}} 
+* **CAMERA FLOW (Timecode-based Moves):** {{cameraFlow}}
+* **SCRIPT (Timecode-based Audio/Text):** {{script}}
+* **BACKGROUND MUSIC VIBE:** {{backgroundMusic}}
 
-## ⚙️ CORE TASK: GENERATE MACHINE-READABLE PRODUCTION SPECS
-Generate detailed, precise video production parameters organized into the required technical blocks.
+## 🎬 MASTER VIDEO GENERATION PROMPT
+**Generate a hyperrealistic, high-definition (HD) video clip exactly {{duration}} seconds in length.** The clip must feature the following continuous, dynamic action:
 
-## 📋 PRODUCTION PARAMETER DEFINITIONS
+**1. AESTHETIC & MOOD:**
+Render the scene using a **{{videoSpecs.lightingStyle}}** lighting style and a **{{videoSpecs.colorGrade}}** color grade. The overall feel should be **authentic, raw, and high-stakes**, matching the style of a modern sports documentary or UGC video. Include **{{technicalNotes}}** (e.g., visible sweat, subtle lens flare, film grain).
 
-* **\`videoSpecs\`**: Define the overall visual output style.
-    * \`lightingStyle\`: (e.g., "Golden Hour High Contrast," "Overcast Soft Diffused," "Harsh Gym Fluorescent").
-    * \`colorGrade\`: (e.g., "Slightly Desaturated Cinematic," "Warm and High Saturation," "Cool Teal & Orange Look").
-    * \`motionStyle\`: (e.g., "Mostly Handheld with Jitter," "Smooth Steadicam Look," "Aggressive Whip Pans/Fast Cuts").
-    * \`frameRate\`: (e.g., "24 FPS Cinematic," "60 FPS High-Speed for Slow Motion effects").
-* **\`productPlacement\`**: Define how and when the product is the focus.
-    * \`productVisibilityTimecode\`: (e.g., "0:02-0:04").
-    * \`focusStyle\`: (e.g., "Shallow Depth of Field focus pull to product," "Steady Close-up on branding," "In-use action shot").
-* **\`audioMix\`**: Define the layering and treatment of sound elements.
-    * \`musicVolume\`: (e.g., "60% during VO, 90% during action," "Fades out at 0:04").
-    * \`sfxPriority\`: (e.g., "High priority on performance sounds (e.g., footsteps, heavy breathing)," "Low priority, subtle ambient SFX only").
-    * \`vocalTreatment\`: (e.g., "Clean, studio-quality VO," "Raw, naturalistic mic sound for dialogue").
-* **\`timing\`**: Verification of scene and element timing.
-    * \`sceneDurationSeconds\`: (The numerical duration, e.g., 4.0).
-    * \`majorBeatTimecode\`: (The timecode of the most critical visual/narrative moment in the scene, e.g., "0:02.5").
-* **\`technicalNotes\`**: Any final, critical instructions for the AI model regarding quality, consistency, or special effects (e.g., "Ensure consistent sweat sheen on skin," "Maintain the approved persona outfit color," "Require subtle lens flare effect").
+**2. ACTION & TIMING (The Visual Flow):**
+**From [Start Time] to [End Time],** execute the following camera movement and visual action, seamlessly merging the **VISUAL** and **CAMERA FLOW** inputs:
+* [0:00-0:01]: **[Extract Visual Action from VISUAL]** filmed with a **[Extract Camera Move from CAMERA FLOW]**.
+* [0:01-0:02]: **[Extract Visual Action from VISUAL]** filmed with a **[Extract Camera Move from CAMERA FLOW]**.
+* [0:02-0:03]: **[Extract Visual Action from VISUAL]** filmed with a **[Extract Camera Move from CAMERA FLOW]**.
+* ... (Continue for the full duration, or until the end of the scene flow)
 
-## 📄 MANDATORY OUTPUT FORMAT
-**RESPOND IN THIS EXACT JSON FORMAT. DO NOT include any explanatory text before or after the JSON structure:**
-{
-  "sceneNumber": {{sceneNumber}},
-  "videoSpecs": {},
-  "productPlacement": {},
-  "audioMix": {},
-  "timing": {},
-  "technicalNotes": ""
-}`,
+**3. CHARACTER & PRODUCT FOCUS:**
+Ensure the primary subject looks consistent with the provided persona references. The product **{{productPlacement.focusStyle}}** will be the focus during the time window **{{productPlacement.productVisibilityTimecode}}**.
+
+**4. AUDIO CUES (For Synchronization):**
+The background score should be **{{BACKGROUND MUSIC VIBE}}**. Key audio synchronization points are:
+* **Dialogue/VO:** **{{SCRIPT (Specific lines and timecodes)}}**
+* **Sound Effects:** **[Extract key SFX from SCRIPT]** should be prioritized.
+
+**Target Output:** A highly dynamic, emotionally charged, and technically precise short-form AGC video clip with smooth, realistic motion.`,
       outputFormat: 'json',
       variables: [
         { name: 'sceneNumber', description: 'Scene number', placeholder: '1' },
