@@ -356,6 +356,30 @@ export function Stage4Storyboard({
 
   // Show prompt editor if requested
   if (showPromptEditor) {
+    // Get primary selected persona
+    const primaryPersonaId = project?.userPersonaSelection?.primaryPersonaId;
+    const allPersonas = project?.aiGeneratedPersonas?.personas || [];
+    const primaryPersona = allPersonas.find((p: any) => p.id === primaryPersonaId) || allPersonas[0];
+
+    // Format persona information
+    const personaName = primaryPersona?.coreIdentity?.name || 'Unknown';
+    const personaDemographic = primaryPersona?.coreIdentity?.demographic || '';
+    const personaBio = primaryPersona?.coreIdentity?.bio || '';
+    const personaMotivation = primaryPersona?.coreIdentity?.motivation || '';
+    const personaDescription = `${personaName} - ${personaDemographic}\n\nBio: ${personaBio}\n\nMotivation: ${personaMotivation}`;
+
+    // Get persona image URL
+    const personaImageUrl = primaryPersona?.image?.url || primaryPersona?.image || '';
+
+    // Get product image URL
+    const productImageUrl = project?.campaignDetails?.productImageUrl || '';
+
+    // Get selected narrative information
+    const narrativeStyle = project?.narrativePreferences?.narrativeStyle;
+    const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find((n: any) => n.id === narrativeStyle);
+    const narrativeTheme = selectedNarrative?.title || project?.narrativePreferences?.customNarrative || 'Not selected';
+    const narrativeStructure = selectedNarrative?.structure || selectedNarrative?.description || '';
+
     return (
       <PromptTemplateEditor
         stageType="stage_4_storyboard"
@@ -364,7 +388,14 @@ export function Stage4Storyboard({
         stageData={{
           productDescription: project?.campaignDetails?.productDescription || '',
           targetAudience: project?.campaignDetails?.targetAudience || '',
-          videoDuration: project?.campaignDetails?.videoDuration || '',
+          videoDuration: project?.campaignDetails?.videoDuration || '30s',
+          numberOfScenes: '6',
+          selectedPersonaName: personaName,
+          selectedPersonaDescription: personaDescription,
+          personaImageUrl: personaImageUrl,
+          productImageUrl: productImageUrl,
+          narrativeTheme: narrativeTheme,
+          narrativeStructure: narrativeStructure,
         }}
       />
     );

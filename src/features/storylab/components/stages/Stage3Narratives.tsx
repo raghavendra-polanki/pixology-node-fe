@@ -380,6 +380,21 @@ export function Stage3Narratives({
 
   // Show prompt editor if requested
   if (showPromptEditor) {
+    // Get selected personas for narrative generation
+    const selectedPersonaIds = project?.userPersonaSelection?.selectedPersonaIds || [];
+    const allPersonas = project?.aiGeneratedPersonas?.personas || [];
+    const selectedPersonas = allPersonas.filter((p: any) =>
+      selectedPersonaIds.includes(p.id)
+    );
+
+    // Format selected personas as a string (names and descriptions)
+    const selectedPersonasText = selectedPersonas.map((p: any) => {
+      const name = p.coreIdentity?.name || 'Unknown';
+      const demographic = p.coreIdentity?.demographic || '';
+      const bio = p.coreIdentity?.bio || '';
+      return `${name} (${demographic}): ${bio}`;
+    }).join('\n\n');
+
     return (
       <PromptTemplateEditor
         stageType="stage_3_narratives"
@@ -388,6 +403,8 @@ export function Stage3Narratives({
         stageData={{
           productDescription: project?.campaignDetails?.productDescription || '',
           targetAudience: project?.campaignDetails?.targetAudience || '',
+          selectedPersonas: selectedPersonasText || 'No personas selected',
+          numberOfNarratives: '6',
         }}
       />
     );
