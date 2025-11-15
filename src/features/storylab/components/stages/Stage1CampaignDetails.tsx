@@ -92,10 +92,10 @@ export function Stage1CampaignDetails({
           }
         }
       } else {
-        // Update campaign details for existing projects
-        await updateCampaignDetails(formData);
-        // Mark stage as completed for existing projects
-        await markStageCompleted('campaign-details');
+        // Update campaign details and mark stage as completed in a single save
+        await markStageCompleted('campaign-details', undefined, {
+          campaignDetails: formData,
+        });
         // Navigate to next stage (Stage 2 - Personas)
         if (navigateToStage) {
           navigateToStage(2);

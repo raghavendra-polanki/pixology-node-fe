@@ -346,27 +346,28 @@ export function Stage3Narratives({
         throw new Error('No project loaded. Please go back and reload the project.');
       }
 
+      // Prepare narrative preferences
+      let narrativePrefs = null;
       if (useCustom && customNarrative) {
-        // Save custom narrative preferences
-        await updateNarrativePreferences({
+        narrativePrefs = {
           narrativeStyle: '',
           useCustomStructure: true,
           customNarrative: customNarrative,
           tone: 'custom',
-        }, project.id);
+        };
       } else if (selectedNarrative) {
-        // Save selected narrative preferences
-        const selected = narrativeOptions.find(n => n.id === selectedNarrative);
-        await updateNarrativePreferences({
+        narrativePrefs = {
           narrativeStyle: selectedNarrative,
           useCustomStructure: false,
           tone: selectedNarrative,
-        }, project.id);
+        };
       }
 
-      // Mark stage as completed
+      // Save narrative preferences and mark stage as completed in a single save
       console.log('Marking narrative stage as completed...');
-      await markStageCompleted('narrative');
+      await markStageCompleted('narrative', undefined, narrativePrefs ? {
+        narrativePreferences: narrativePrefs,
+      } : undefined);
 
       console.log('Stage completed successfully. Advancing to next stage...');
       alert('Narrative preferences saved! Moving to next stage...');

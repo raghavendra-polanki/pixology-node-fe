@@ -177,13 +177,13 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     if (selectedPersonas.length > 0) {
       try {
         setIsSaving(true);
-        // Save persona selection
-        await updatePersonaSelection({
-          selectedPersonaIds: selectedPersonas.map(p => p.id),
-          primaryPersonaId: selectedPersonas[0]?.id,
+        // Save persona selection and mark stage as completed in a single save
+        await markStageCompleted('personas', undefined, {
+          userPersonaSelection: {
+            selectedPersonaIds: selectedPersonas.map(p => p.id),
+            primaryPersonaId: selectedPersonas[0]?.id,
+          },
         });
-        // Mark stage as completed
-        await markStageCompleted('personas');
         // Navigate to next stage (Stage 3 - Narratives)
         if (navigateToStage) {
           navigateToStage(3);
