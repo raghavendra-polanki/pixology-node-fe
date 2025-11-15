@@ -454,58 +454,58 @@ export function Stage3Narratives({
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <h2 className="text-white">Select Narrative Theme</h2>
-              <p className="text-gray-400">
-                Choose the overall tone and story structure for your video
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
+            <BookOpen className="w-6 h-6 text-blue-500" />
           </div>
           <div>
-            <div className="flex gap-3">
-              <Button
-                onClick={handleEditPrompts}
-                variant="outline"
-                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-                size="lg"
-              >
-                <SettingsIcon className="w-5 h-5 mr-2" />
-                Edit Prompts
-              </Button>
-              <Button
-                onClick={handleGenerateNarratives}
-                disabled={isGenerating}
-                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-                size="lg"
-              >
-                <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
-                {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
-              </Button>
-            </div>
-
-            {/* Progress Indicator */}
-            <GenerationProgressIndicator
-              isGenerating={isGenerating}
-              progress={generationProgress}
-              status={generationStatus}
-            />
-
-            <style>{`
-              @keyframes sparkIntense {
-                0%, 100% { opacity: 1; transform: scale(1); }
-                50% { opacity: 0.4; transform: scale(1.2); }
-              }
-              .animate-spark-intense {
-                animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-              }
-            `}</style>
+            <h2 className="text-white">Select Narrative Theme</h2>
+            <p className="text-gray-400">
+              Choose the overall tone and story structure for your video
+            </p>
           </div>
         </div>
+      </div>
+
+      {/* Generate & Edit Buttons */}
+      <div className="mb-8">
+        <div className="flex gap-4">
+          <Button
+            onClick={handleGenerateNarratives}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+            size="lg"
+          >
+            <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
+            {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
+          </Button>
+          <Button
+            onClick={handleEditPrompts}
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+            size="lg"
+          >
+            <SettingsIcon className="w-5 h-5 mr-2" />
+            Edit Prompts
+          </Button>
+        </div>
+
+        {/* Progress Indicator */}
+        <GenerationProgressIndicator
+          isGenerating={isGenerating}
+          progress={generationProgress}
+          status={generationStatus}
+        />
+
+        <style>{`
+          @keyframes sparkIntense {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+          }
+          .animate-spark-intense {
+            animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        `}</style>
       </div>
 
       {/* AI-Generated Narratives Section */}
