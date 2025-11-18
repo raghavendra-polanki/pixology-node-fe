@@ -316,6 +316,41 @@ class StoryboardGenerationService {
     );
   }
 
+  /**
+   * Upload a new image for a storyboard scene
+   * This will replace the existing image in GCS
+   *
+   * @param {Buffer} imageBuffer - Image file buffer
+   * @param {string} projectId - Project ID
+   * @param {string} sceneId - Scene ID
+   * @param {string} oldImageUrl - Old image URL to delete (optional)
+   * @returns {Promise<string>} New image URL
+   */
+  static async uploadSceneImage(imageBuffer, projectId, sceneId, oldImageUrl = null) {
+    try {
+      // Delete old image if provided
+      if (oldImageUrl) {
+        try {
+          await GCSService.deleteImageFromGCS(oldImageUrl);
+          console.log(`Deleted old scene image: ${oldImageUrl}`);
+        } catch (deleteError) {
+          console.warn('Failed to delete old image:', deleteError.message);
+          // Continue with upload even if delete fails
+        }
+      }
+
+      // Upload new image with scene-specific naming
+      const filename = `storyboard-scene-${sceneId}`;
+      const imageUrl = await GCSService.uploadImageToGCS(imageBuffer, projectId, filename);
+
+      console.log(`Uploaded new scene image: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      console.error('Error uploading scene image:', error);
+      throw new Error(`Failed to upload scene image: ${error.message}`);
+    }
+  }
+
 }
 
 module.exports = StoryboardGenerationService;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Sparkles, Edit2, User, Check } from 'lucide-react';
+import { ArrowRight, Sparkles, Edit2, User, Check, UserPlus, Users, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
+import { CreateRealPersona } from '../personas/CreateRealPersona';
+import { RealPersonaSelector } from '../personas/RealPersonaSelector';
 
 // UI representation of persona (different from PersonaData in data model)
 interface Persona {
@@ -26,12 +28,15 @@ interface Stage2Props {
   project: any;
   updateAIPersonas: (personas: any) => Promise<void>;
   updatePersonaSelection: (selection: any) => Promise<void>;
+  updateSelectedRealPersona: (personaId: string | null) => Promise<void>;
   markStageCompleted: (stageName: string, data?: any) => Promise<void>;
   advanceToNextStage: (projectToAdvance?: any) => Promise<void>;
   navigateToStage?: (stageId: number) => void;
 }
 
-export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, markStageCompleted, advanceToNextStage, navigateToStage }: Stage2Props) {
+type PersonaTab = 'ai' | 'real';
+
+export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, updateSelectedRealPersona, markStageCompleted, advanceToNextStage, navigateToStage }: Stage2Props) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,25 +45,48 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
+  const [activeTab, setActiveTab] = useState<PersonaTab>('ai');
+  const [showCreateReal, setShowCreateReal] = useState(false);
+  const [selectedRealPersonaId, setSelectedRealPersonaId] = useState<string | null>(null);
 
   // Sync personas with project data when loaded - only if they've been generated
   useEffect(() => {
     if (project?.aiGeneratedPersonas?.personas && project.aiGeneratedPersonas.personas.length > 0) {
-      // Convert PersonaData to UI Persona format
-      const loadedPersonas: Persona[] = project.aiGeneratedPersonas.personas.map(p => ({
-        id: p.id,
-        name: (p.coreIdentity as any)?.name || 'Unknown',
-        age: (p.coreIdentity as any)?.age || '',
-        demographic: (p.coreIdentity as any)?.demographic || '',
-        motivation: (p.coreIdentity as any)?.motivation || '',
-        bio: (p.coreIdentity as any)?.bio || '',
-        image: (p.image as any)?.url || (p.image as any) || '',
-        selected: project.userPersonaSelection?.selectedPersonaIds?.includes(p.id) || false
-      }));
+      // Convert PersonaData to UI Persona format, filtering out real personas
+      const loadedPersonas: Persona[] = project.aiGeneratedPersonas.personas
+        .filter(p => !(p as any).isRealPersona) // Filter out real personas from AI tab
+        .map(p => ({
+          id: p.id,
+          name: (p.coreIdentity as any)?.name || 'Unknown',
+          age: (p.coreIdentity as any)?.age || '',
+          demographic: (p.coreIdentity as any)?.demographic || '',
+          motivation: (p.coreIdentity as any)?.motivation || '',
+          bio: (p.coreIdentity as any)?.bio || '',
+          image: (p.image as any)?.url || (p.image as any) || '',
+          selected: project.userPersonaSelection?.selectedPersonaIds?.includes(p.id) || false
+        }));
       setPersonas(loadedPersonas);
-      setHasGenerated(true);
+      setHasGenerated(loadedPersonas.length > 0);
     }
-  }, [project?.aiGeneratedPersonas, project?.userPersonaSelection]);
+
+    // Load selected real persona ID from multiple possible sources
+    // Priority: userPersonaSelection (most current) > selectedRealPersonaId (legacy)
+    if (project?.userPersonaSelection?.primaryPersonaId) {
+      // Check if the selected persona is a real persona
+      const selectedPersona = project.aiGeneratedPersonas?.personas?.find(
+        p => p.id === project.userPersonaSelection.primaryPersonaId
+      );
+      if (selectedPersona && (selectedPersona as any).isRealPersona) {
+        setSelectedRealPersonaId(selectedPersona.id);
+        // Auto-switch to real persona tab if a real persona is selected
+        setActiveTab('real');
+      }
+    } else if (project?.selectedRealPersonaId) {
+      setSelectedRealPersonaId(project.selectedRealPersonaId);
+      // Auto-switch to real persona tab if a real persona is selected
+      setActiveTab('real');
+    }
+  }, [project?.aiGeneratedPersonas, project?.userPersonaSelection, project?.selectedRealPersonaId]);
 
   const handleEditPrompts = () => {
     setShowPromptEditor(true);
@@ -259,6 +287,73 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     }
   };
 
+  const handleCreateRealPersona = async (realPersona: any) => {
+    console.log('Real persona created:', realPersona);
+
+    // Save only the real persona ID reference to the project
+    await updateSelectedRealPersona(realPersona.id);
+
+    setShowCreateReal(false);
+    setActiveTab('real'); // Switch to real personas tab to show the newly created persona
+  };
+
+  const handleChooseRealPersona = async (realPersona: any) => {
+    console.log('Real persona chosen:', realPersona);
+
+    // Update local state
+    setSelectedRealPersonaId(realPersona.id);
+
+    // Save only the real persona ID reference to the project
+    await updateSelectedRealPersona(realPersona.id);
+  };
+
+  const handleSubmitRealPersona = async () => {
+    if (!selectedRealPersonaId) return;
+
+    try {
+      setIsSaving(true);
+
+      // Fetch the real persona and convert to PersonaData format
+      const response = await fetch(`/api/real-personas/${selectedRealPersonaId}/persona-data`);
+      const { personaData } = await response.json();
+
+      // Preserve existing AI personas and add the real persona to the array
+      const existingAIPersonas = project?.aiGeneratedPersonas?.personas?.filter(p => !(p as any).isRealPersona) || [];
+      const existingRealPersonas = project?.aiGeneratedPersonas?.personas?.filter(p => (p as any).isRealPersona) || [];
+
+      // Combine: keep AI personas + replace any existing real persona with the new one
+      const allPersonas = [...existingAIPersonas, personaData];
+
+      // Save this persona to aiGeneratedPersonas (preserving AI personas)
+      await updateAIPersonas({
+        personas: allPersonas,
+        generatedAt: project?.aiGeneratedPersonas?.generatedAt || new Date(),
+        model: existingAIPersonas.length > 0 ? project?.aiGeneratedPersonas?.model || 'mixed' : 'real-persona',
+        count: allPersonas.length,
+        generationRecipeId: project?.aiGeneratedPersonas?.generationRecipeId || 'mixed',
+        generationExecutionId: project?.aiGeneratedPersonas?.generationExecutionId || selectedRealPersonaId,
+      });
+
+      // Save persona selection in the same format as AI personas
+      // This is crucial for Stage 3+ to access the selected persona
+      await markStageCompleted('personas', undefined, {
+        userPersonaSelection: {
+          selectedPersonaIds: [personaData.id],
+          primaryPersonaId: personaData.id,
+        },
+      });
+
+      // Navigate to next stage (Stage 3 - Narratives)
+      if (navigateToStage) {
+        navigateToStage(3);
+      }
+    } catch (error) {
+      console.error('Failed to advance with real persona:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
     const selectedPersonas = personas.filter(p => p.selected);
     if (selectedPersonas.length > 0) {
@@ -303,86 +398,136 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     );
   }
 
+  // Show create real persona flow
+  if (showCreateReal) {
+    return (
+      <CreateRealPersona
+        onSave={handleCreateRealPersona}
+        onCancel={() => setShowCreateReal(false)}
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-xl bg-blue-600/20 flex items-center justify-center">
             <User className="w-6 h-6 text-blue-500" />
           </div>
           <div>
-            <h2 className="text-white">Generate Campaign Personas</h2>
+            <h2 className="text-white">Campaign Personas</h2>
             <p className="text-gray-400">
-              AI creates detailed character personas based on your target audience
+              Generate AI personas or use real personas
             </p>
           </div>
         </div>
       </div>
 
-      {/* Generate & Edit Buttons */}
+      {/* Tabs */}
       <div className="mb-8">
-        <div className="flex gap-4">
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
-            size="lg"
+        <div className="flex gap-2 border-b border-gray-800">
+          <button
+            onClick={() => setActiveTab('ai')}
+            className={`px-6 py-3 font-medium transition-colors relative ${
+              activeTab === 'ai'
+                ? 'text-blue-500'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
           >
-            {isGenerating ? (
-              <>
-                <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
-                Generating Personas...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate Personas
-              </>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              <span>AI Personas</span>
+            </div>
+            {activeTab === 'ai' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
             )}
-          </Button>
-          <Button
-            onClick={handleEditPrompts}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-            size="lg"
+          </button>
+          <button
+            onClick={() => setActiveTab('real')}
+            className={`px-6 py-3 font-medium transition-colors relative ${
+              activeTab === 'real'
+                ? 'text-blue-500'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
           >
-            <Edit2 className="w-5 h-5 mr-2" />
-            Edit Prompts
-          </Button>
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              <span>Real Personas</span>
+            </div>
+            {activeTab === 'real' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+            )}
+          </button>
         </div>
-
-        {/* Progress Indicator */}
-        <GenerationProgressIndicator
-          isGenerating={isGenerating}
-          progress={generationProgress}
-          status={generationStatus}
-        />
-
-        <style>{`
-          @keyframes sparkIntense {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.2); }
-          }
-          .animate-spark-intense {
-            animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          }
-        `}</style>
       </div>
 
-      {/* Empty State - No Personas Generated Yet */}
-      {!hasGenerated && personas.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 px-8 border border-dashed border-gray-700 rounded-xl bg-gray-900/30 mb-8">
-          <User className="w-16 h-16 text-gray-500 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-300 mb-2">No Personas Generated Yet</h3>
-          <p className="text-gray-400 text-center max-w-md mb-6">
-            Click the "Generate Personas" button above to create AI-powered personas based on your campaign details.
-          </p>
-        </div>
-      )}
+      {/* AI Personas Tab */}
+      {activeTab === 'ai' && (
+        <>
+          <div className="mb-8">
+            <div className="flex gap-4">
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+                size="lg"
+              >
+                {isGenerating ? (
+                  <>
+                    <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                    Generating Personas...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    {hasGenerated ? 'Regenerate Personas' : 'Generate Personas'}
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleEditPrompts}
+                variant="outline"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+                size="lg"
+              >
+                <Edit2 className="w-5 h-5 mr-2" />
+                Edit Prompts
+              </Button>
+            </div>
 
-      {/* Personas Grid */}
-      {personas.length > 0 && (
+            {/* Progress Indicator */}
+            <GenerationProgressIndicator
+              isGenerating={isGenerating}
+              progress={generationProgress}
+              status={generationStatus}
+            />
+
+            <style>{`
+              @keyframes sparkIntense {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.4; transform: scale(1.2); }
+              }
+              .animate-spark-intense {
+                animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+              }
+            `}</style>
+          </div>
+
+          {/* Empty State - No Personas Generated Yet */}
+          {!hasGenerated && personas.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 px-8 border border-dashed border-gray-700 rounded-xl bg-gray-900/30 mb-8">
+              <User className="w-16 h-16 text-gray-500 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-300 mb-2">No Personas Generated Yet</h3>
+              <p className="text-gray-400 text-center max-w-md mb-6">
+                Click the "Generate Personas" button above to create AI-powered personas based on your campaign details.
+              </p>
+            </div>
+          )}
+
+          {/* Personas Grid - Only show in AI tab */}
+          {personas.length > 0 && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {personas.map((persona) => (
           <Card
@@ -455,32 +600,82 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
           </Card>
         ))}
       </div>
+          )}
+
+          {/* Summary & Submit */}
+          {personas.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400">
+                {selectedCount} {selectedCount === 1 ? 'persona' : 'personas'} selected
+              </p>
+              <Button
+                onClick={handleSubmit}
+                disabled={!canProceed || isSaving}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
+                size="lg"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin mr-2">⏳</div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Continue with Selected Personas
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Summary & Submit */}
-      <div className="flex items-center justify-between">
-        <p className="text-gray-400">
-          {selectedCount} {selectedCount === 1 ? 'persona' : 'personas'} selected
-        </p>
-        <Button
-          onClick={handleSubmit}
-          disabled={!canProceed || isSaving}
-          className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
-          size="lg"
-        >
-          {isSaving ? (
-            <>
-              <div className="animate-spin mr-2">⏳</div>
-              Saving...
-            </>
-          ) : (
-            <>
-              Continue with Selected Personas
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </>
+      {/* Real Personas Tab */}
+      {activeTab === 'real' && (
+        <div className="mb-8">
+          <div className="mb-6">
+            <Button
+              onClick={() => setShowCreateReal(true)}
+              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+              size="lg"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Create New Real Persona
+            </Button>
+          </div>
+
+          {/* Show RealPersonaSelector inline */}
+          <RealPersonaSelector
+            onSelect={handleChooseRealPersona}
+            initialSelectedId={selectedRealPersonaId}
+          />
+
+          {/* Continue button */}
+          {selectedRealPersonaId && (
+            <div className="mt-8 flex justify-end">
+              <Button
+                onClick={handleSubmitRealPersona}
+                disabled={isSaving}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-8"
+                size="lg"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin mr-2">⏳</div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Continue with Selected Persona
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
           )}
-        </Button>
-      </div>
+        </div>
+      )}
 
       {/* Edit Persona Dialog */}
       <Dialog open={!!editingPersona} onOpenChange={() => setEditingPersona(null)}>

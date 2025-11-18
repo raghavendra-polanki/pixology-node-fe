@@ -38,6 +38,9 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
     updateCampaignDetails,
     updateAIPersonas,
     updatePersonaSelection,
+    updateSelectedRealPersona,
+    updateAIStoryboard,
+    updateStoryboardCustomizations,
     updateAIScreenplay,
     updateScreenplayCustomizations,
     markStageCompleted,
@@ -254,6 +257,9 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
               updateCampaignDetails={updateCampaignDetails}
               updateAIPersonas={updateAIPersonas}
               updatePersonaSelection={updatePersonaSelection}
+              updateSelectedRealPersona={updateSelectedRealPersona}
+              updateAIStoryboard={updateAIStoryboard}
+              updateStoryboardCustomizations={updateStoryboardCustomizations}
               updateAIScreenplay={updateAIScreenplay}
               updateScreenplayCustomizations={updateScreenplayCustomizations}
               markStageCompleted={markStageCompleted}

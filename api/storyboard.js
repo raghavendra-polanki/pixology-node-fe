@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import multer from 'multer';
 import { db } from './config/firestore.js';
 import AIAdaptorResolver from './services/AIAdaptorResolver.js';
 import { createRequire } from 'module';
@@ -11,8 +12,21 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const GCSService = require('./services/gcsService');
 const PromptManager = require('./services/PromptManager.cjs');
+const StoryboardGenerationService = require('./services/StoryboardGenerationService.cjs');
 
 const router = express.Router();
+
+// Configure multer for file upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed'), false);
+    }
+    cb(null, true);
+  },
+});
 
 /**
  * POST /api/storyboard/edit-image
@@ -131,6 +145,51 @@ router.post('/edit-image', async (req, res) => {
       error: 'Failed to edit image',
       message: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+  }
+});
+
+/**
+ * POST /api/storyboard/upload-scene-image
+ * Upload a new image for a storyboard scene (replaces existing image)
+ */
+router.post('/upload-scene-image', upload.single('image'), async (req, res) => {
+  try {
+    const { projectId, sceneId, oldImageUrl } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image file provided',
+      });
+    }
+
+    if (!projectId || !sceneId) {
+      return res.status(400).json({
+        error: 'projectId and sceneId are required',
+      });
+    }
+
+    console.log(`[Storyboard] Uploading new image for scene ${sceneId} in project ${projectId}`);
+
+    // Upload the new image and optionally delete the old one
+    const imageUrl = await StoryboardGenerationService.uploadSceneImage(
+      req.file.buffer,
+      projectId,
+      sceneId,
+      oldImageUrl
+    );
+
+    console.log(`[Storyboard] Scene image uploaded successfully: ${imageUrl}`);
+
+    res.json({
+      success: true,
+      imageUrl,
+    });
+  } catch (error) {
+    console.error('[Storyboard] Error uploading scene image:', error);
+    res.status(500).json({
+      error: 'Failed to upload scene image',
+      message: error.message,
     });
   }
 });

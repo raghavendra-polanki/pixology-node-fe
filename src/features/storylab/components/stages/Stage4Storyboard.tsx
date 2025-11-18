@@ -10,7 +10,8 @@ import {
   SettingsIcon,
   ChevronDown,
   ChevronUp,
-  Wand2
+  Wand2,
+  Upload
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -58,7 +59,8 @@ export function Stage4Storyboard({
   // Load project using hook, but prefer passed props from WorkflowView
   const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
 
-  // Use passed props from WorkflowView (preferred) or fall back to hook results
+  // Use passed props from WorkflowView (preferred) since we call WorkflowView's loadProject
+  // which updates WorkflowView's project state that gets passed down
   const project = propProject || hookResult.project;
   const isSaving = hookResult.isSaving;
   const updateAIStoryboard = propUpdateAIStoryboard || hookResult.updateAIStoryboard;
@@ -69,6 +71,7 @@ export function Stage4Storyboard({
   const loadProject = hookResult.loadProject;
 
   const generatedScenesRef = useRef<HTMLDivElement>(null);
+  const lastLoadedScenesRef = useRef<string>(''); // Track last loaded scenes to prevent unnecessary reloads
 
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -83,22 +86,44 @@ export function Stage4Storyboard({
   const [newGeneratedImage, setNewGeneratedImage] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
+  const [locallyModified, setLocallyModified] = useState(false);
 
   // Sync scenes with project data when loaded
   useEffect(() => {
-    if (project?.aiGeneratedStoryboard?.scenes) {
-      const loadedScenes: Scene[] = project.aiGeneratedStoryboard.scenes.map((s, i) => ({
-        id: s.sceneNumber?.toString() || i.toString(),
-        number: s.sceneNumber || i + 1,
-        title: s.title || '',
-        description: s.description || '',
-        visualNote: s.cameraInstructions || '',
-        image: (s.image as any)?.url || (s.referenceImage as any)?.url || (s.referenceImage as any) || '',
-      }));
-      setScenes(loadedScenes);
-    } else {
+    // Only reload from project if we haven't made local modifications
+    // This prevents tab switching from overwriting unsaved local changes
+    if (!locallyModified && project?.aiGeneratedStoryboard?.scenes) {
+      // Create a hash of the scene data to detect actual changes
+      const sceneDataHash = JSON.stringify(
+        project.aiGeneratedStoryboard.scenes.map((s: any) => ({
+          id: s.sceneNumber,
+          title: s.title,
+          imageUrl: (s.image as any)?.url || (s.referenceImage as any)?.url || (s.referenceImage as any),
+        }))
+      );
+
+      // Only reload if the scene data has actually changed
+      if (sceneDataHash !== lastLoadedScenesRef.current) {
+        const loadedScenes: Scene[] = project.aiGeneratedStoryboard.scenes.map((s, i) => ({
+          id: s.sceneNumber?.toString() || i.toString(),
+          number: s.sceneNumber || i + 1,
+          title: s.title || '',
+          description: s.description || '',
+          visualNote: s.cameraInstructions || '',
+          image: (s.image as any)?.url || (s.referenceImage as any)?.url || (s.referenceImage as any) || '',
+        }));
+        setScenes(loadedScenes);
+        lastLoadedScenesRef.current = sceneDataHash;
+      }
+    } else if (!project?.aiGeneratedStoryboard?.scenes && !locallyModified) {
       setScenes([]);
+      lastLoadedScenesRef.current = '';
     }
+    // Note: locallyModified is intentionally NOT in the dependency array
+    // We only want to reload when project data changes, not when the flag changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.aiGeneratedStoryboard]);
 
   const handleGenerateStoryboard = async () => {
@@ -106,6 +131,8 @@ export function Stage4Storyboard({
     setGenerationProgress(0);
     setGenerationStatus('Initializing...');
     setScenes([]); // Clear existing scenes for progressive loading
+    setLocallyModified(false); // Reset flag when generating new storyboard
+    lastLoadedScenesRef.current = ''; // Reset tracking when generating new storyboard
 
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
@@ -262,6 +289,9 @@ export function Stage4Storyboard({
     if (!editingScene) return;
 
     try {
+      // Mark as locally modified to prevent useEffect from overwriting changes
+      setLocallyModified(true);
+
       // Update local state
       const updatedScenes = scenes.map(s => s.id === editingScene.id ? editingScene : s);
       setScenes(updatedScenes);
@@ -274,6 +304,10 @@ export function Stage4Storyboard({
               title: editingScene.title,
               description: editingScene.description,
               visualNote: editingScene.visualNote,
+              // Preserve image object structure - update URL while keeping metadata
+              image: typeof editingScene.image === 'string'
+                ? { ...s.image, url: editingScene.image }
+                : editingScene.image,
             }
           : s
       );
@@ -289,10 +323,22 @@ export function Stage4Storyboard({
           project.id
         );
 
-        console.log('Scene text edits saved successfully');
+        console.log('Scene edits saved successfully');
+
+        // Reload project to get fresh data from database
+        // This ensures when we navigate away and back, we have the latest data
+        await new Promise(resolve => setTimeout(resolve, 800));
+        await loadProject(project.id);
+
+        // Keep locallyModified=true to prevent the useEffect from immediately overwriting
+        // It will be reset when navigating to another stage
       }
 
-      // Close dialog
+      // Cleanup and close dialog
+      if (uploadedImagePreview) {
+        URL.revokeObjectURL(uploadedImagePreview);
+      }
+      setUploadedImagePreview(null);
       setEditingScene(null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save changes';
@@ -304,6 +350,49 @@ export function Stage4Storyboard({
   const handleEditChange = (field: keyof Scene, value: string | number) => {
     if (editingScene) {
       setEditingScene({ ...editingScene, [field]: value });
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingScene) return;
+
+    try {
+      setUploadingImage(true);
+
+      // Create preview
+      const previewUrl = URL.createObjectURL(file);
+      setUploadedImagePreview(previewUrl);
+
+      // Upload to GCS
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('projectId', project.id);
+      formData.append('sceneId', editingScene.id);
+      formData.append('oldImageUrl', editingScene.image);
+
+      const response = await fetch('/api/storyboard/upload-scene-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload image');
+      }
+
+      const { imageUrl } = await response.json();
+
+      // Update editing scene with new image URL
+      setEditingScene({ ...editingScene, image: imageUrl });
+
+      console.log('Image uploaded successfully:', imageUrl);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image. Please try again.');
+      setUploadedImagePreview(null);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -356,9 +445,12 @@ export function Stage4Storyboard({
       }
 
       // Merge the scene data with the current image from local state
+      // Preserve image object structure while updating the URL
       const sceneDataWithCurrentImage = {
         ...fullSceneData,
-        image: currentSceneFromState.image, // Use the current/regenerated image
+        image: typeof currentSceneFromState.image === 'string'
+          ? { ...fullSceneData.image, url: currentSceneFromState.image }
+          : currentSceneFromState.image,
       };
 
       // Call AI image edit API
@@ -397,6 +489,9 @@ export function Stage4Storyboard({
     if (!aiEditingScene || !newGeneratedImage) return;
 
     try {
+      // Mark as locally modified to prevent useEffect from overwriting changes
+      setLocallyModified(true);
+
       // Update scene with new image
       const updatedScenes = scenes.map(s =>
         s.id === aiEditingScene.id ? { ...s, image: newGeneratedImage } : s
@@ -421,17 +516,21 @@ export function Stage4Storyboard({
           project.id
         );
 
-        // Reload project to ensure fresh data when navigating back
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('AI edited image saved successfully');
+
+        // Reload project to get fresh data from database
+        // This ensures when we navigate away and back, we have the latest data
+        await new Promise(resolve => setTimeout(resolve, 800));
         await loadProject(project.id);
+
+        // Keep locallyModified=true to prevent the useEffect from immediately overwriting
+        // It will be reset when navigating to another stage
       }
 
       // Close dialog
       setAiEditingScene(null);
       setNewGeneratedImage(null);
       setAiEditPrompt('');
-
-      console.log('Image saved successfully');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save image';
       console.error('Error saving image:', errorMessage);
@@ -455,6 +554,9 @@ export function Stage4Storyboard({
 
       // Reload project to ensure latest storyboard data is available for next stage
       await loadProject(project.id);
+
+      // Reset flag so fresh data loads when returning to this stage
+      setLocallyModified(false);
 
       // Navigate to next stage (Screenplay = stage 5)
       if (navigateToStage) {
@@ -729,7 +831,13 @@ export function Stage4Storyboard({
       )}
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingScene} onOpenChange={() => setEditingScene(null)}>
+      <Dialog open={!!editingScene} onOpenChange={() => {
+        if (uploadedImagePreview) {
+          URL.revokeObjectURL(uploadedImagePreview);
+        }
+        setUploadedImagePreview(null);
+        setEditingScene(null);
+      }}>
         <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Scene {editingScene?.number}</DialogTitle>
@@ -780,6 +888,29 @@ export function Stage4Storyboard({
                   className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg"
                   placeholder="https://..."
                 />
+              </div>
+
+              {/* Upload New Image */}
+              <div className="space-y-2">
+                <Label className="text-gray-300">Or Upload New Image</Label>
+                <div className="flex gap-2">
+                  <label className="flex-1">
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg cursor-pointer transition-colors">
+                      <Upload className="w-4 h-4" />
+                      <span>{uploadingImage ? 'Uploading...' : 'Choose Image'}</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Upload a new image to replace the current one (max 10MB)
+                </p>
               </div>
 
               {/* Preview */}
