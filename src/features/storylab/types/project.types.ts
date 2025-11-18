@@ -346,6 +346,7 @@ export interface StoryLabProject {
   // STAGE 2: PERSONAS
   aiGeneratedPersonas?: AIGeneratedPersonas;
   userPersonaSelection?: UserInputPersonaSelection;
+  selectedRealPersonaId?: string; // Reference to a real persona from the global realPersonas collection
 
   // STAGE 3: NARRATIVE
   narrativePreferences?: UserInputNarrativePreferences;

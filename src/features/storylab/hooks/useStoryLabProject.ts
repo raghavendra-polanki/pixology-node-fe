@@ -45,6 +45,7 @@ interface UseStoryLabProjectResult {
   updateScriptPreferences: (preferences: any) => Promise<void>;
   updateAIPersonas: (personas: AIGeneratedPersonas) => Promise<void>;
   updatePersonaSelection: (selection: any) => Promise<void>;
+  updateSelectedRealPersona: (personaId: string | null) => Promise<void>;
   updateAINarratives: (narratives: any) => Promise<void>;
   updateAINarrative: (narrative: AIGeneratedNarrative) => Promise<void>;
   updateAIStoryboard: (storyboard: AIGeneratedStoryboard, projectIdOverride?: string) => Promise<StoryLabProject | void>;
@@ -263,6 +264,17 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
       if (!projectId) throw new Error('No project loaded');
       setHasUnsavedChanges(true);
       await updateProject({ userPersonaSelection: selection }, projectId);
+    },
+    [updateProject, project],
+  );
+
+  // Update selected real persona ID
+  const updateSelectedRealPersona = useCallback(
+    async (personaId: string | null, projectIdOverride?: string) => {
+      const projectId = projectIdOverride || project?.id;
+      if (!projectId) throw new Error('No project loaded');
+      setHasUnsavedChanges(true);
+      await updateProject({ selectedRealPersonaId: personaId }, projectId);
     },
     [updateProject, project],
   );
@@ -560,6 +572,7 @@ export function useStoryLabProject(options: UseStoryLabProjectOptions = {}): Use
     updateScriptPreferences,
     updateAIPersonas,
     updatePersonaSelection,
+    updateSelectedRealPersona,
     updateAINarratives,
     updateAINarrative,
     updateAIStoryboard,

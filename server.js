@@ -43,6 +43,7 @@ import storyboardRouter from './api/storyboard.js';
 import adaptorsRouter from './api/adaptors.js';
 import promptsRouter from './api/prompts.js';
 import generationRouter from './api/generation.js';
+import realPersonasRouter from './api/realPersonas.js';
 import { initializeAdaptors } from './api/services/adaptors/index.js';
 
 const app = express();
@@ -173,6 +174,9 @@ app.use('/api/prompts', promptsRouter);
 
 // V2 Generation API routes (adaptor-aware generation)
 app.use('/api/generation', generationRouter);
+
+// Real Personas API routes (global personas available across projects)
+app.use('/api/real-personas', realPersonasRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {
