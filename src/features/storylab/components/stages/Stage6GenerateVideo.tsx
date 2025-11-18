@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Download, AlertCircle, Play, RefreshCw, SettingsIcon, CheckCircle } from 'lucide-react';
+import { Sparkles, Download, AlertCircle, Play, RefreshCw, SettingsIcon, CheckCircle, Info } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Alert, AlertDescription } from '../ui/alert';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 interface Stage6Props {
   project?: any;
@@ -58,6 +59,11 @@ export function Stage6GenerateVideo({
   const [playingScenes, setPlayingScenes] = useState<Set<number>>(new Set());
   const videoRef = useRef<HTMLVideoElement>(null);
   const [initError, setInitError] = useState<string | null>(null);
+
+  // State for "Generate All Videos" functionality
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [overallStatus, setOverallStatus] = useState('');
 
   const handlePlayClick = () => {
     if (selectedScene !== null && videoRef.current) {
@@ -232,6 +238,241 @@ Generate a high-quality, professional marketing video that brings this scene to 
     return null;
   };
 
+  const handleGenerateAll = async () => {
+    if (!project?.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
+      alert('No scenes found. Please generate storyboard first.');
+      return;
+    }
+
+    setIsGeneratingAll(true);
+    setOverallProgress(0);
+    setOverallStatus('Initializing...');
+
+    const scenes = project.aiGeneratedStoryboard.scenes;
+    const totalScenes = scenes.length;
+
+    // Track videos locally to avoid stale project data
+    let accumulatedVideos: any[] = project?.aiGeneratedVideos?.videos || [];
+
+    try {
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        const sceneNumber = scene.sceneNumber;
+
+        // Update overall status
+        setOverallStatus(`Generating Scene ${sceneNumber} (${i + 1}/${totalScenes})...`);
+
+        // Generate video for this scene and get the result
+        await handleGenerateWithAccumulation(sceneNumber, accumulatedVideos);
+
+        // After successful generation, update accumulated videos
+        // The videos are updated by reference in handleGenerateWithAccumulation
+
+        // Update overall progress
+        const progressPercentage = Math.round(((i + 1) / totalScenes) * 100);
+        setOverallProgress(progressPercentage);
+      }
+
+      setOverallStatus('All videos generated successfully!');
+      setOverallProgress(100);
+
+      // Clear status after a delay
+      setTimeout(() => {
+        setIsGeneratingAll(false);
+        setOverallProgress(0);
+        setOverallStatus('');
+      }, 3000);
+    } catch (error) {
+      console.error('Error in Generate All:', error);
+      setOverallStatus('Generation failed. Please try again.');
+      setTimeout(() => {
+        setIsGeneratingAll(false);
+        setOverallProgress(0);
+        setOverallStatus('');
+      }, 3000);
+    }
+  };
+
+  const handleGenerateWithAccumulation = async (sceneNumber: number, accumulatedVideos: any[]) => {
+    try {
+      // Reset error state before generation
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], status: 'generating', progress: 0, error: undefined }
+      }));
+
+      // Validate required project data
+      if (!project?.aiGeneratedStoryboard?.scenes || project.aiGeneratedStoryboard.scenes.length === 0) {
+        throw new Error('No storyboard scenes found. Please generate storyboard first.');
+      }
+
+      if (!project?.aiGeneratedScreenplay?.screenplay || project.aiGeneratedScreenplay.screenplay.length === 0) {
+        throw new Error('No screenplay found. Please generate screenplay first.');
+      }
+
+      // Find the scene and screenplay entry by sceneNumber
+      const sceneData = project.aiGeneratedStoryboard.scenes.find((s: any) => s.sceneNumber === sceneNumber);
+      const screenplayEntry = project.aiGeneratedScreenplay.screenplay.find((s: any) => s.sceneNumber === sceneNumber);
+
+      if (!sceneData) {
+        throw new Error(`No scene data found for Scene ${sceneNumber}`);
+      }
+
+      if (!screenplayEntry) {
+        throw new Error(`No screenplay entry found for Scene ${sceneNumber}`);
+      }
+
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 20 }
+      }));
+
+      // Generate video using adaptor-based V2 service
+      const generationResponse = await fetch('/api/generation/video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          screenplayEntries: [screenplayEntry],
+          storyboardScenes: [sceneData],
+          videoDuration: '6s',
+          aspectRatio: '16:9',
+          resolution: '1080p',
+        }),
+      });
+
+      if (!generationResponse.ok) {
+        const errorData = await generationResponse.json();
+        throw new Error(errorData.error || 'Failed to generate video');
+      }
+
+      const generationData = await generationResponse.json();
+      const videos = generationData.data || [];
+
+      if (!Array.isArray(videos) || videos.length === 0) {
+        throw new Error('No video returned from generation service');
+      }
+
+      const result = videos[0];
+
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { ...prev[sceneNumber], progress: 90 }
+      }));
+
+      // Extract video data from result
+      const videoData: VideoData = {
+        sceneNumber: result.sceneNumber || sceneNumber,
+        sceneTitle: result.sceneTitle || `Scene ${sceneNumber}`,
+        videoUrl: result.videoUrl || '',
+        videoFormat: result.videoFormat || 'mp4',
+        duration: result.duration || '6s',
+        generatedAt: new Date().toISOString(),
+      };
+
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: {
+          status: 'complete',
+          progress: 100,
+          videoData,
+        }
+      }));
+
+      // Use accumulated videos instead of project data
+      const videoIndex = accumulatedVideos.findIndex(v => v.sceneNumber === sceneNumber);
+
+      // Create AIGeneratedVideo entry
+      const newVideoEntry = {
+        videoId: `video_${sceneNumber}_${Date.now()}`,
+        sceneNumber,
+        sceneTitle: result.sceneTitle || `Scene ${sceneNumber}`,
+        videoUrl: result.videoUrl,
+        gcsUri: result.gcsUri,
+        duration: result.duration || '6s',
+        resolution: result.resolution || '1080p',
+        format: 'mp4',
+        status: 'complete' as const,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      // Update or add the video entry to accumulated videos
+      if (videoIndex >= 0) {
+        accumulatedVideos[videoIndex] = newVideoEntry;
+      } else {
+        accumulatedVideos.push(newVideoEntry);
+      }
+
+      // Create or update AIGeneratedVideos collection
+      const aiGeneratedVideos = {
+        videoCollectionId: project?.id || `videos_${Date.now()}`,
+        title: `Video Generation for ${project?.name || 'Project'}`,
+        videos: accumulatedVideos,
+        completedCount: accumulatedVideos.filter(v => v.status === 'complete').length,
+        failedCount: accumulatedVideos.filter(v => v.status === 'error').length,
+        totalCount: accumulatedVideos.length,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      // Update project with aiGeneratedVideos using hook method
+      await updateAIVideos(aiGeneratedVideos, project?.id);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`❌ Error generating video for Scene ${sceneNumber}:`, err);
+
+      // Mark as error in local state
+      setSceneVideos(prev => ({
+        ...prev,
+        [sceneNumber]: { status: 'error', progress: 0, error: errorMsg }
+      }));
+
+      // Also save the error status to the project
+      const videoIndex = accumulatedVideos.findIndex(v => v.sceneNumber === sceneNumber);
+      const errorVideoEntry = {
+        videoId: `video_${sceneNumber}_${Date.now()}`,
+        sceneNumber,
+        sceneTitle: `Scene ${sceneNumber}`,
+        videoUrl: '',
+        gcsUri: '',
+        duration: '6s',
+        resolution: '1080p',
+        format: 'mp4',
+        status: 'error' as const,
+        error: errorMsg,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      if (videoIndex >= 0) {
+        accumulatedVideos[videoIndex] = errorVideoEntry;
+      } else {
+        accumulatedVideos.push(errorVideoEntry);
+      }
+
+      // Save error state to project
+      const aiGeneratedVideos = {
+        videoCollectionId: project?.id || `videos_${Date.now()}`,
+        title: `Video Generation for ${project?.name || 'Project'}`,
+        videos: accumulatedVideos,
+        completedCount: accumulatedVideos.filter(v => v.status === 'complete').length,
+        failedCount: accumulatedVideos.filter(v => v.status === 'error').length,
+        totalCount: accumulatedVideos.length,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      try {
+        await updateAIVideos(aiGeneratedVideos, project?.id);
+      } catch (saveErr) {
+        console.error('Failed to save error status:', saveErr);
+      }
+
+      // Don't re-throw - continue with next video in batch
+    }
+  };
+
   const handleGenerate = async (sceneNumber: number) => {
     try {
       // Reset error state before generation
@@ -362,10 +603,55 @@ Generate a high-quality, professional marketing video that brings this scene to 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       console.error(`❌ Error generating video for Scene ${sceneNumber}:`, err);
+
+      // Mark as error in local state
       setSceneVideos(prev => ({
         ...prev,
-        [sceneNumber]: { ...prev[sceneNumber], status: 'idle', progress: 0, error: errorMsg }
+        [sceneNumber]: { status: 'error', progress: 0, error: errorMsg }
       }));
+
+      // Also save the error status to the project
+      const existingVideos = project?.aiGeneratedVideos?.videos || [];
+      const videoIndex = existingVideos.findIndex(v => v.sceneNumber === sceneNumber);
+
+      const errorVideoEntry = {
+        videoId: `video_${sceneNumber}_${Date.now()}`,
+        sceneNumber,
+        sceneTitle: `Scene ${sceneNumber}`,
+        videoUrl: '',
+        gcsUri: '',
+        duration: '6s',
+        resolution: '1080p',
+        format: 'mp4',
+        status: 'error' as const,
+        error: errorMsg,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      const updatedVideos = [...existingVideos];
+      if (videoIndex >= 0) {
+        updatedVideos[videoIndex] = errorVideoEntry;
+      } else {
+        updatedVideos.push(errorVideoEntry);
+      }
+
+      const aiGeneratedVideos = {
+        videoCollectionId: project?.id || `videos_${Date.now()}`,
+        title: `Video Generation for ${project?.name || 'Project'}`,
+        videos: updatedVideos,
+        completedCount: updatedVideos.filter(v => v.status === 'complete').length,
+        failedCount: updatedVideos.filter(v => v.status === 'error').length,
+        totalCount: updatedVideos.length,
+        generatedAt: new Date(),
+        model: 'video-generation-v2',
+      };
+
+      try {
+        await updateAIVideos(aiGeneratedVideos, project?.id);
+      } catch (saveErr) {
+        console.error('Failed to save error status:', saveErr);
+      }
     }
   };
 
@@ -481,28 +767,66 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
         <>
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-white">Generate Videos</h2>
-              <p className="text-gray-400">
-                Generate video for each scene and review results
-              </p>
-            </div>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center">
+            <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <div className="flex gap-2">
+          <div>
+            <h2 className="text-white">Generate Videos</h2>
+            <p className="text-gray-400">
+              Generate video for each scene and review results
+            </p>
+          </div>
+        </div>
+
+        {/* Generate All & Edit Buttons */}
+        <div className="mb-4">
+          <div className="flex gap-4">
+            <Button
+              onClick={handleGenerateAll}
+              disabled={isGeneratingAll}
+              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl"
+              size="lg"
+            >
+              {isGeneratingAll ? (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2 animate-spark-intense" />
+                  Generating All Videos...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Generate All Videos
+                </>
+              )}
+            </Button>
             <Button
               onClick={handleEditPrompts}
               variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
             >
-              <SettingsIcon className="w-4 h-4 mr-2" />
+              <SettingsIcon className="w-5 h-5 mr-2" />
               Edit Prompts
             </Button>
           </div>
+
+          {/* Progress Indicator */}
+          <GenerationProgressIndicator
+            isGenerating={isGeneratingAll}
+            progress={overallProgress}
+            status={overallStatus}
+          />
+
+          <style>{`
+            @keyframes sparkIntense {
+              0%, 100% { opacity: 1; transform: scale(1); }
+              50% { opacity: 0.4; transform: scale(1.2); }
+            }
+            .animate-spark-intense {
+              animation: sparkIntense 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+          `}</style>
         </div>
       </div>
 
@@ -741,7 +1065,7 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
                         )}
 
                         {/* Status Indicator */}
-                        {(sceneStatus?.status === 'generating' || sceneStatus?.status === 'complete') && (
+                        {(sceneStatus?.status === 'generating' || sceneStatus?.status === 'complete' || sceneStatus?.status === 'error') && (
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
                             <div className="flex items-center gap-1">
                               {sceneStatus?.status === 'complete' && (
@@ -752,6 +1076,24 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
                               )}
                               {sceneStatus?.status === 'generating' && (
                                 <span className="text-blue-400 text-xs animate-pulse">Generating...</span>
+                              )}
+                              {sceneStatus?.status === 'error' && (
+                                <div
+                                  className="flex items-center gap-1 cursor-pointer group relative"
+                                  title={sceneStatus?.error || 'Generation failed'}
+                                >
+                                  <AlertCircle className="w-4 h-4 text-red-500" />
+                                  <span className="text-red-400 text-xs font-medium">Failed</span>
+                                  <Info className="w-3 h-3 text-red-400 ml-1" />
+
+                                  {/* Tooltip */}
+                                  <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50">
+                                    <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl max-w-xs border border-red-500/30">
+                                      <p className="font-semibold text-red-400 mb-1">Error:</p>
+                                      <p className="text-gray-300">{sceneStatus?.error || 'Generation failed'}</p>
+                                    </div>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>

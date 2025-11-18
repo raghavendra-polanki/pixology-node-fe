@@ -43,10 +43,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setUser(storedUser);
             setIsAuthenticated(true);
           } else {
-            // Token invalid, clear auth
+            // Token invalid, clear auth and redirect to login
+            console.log('Token verification failed, redirecting to login...');
             await authService.logout();
             setUser(null);
             setIsAuthenticated(false);
+
+            // Redirect to login page
+            window.location.href = '/login';
           }
         } else {
           setUser(null);
@@ -56,6 +60,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.error('Auth check failed:', err);
         setUser(null);
         setIsAuthenticated(false);
+
+        // Redirect to login on error
+        window.location.href = '/login';
       } finally {
         setIsLoading(false);
       }

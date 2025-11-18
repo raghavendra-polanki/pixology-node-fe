@@ -214,10 +214,42 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
     setEditingPersona({ ...persona });
   };
 
-  const handleEditSave = () => {
-    if (editingPersona) {
-      setPersonas(personas.map(p => p.id === editingPersona.id ? editingPersona : p));
+  const handleEditSave = async () => {
+    if (!editingPersona) return;
+
+    try {
+      // Update local state
+      const updatedPersonas = personas.map(p => p.id === editingPersona.id ? editingPersona : p);
+      setPersonas(updatedPersonas);
+
+      // Save to database - convert UI personas back to PersonaData format
+      const personasForDatabase = updatedPersonas.map(p => ({
+        id: p.id,
+        coreIdentity: {
+          name: p.name,
+          age: p.age,
+          demographic: p.demographic,
+          motivation: p.motivation,
+          bio: p.bio,
+        },
+        image: {
+          url: p.image,
+        },
+      }));
+
+      await updateAIPersonas({
+        personas: personasForDatabase,
+        generatedAt: project?.aiGeneratedPersonas?.generatedAt || new Date(),
+        model: project?.aiGeneratedPersonas?.model || 'persona-generation-v2',
+        count: personasForDatabase.length,
+      });
+
+      console.log('Persona edits saved successfully');
       setEditingPersona(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save changes';
+      console.error('Error saving persona edits:', errorMessage);
+      alert(`Failed to save changes: ${errorMessage}`);
     }
   };
 

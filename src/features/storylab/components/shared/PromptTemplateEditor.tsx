@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import Editor from 'react-simple-code-editor';
+import Editor from '@monaco-editor/react';
 import './PromptTemplateEditor.css';
 
 interface PromptConfig {
@@ -58,6 +58,9 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
   // Edited prompt state (isolated from parent)
   const [editedPrompt, setEditedPrompt] = useState<PromptConfig | null>(null);
 
+  // Track the prompt template text separately to avoid Editor re-render issues
+  const [promptText, setPromptText] = useState<string>('');
+
   // Store inputs and outputs per prompt (preserves state when switching prompts)
   const [promptStates, setPromptStates] = useState<Record<string, { variables: VariableValue; output: string | null }>>({});
 
@@ -98,6 +101,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
             setSelectedPromptId(firstPrompt.id);
             setActiveCapability(firstPrompt.capability);
             setEditedPrompt({ ...firstPrompt }); // Create isolated copy
+            setPromptText(firstPrompt.userPromptTemplate || ''); // Initialize prompt text
 
             // Prefill variable values from stageData if provided
             if (stageData) {
@@ -150,6 +154,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
           projectId,
           capability: activeCapability,
           variables: variableValues,
+          customPrompt: promptText, // Send the live edited prompt text
         }),
       });
 
@@ -186,6 +191,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
       setIsSaving(true);
       setError(null);
 
+      // Use promptText as the source of truth
       const response = await fetch(`/api/prompts/templates/${stageType}/${editedPrompt.id}`, {
         method: 'PUT',
         headers: {
@@ -193,7 +199,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
         },
         body: JSON.stringify({
           updates: {
-            userPromptTemplate: editedPrompt.userPromptTemplate,
+            userPromptTemplate: promptText,
           },
         }),
       });
@@ -216,6 +222,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
           const updatedPrompt = refreshData.templates[0].prompts.find((p: PromptConfig) => p.id === editedPrompt.id);
           if (updatedPrompt) {
             setEditedPrompt({ ...updatedPrompt });
+            setPromptText(updatedPrompt.userPromptTemplate || ''); // Keep promptText in sync
           }
         }
       }
@@ -281,32 +288,37 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
     return imageHostPatterns.some(pattern => pattern.test(str));
   };
 
-  // Highlight function for syntax highlighting
-  const highlightVariables = (code: string): string => {
-    // Escape HTML to prevent XSS
-    const escapeHtml = (str: string) => {
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    };
+  // Monaco Editor configuration
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    // Register custom language for prompt templates
+    monaco.languages.register({ id: 'prompt-template' });
 
-    // Split by variable pattern and highlight variables
-    const parts = code.split(/(\{\{[^}]+\}\})/g);
+    // Define syntax highlighting rules
+    monaco.languages.setMonarchTokensProvider('prompt-template', {
+      tokenizer: {
+        root: [
+          // Highlight {{variableName}} pattern
+          [/\{\{[^}]+\}\}/, 'variable'],
+        ],
+      },
+    });
 
-    return parts
-      .map((part) => {
-        if (part.match(/^\{\{[^}]+\}\}$/)) {
-          // This is a variable - highlight it
-          return `<span style="color: #0061ff; font-weight: 600; background-color: rgba(0, 97, 255, 0.1); padding: 2px 4px; border-radius: 3px;">${escapeHtml(part)}</span>`;
-        } else {
-          // Regular text
-          return escapeHtml(part);
-        }
-      })
-      .join('');
+    // Define colors for the tokens
+    monaco.editor.defineTheme('prompt-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'variable', foreground: '0061ff', fontStyle: 'bold' },
+      ],
+      colors: {
+        'editor.background': '#0a0a0a',
+        'editor.foreground': '#e0e0e0',
+        'editorLineNumber.foreground': '#666666',
+        'editor.lineHighlightBackground': '#1a1a1a',
+        'editor.selectionBackground': '#264f78',
+        'editorCursor.foreground': '#0061ff',
+      },
+    });
   };
 
   // Render JSON output in a user-friendly format
@@ -720,6 +732,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                       if (prompt) {
                         setActiveCapability(prompt.capability);
                         setEditedPrompt({ ...prompt }); // Create isolated copy
+                        setPromptText(prompt.userPromptTemplate || ''); // Update prompt text
 
                         // Restore saved state for this prompt (if exists)
                         const savedState = promptStates[newPromptId];
@@ -786,39 +799,62 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                       </div>
                       <div style={{
                         width: '100%',
-                        minHeight: '450px',
-                        backgroundColor: 'rgba(21, 21, 21, 0.5)',
+                        height: '450px',
                         border: '1px solid rgba(51, 51, 51, 0.15)',
                         borderRadius: '8px',
-                        transition: 'all 0.2s',
-                        overflow: 'auto'
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = '#0061ff';
-                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 97, 255, 0.1)';
-                        e.currentTarget.style.backgroundColor = 'rgba(21, 21, 21, 0.9)';
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(51, 51, 51, 0.15)';
-                        e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.backgroundColor = 'rgba(21, 21, 21, 0.5)';
+                        overflow: 'hidden'
                       }}>
                         <Editor
-                          value={currentPrompt.userPromptTemplate || ''}
-                          onValueChange={(code) => setEditedPrompt({ ...currentPrompt, userPromptTemplate: code })}
-                          highlight={highlightVariables}
-                          padding={12}
-                          placeholder="Enter your prompt template here. Use {{variableName}} for variables."
-                          style={{
-                            fontFamily: '"Monaco", "Courier New", monospace',
-                            fontSize: '12px',
-                            lineHeight: '1.6',
-                            minHeight: '450px',
-                            color: '#e0e0e0',
-                            backgroundColor: 'transparent',
-                            outline: 'none'
+                          height="450px"
+                          defaultLanguage="prompt-template"
+                          language="prompt-template"
+                          theme="prompt-theme"
+                          value={promptText}
+                          onChange={(value) => {
+                            const newValue = value || '';
+                            // Update promptText directly - this is the source of truth
+                            setPromptText(newValue);
+                            // Keep editedPrompt in sync for other uses
+                            setEditedPrompt(prev => prev ? { ...prev, userPromptTemplate: newValue } : null);
                           }}
-                          textareaClassName="prompt-editor-textarea"
+                          onMount={handleEditorDidMount}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'off',
+                            wordWrap: 'on',
+                            wrappingIndent: 'same',
+                            automaticLayout: true,
+                            scrollBeyondLastLine: false,
+                            folding: false,
+                            renderLineHighlight: 'none',
+                            overviewRulerBorder: false,
+                            hideCursorInOverviewRuler: true,
+                            overviewRulerLanes: 0,
+                            scrollbar: {
+                              vertical: 'visible',
+                              horizontal: 'visible',
+                              verticalScrollbarSize: 10,
+                              horizontalScrollbarSize: 10,
+                            },
+                            padding: { top: 12, bottom: 12 },
+                            // Disable autocomplete and suggestions
+                            quickSuggestions: false,
+                            suggestOnTriggerCharacters: false,
+                            wordBasedSuggestions: 'off',
+                            parameterHints: { enabled: false },
+                            suggest: {
+                              showWords: false,
+                              showSnippets: false,
+                            },
+                            acceptSuggestionOnEnter: 'off',
+                            tabCompletion: 'off',
+                            // Disable glyph margin (area for breakpoints, etc.)
+                            glyphMargin: false,
+                            // Disable line decorations
+                            lineDecorationsWidth: 0,
+                            lineNumbersMinChars: 0,
+                          }}
                         />
                       </div>
                       <p style={{

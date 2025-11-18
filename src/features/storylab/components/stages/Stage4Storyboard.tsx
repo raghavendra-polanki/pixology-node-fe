@@ -258,10 +258,46 @@ export function Stage4Storyboard({
     setEditingScene({ ...scene });
   };
 
-  const handleEditSave = () => {
-    if (editingScene) {
-      setScenes(scenes.map(s => s.id === editingScene.id ? editingScene : s));
+  const handleEditSave = async () => {
+    if (!editingScene) return;
+
+    try {
+      // Update local state
+      const updatedScenes = scenes.map(s => s.id === editingScene.id ? editingScene : s);
+      setScenes(updatedScenes);
+
+      // Save to database - update the storyboard in the project
+      const updatedStoryboard = project?.aiGeneratedStoryboard?.scenes?.map((s: any) =>
+        s.sceneNumber?.toString() === editingScene.id
+          ? {
+              ...s,
+              title: editingScene.title,
+              description: editingScene.description,
+              visualNote: editingScene.visualNote,
+            }
+          : s
+      );
+
+      if (updatedStoryboard) {
+        await updateAIStoryboard(
+          {
+            scenes: updatedStoryboard,
+            generatedAt: project?.aiGeneratedStoryboard?.generatedAt || new Date(),
+            model: project?.aiGeneratedStoryboard?.model || 'storyboard-generation-v2',
+            count: updatedStoryboard.length,
+          },
+          project.id
+        );
+
+        console.log('Scene text edits saved successfully');
+      }
+
+      // Close dialog
       setEditingScene(null);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save changes';
+      console.error('Error saving scene edits:', errorMessage);
+      alert(`Failed to save changes: ${errorMessage}`);
     }
   };
 
@@ -303,7 +339,14 @@ export function Stage4Storyboard({
 
     setIsRegeneratingImage(true);
     try {
-      // Get the full scene data from project
+      // Get the current scene data from local state (which has the latest image)
+      const currentSceneFromState = scenes.find(s => s.id === aiEditingScene.id);
+
+      if (!currentSceneFromState) {
+        throw new Error('Could not find scene in local state');
+      }
+
+      // Get the full scene metadata from project, but use the current image from local state
       const fullSceneData = project?.aiGeneratedStoryboard?.scenes?.find(
         (s: any) => s.sceneNumber?.toString() === aiEditingScene.id
       );
@@ -312,6 +355,12 @@ export function Stage4Storyboard({
         throw new Error('Could not find complete scene data');
       }
 
+      // Merge the scene data with the current image from local state
+      const sceneDataWithCurrentImage = {
+        ...fullSceneData,
+        image: currentSceneFromState.image, // Use the current/regenerated image
+      };
+
       // Call AI image edit API
       const response = await fetch('/api/storyboard/edit-image', {
         method: 'POST',
@@ -319,7 +368,7 @@ export function Stage4Storyboard({
         body: JSON.stringify({
           projectId: project.id,
           sceneNumber: aiEditingScene.number,
-          sceneData: fullSceneData,
+          sceneData: sceneDataWithCurrentImage,
           editPrompt: aiEditPrompt,
         }),
       });
@@ -403,6 +452,9 @@ export function Stage4Storyboard({
 
       // Mark stage as completed with batched updates (includes customizations, stage execution, and stage advancement)
       await markStageCompleted('storyboard', undefined, additionalUpdates);
+
+      // Reload project to ensure latest storyboard data is available for next stage
+      await loadProject(project.id);
 
       // Navigate to next stage (Screenplay = stage 5)
       if (navigateToStage) {

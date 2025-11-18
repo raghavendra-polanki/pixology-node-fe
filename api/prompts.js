@@ -232,7 +232,7 @@ router.get('/variables', async (req, res) => {
  */
 router.post('/test', async (req, res) => {
   try {
-    const { stageType, projectId, capability, variables } = req.body;
+    const { stageType, projectId, capability, variables, customPrompt } = req.body;
 
     if (!stageType || !capability || !variables) {
       return res.status(400).json({
@@ -242,32 +242,49 @@ router.post('/test', async (req, res) => {
 
     console.log(`[API] /test: Testing prompt for ${stageType}/${capability}`);
 
-    // Get the prompt for the specific capability
-    const promptConfig = await PromptManager.getPromptByCapability(
-      stageType,
-      capability,
-      projectId,
-      db
-    );
+    let fullPrompt;
 
-    if (!promptConfig) {
-      return res.status(404).json({
-        error: `No prompt found for ${stageType}/${capability}`,
+    if (customPrompt) {
+      // Use the custom prompt from the editor (live editing)
+      console.log(`[API] /test: Using custom prompt from editor`);
+
+      // Manually resolve variables in the custom prompt
+      let resolvedCustomPrompt = customPrompt;
+      Object.entries(variables).forEach(([key, value]) => {
+        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+        resolvedCustomPrompt = resolvedCustomPrompt.replace(regex, String(value));
       });
+
+      fullPrompt = resolvedCustomPrompt;
+    } else {
+      // Use the saved prompt from database
+      // Get the prompt for the specific capability
+      const promptConfig = await PromptManager.getPromptByCapability(
+        stageType,
+        capability,
+        projectId,
+        db
+      );
+
+      if (!promptConfig) {
+        return res.status(404).json({
+          error: `No prompt found for ${stageType}/${capability}`,
+        });
+      }
+
+      // Resolve prompt template with variables
+      const resolvedPrompt = PromptManager.resolvePrompt(
+        promptConfig,
+        variables
+      );
+
+      // Combine system and user prompts
+      const systemPrompt = resolvedPrompt.systemPrompt || '';
+      const userPrompt = resolvedPrompt.userPrompt || '';
+      fullPrompt = systemPrompt
+        ? `${systemPrompt}\n\n${userPrompt}`
+        : userPrompt;
     }
-
-    // Resolve prompt template with variables
-    const resolvedPrompt = PromptManager.resolvePrompt(
-      promptConfig,
-      variables
-    );
-
-    // Combine system and user prompts
-    const systemPrompt = resolvedPrompt.systemPrompt || '';
-    const userPrompt = resolvedPrompt.userPrompt || '';
-    const fullPrompt = systemPrompt
-      ? `${systemPrompt}\n\n${userPrompt}`
-      : userPrompt;
 
     console.log(`[API] /test: Resolved prompt: ${fullPrompt.substring(0, 100)}...`);
 
