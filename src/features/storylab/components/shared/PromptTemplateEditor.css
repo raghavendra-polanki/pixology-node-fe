@@ -177,6 +177,7 @@
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
+  color-scheme: dark;
 }
 
 .capability-select:hover {
@@ -189,6 +190,26 @@
   border-color: #0061ff;
   box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.1);
   background: rgba(21, 21, 21, 0.9);
+}
+
+.capability-select option {
+  background: #151515 !important;
+  background-color: #151515 !important;
+  color: #ffffff !important;
+  padding: 8px !important;
+}
+
+.capability-select option:hover,
+.capability-select option:focus {
+  background: #0061ff !important;
+  background-color: #0061ff !important;
+  color: #ffffff !important;
+}
+
+.capability-select option:checked {
+  background: #0061ff !important;
+  background-color: #0061ff !important;
+  color: #ffffff !important;
 }
 
 /* Prompt Display */

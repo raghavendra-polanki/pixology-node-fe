@@ -4,8 +4,52 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import Editor from '@monaco-editor/react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
+import Editor, { loader } from '@monaco-editor/react';
 import './PromptTemplateEditor.css';
+
+// Configure Monaco to load from local node_modules instead of CDN
+// This avoids CSP issues with external CDN loading
+import * as monaco from 'monaco-editor';
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+
+self.MonacoEnvironment = {
+  getWorker() {
+    return new editorWorker();
+  },
+};
+
+loader.config({ monaco });
+
+interface ModelConfig {
+  adaptorId: string;
+  modelId: string;
+}
+
+interface AvailableModel {
+  adaptorId: string;
+  adaptorName: string;
+  modelId: string;
+  displayName: string;
+  description: string;
+  isDefault?: boolean;
+}
 
 interface PromptConfig {
   id: string;
@@ -18,6 +62,7 @@ interface PromptConfig {
   variables?: Array<{ name: string; description: string; placeholder?: string }>;
   isDefault?: boolean;
   isActive?: boolean;
+  modelConfig?: ModelConfig;
 }
 
 interface PromptTemplate {
@@ -54,6 +99,14 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
   const [selectedPromptId, setSelectedPromptId] = useState<string>('');
   const [variableValues, setVariableValues] = useState<VariableValue>({});
   const [testOutput, setTestOutput] = useState<string | null>(null);
+
+  // Model configuration state
+  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  // Save confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   // Edited prompt state (isolated from parent)
   const [editedPrompt, setEditedPrompt] = useState<PromptConfig | null>(null);
@@ -136,6 +189,13 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
     loadTemplate();
   }, [stageType]);
 
+  // Load available models when capability changes
+  useEffect(() => {
+    if (activeCapability) {
+      loadAvailableModels(activeCapability);
+    }
+  }, [activeCapability]);
+
   const handleTestPrompt = async () => {
     if (!template || !activeCapability || !selectedPromptId) return;
 
@@ -155,6 +215,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
           capability: activeCapability,
           variables: variableValues,
           customPrompt: promptText, // Send the live edited prompt text
+          modelConfig: editedPrompt?.modelConfig, // Send the edited model config for testing
         }),
       });
 
@@ -184,6 +245,21 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
     }
   };
 
+  const handleSaveButtonClick = () => {
+    // Show confirmation dialog instead of saving directly
+    setConfirmText('');
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmSave = async () => {
+    // Close dialog and reset confirmation text
+    setShowConfirmDialog(false);
+    setConfirmText('');
+
+    // Proceed with save
+    await handleSavePrompt();
+  };
+
   const handleSavePrompt = async () => {
     if (!editedPrompt || !stageType) return;
 
@@ -191,7 +267,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
       setIsSaving(true);
       setError(null);
 
-      // Use promptText as the source of truth
+      // Save the prompt template
       const response = await fetch(`/api/prompts/templates/${stageType}/${editedPrompt.id}`, {
         method: 'PUT',
         headers: {
@@ -207,6 +283,33 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save prompt');
+      }
+
+      // Save the model configuration if it was changed
+      if (editedPrompt.modelConfig) {
+        try {
+          const modelConfigResponse = await fetch(`/api/prompts/model-config`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              stageType,
+              capability: editedPrompt.capability,
+              modelConfig: editedPrompt.modelConfig,
+              projectId: null, // Save to default template, not project-specific
+            }),
+          });
+
+          if (!modelConfigResponse.ok) {
+            const errorData = await modelConfigResponse.json();
+            console.warn('Failed to save model config:', errorData.error);
+            // Don't fail the whole save if model config fails
+          }
+        } catch (modelConfigError) {
+          console.warn('Error saving model config:', modelConfigError);
+          // Don't fail the whole save if model config fails
+        }
       }
 
       setSuccessMessage('Prompt saved successfully!');
@@ -243,6 +346,42 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
       }
     }
     return matches;
+  };
+
+  // Load available models for the current capability
+  const loadAvailableModels = async (capability: string) => {
+    try {
+      setIsLoadingModels(true);
+      console.log(`[PromptTemplateEditor] Loading available models for capability: ${capability}`);
+
+      const response = await fetch(`/api/prompts/available-models?capability=${capability}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to load available models');
+      }
+
+      const data = await response.json();
+      setAvailableModels(data.models || []);
+      console.log(`[PromptTemplateEditor] Loaded ${data.models?.length || 0} models for ${capability}`);
+    } catch (err) {
+      console.error('[PromptTemplateEditor] Error loading models:', err);
+      setAvailableModels([]);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  // Update model configuration for current prompt (local state only, saved on "Save Prompt")
+  const handleModelChange = (newModelConfig: ModelConfig) => {
+    if (!activeCapability || !editedPrompt) return;
+
+    console.log(`[PromptTemplateEditor] Updating model config (local) for ${stageType}/${activeCapability} to ${newModelConfig.adaptorId}/${newModelConfig.modelId}`);
+
+    // Update only local state - will be saved when "Save Prompt" is clicked
+    setEditedPrompt({
+      ...editedPrompt,
+      modelConfig: newModelConfig,
+    });
   };
 
   // Helper function to check if a string is an image URL
@@ -288,8 +427,8 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
     return imageHostPatterns.some(pattern => pattern.test(str));
   };
 
-  // Monaco Editor configuration
-  const handleEditorDidMount = (editor: any, monaco: any) => {
+  // Monaco Editor configuration - called BEFORE editor mounts
+  const handleEditorBeforeMount = (monaco: any) => {
     // Register custom language for prompt templates
     monaco.languages.register({ id: 'prompt-template' });
 
@@ -303,7 +442,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
       },
     });
 
-    // Define colors for the tokens
+    // Define colors for the tokens - this runs BEFORE editor renders
     monaco.editor.defineTheme('prompt-theme', {
       base: 'vs-dark',
       inherit: true,
@@ -710,11 +849,9 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                       </span>
                     )}
                   </div>
-                  <select
+                  <Select
                     value={selectedPromptId}
-                    onChange={(e) => {
-                      const newPromptId = e.target.value;
-
+                    onValueChange={(newPromptId) => {
                       // Save current prompt's state before switching
                       if (selectedPromptId) {
                         setPromptStates(prev => ({
@@ -760,16 +897,89 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                         }
                       }
                     }}
-                    className="capability-select"
                   >
-                    <option value="">Choose a prompt...</option>
-                    {allPrompts.map((prompt) => (
-                      <option key={prompt.id} value={prompt.id}>
-                        {prompt.name} {prompt.isDefault ? '(Default)' : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger style={{ backgroundColor: 'rgba(21, 21, 21, 0.6)', border: '1px solid rgba(51, 51, 51, 0.2)', color: '#ffffff' }}>
+                      <SelectValue placeholder="Choose a prompt..." />
+                    </SelectTrigger>
+                    <SelectContent style={{ backgroundColor: '#151515', border: '1px solid rgba(51, 51, 51, 0.2)' }}>
+                      {allPrompts.map((prompt) => (
+                        <SelectItem key={prompt.id} value={prompt.id} style={{ color: '#ffffff' }}>
+                          {prompt.name} {prompt.isDefault ? '(Default)' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {/* Model Selector */}
+                {currentPrompt && editedPrompt && (
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '12px',
+                    backgroundColor: 'rgba(51, 51, 51, 0.08)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(51, 51, 51, 0.2)'
+                  }}>
+                    <Label style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: '#a0aec0',
+                      marginBottom: '8px',
+                      display: 'block',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px'
+                    }}>
+                      AI Model Configuration
+                    </Label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                      <Select
+                        value={editedPrompt.modelConfig ? `${editedPrompt.modelConfig.adaptorId}/${editedPrompt.modelConfig.modelId}` : ''}
+                        onValueChange={(value) => {
+                          const [adaptorId, modelId] = value.split('/');
+                          if (adaptorId && modelId) {
+                            handleModelChange({ adaptorId, modelId });
+                          }
+                        }}
+                        disabled={isLoadingModels}
+                      >
+                        <SelectTrigger style={{ flex: 1, backgroundColor: 'rgba(21, 21, 21, 0.6)', border: '1px solid rgba(51, 51, 51, 0.2)', color: '#ffffff' }}>
+                          <SelectValue placeholder="Select a model..." />
+                        </SelectTrigger>
+                        <SelectContent style={{ backgroundColor: '#151515', border: '1px solid rgba(51, 51, 51, 0.2)' }}>
+                          {isLoadingModels ? (
+                            <SelectItem value="loading" disabled>Loading models...</SelectItem>
+                          ) : availableModels.length === 0 ? (
+                            <SelectItem value="none" disabled>No models available</SelectItem>
+                          ) : (
+                            <>
+                              {availableModels.map((model) => (
+                                <SelectItem
+                                  key={`${model.adaptorId}/${model.modelId}`}
+                                  value={`${model.adaptorId}/${model.modelId}`}
+                                  style={{ color: '#ffffff' }}
+                                >
+                                  {model.adaptorName} - {model.displayName}
+                                  {model.isDefault ? ' (Default)' : ''}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {editedPrompt.modelConfig && availableModels.length > 0 && (
+                      <p style={{
+                        marginTop: '8px',
+                        fontSize: '0.7rem',
+                        color: '#a0aec0',
+                        lineHeight: '1.4',
+                        margin: '8px 0 0 0'
+                      }}>
+                        {availableModels.find(m => m.modelId === editedPrompt.modelConfig?.modelId)?.description || 'Model configuration for this prompt'}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Display & Edit Selected Prompt */}
                 {currentPrompt && (
@@ -779,7 +989,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                         <h3 className="prompt-display-title" style={{ margin: 0 }}>User Prompt Template</h3>
                         <Button
-                          onClick={handleSavePrompt}
+                          onClick={handleSaveButtonClick}
                           disabled={isSaving || isTesting}
                           size="sm"
                           className="test-button"
@@ -817,7 +1027,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
                             // Keep editedPrompt in sync for other uses
                             setEditedPrompt(prev => prev ? { ...prev, userPromptTemplate: newValue } : null);
                           }}
-                          onMount={handleEditorDidMount}
+                          beforeMount={handleEditorBeforeMount}
                           options={{
                             minimap: { enabled: false },
                             fontSize: 13,
@@ -1068,6 +1278,60 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData }
           </>
         ) : null}
       </div>
+
+      {/* Save Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent style={{ backgroundColor: '#0a0a0a', border: '1px solid #333333' }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: '#ffffff' }}>Confirm Prompt Save</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: '#a0aec0' }}>
+              This will save the prompt template and model configuration. This action will affect all future generations using this prompt.
+              <br /><br />
+              Type <strong style={{ color: '#0061ff' }}>CONFIRM</strong> to proceed:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div style={{ margin: '16px 0' }}>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Type CONFIRM"
+              style={{
+                backgroundColor: 'rgba(21, 21, 21, 0.6)',
+                border: '1px solid rgba(51, 51, 51, 0.2)',
+                color: '#ffffff'
+              }}
+              autoFocus
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setConfirmText('');
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid #333333',
+                color: '#d1d5db'
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmSave}
+              disabled={confirmText !== 'CONFIRM'}
+              style={{
+                backgroundColor: confirmText === 'CONFIRM' ? '#0061ff' : '#333333',
+                color: '#ffffff',
+                cursor: confirmText === 'CONFIRM' ? 'pointer' : 'not-allowed',
+                opacity: confirmText === 'CONFIRM' ? 1 : 0.5
+              }}
+            >
+              Save Prompt
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
