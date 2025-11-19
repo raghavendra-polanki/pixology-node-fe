@@ -134,19 +134,15 @@ class VideoGenerationService {
           // Build video prompt (pass actualSceneNumber - 1 to maintain 0-based index for prompt builder)
           const prompt = this._buildVideoPrompt(combinedSceneData, actualSceneNumber - 1);
 
-          // Build reference images array with scene image and persona image
-          const referenceImageUris = [
-            sceneImageGcsUri || sceneImageUrl,  // Scene image (required)
-            personaImageUri,                     // Persona image (optional)
-          ].filter(Boolean);  // Remove any null/undefined values
+          // Use primary scene image for video generation
+          const primaryImageUri = sceneImageGcsUri || sceneImageUrl;
 
-          console.log(`[VideoGen] Using ${referenceImageUris.length} reference image(s) for video generation`);
+          console.log(`[VideoGen] Using scene image for video generation: ${primaryImageUri}`);
 
-          // Generate video using AI adaptor with multiple reference images
-          // Note: Video generation with reference images only supports 8s duration
-          const videoResult = await videoAdaptor.adaptor.generateVideoWithReferenceImages(prompt, {
-            referenceImageUris: referenceImageUris,
-            durationSeconds: 8,  // Fixed to 8s - only supported duration for reference image video generation
+          // Generate video using AI adaptor
+          const videoResult = await videoAdaptor.adaptor.generateVideo(prompt, {
+            imageGcsUri: primaryImageUri,
+            durationSeconds: 8,
             aspectRatio: combinedSceneData.aspectRatio,
             resolution: combinedSceneData.resolution,
             projectId: projectId,
@@ -169,7 +165,7 @@ class VideoGenerationService {
               backend: videoResult.backend,
               operationName: videoResult.operationName,
               prompt: prompt.substring(0, 200),
-              referenceImagesCount: videoResult.referenceImagesCount || referenceImageUris.length,
+              referenceImagesCount: videoResult.referenceImagesCount || 1,
             },
           });
 
