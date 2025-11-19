@@ -50,22 +50,40 @@ router.post('/edit-image', async (req, res) => {
     console.log(`[Storyboard] Editing image for scene ${sceneNumber} in project ${projectId}`);
     console.log(`[Storyboard] Edit request: ${editPrompt}`);
 
-    // Fetch project data to get product image
+    // Fetch project data to get product image and all scenes
     const projectDoc = await db.collection('projects').doc(projectId).get();
     const projectData = projectDoc.data();
     const productImageUrl = projectData?.campaignDetails?.productImageUrl;
+    const allScenes = projectData?.aiGeneratedStoryboard?.scenes || [];
 
-    // Resolve image generation adaptor
-    const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
-      projectId,
-      'stage_4_storyboard',
-      'imageGeneration',
-      db
-    );
+    // Build previous scenes context for visual continuity
+    let previousScenesContext = '';
+    const currentSceneIndex = allScenes.findIndex(s => s.sceneNumber?.toString() === sceneNumber.toString());
 
-    console.log(`[Storyboard] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`);
+    if (currentSceneIndex > 0) {
+      const previousScenes = allScenes.slice(0, currentSceneIndex);
 
-    // Get prompt template for image editing capability
+      if (previousScenes.length > 0) {
+        previousScenesContext = '**Previous Scenes for Reference:**\n\n';
+        previousScenes.forEach((prevScene, idx) => {
+          previousScenesContext += `**Scene ${idx + 1}: ${prevScene.title || `Scene ${idx + 1}`}**\n`;
+          previousScenesContext += `- Description: ${prevScene.description || 'N/A'}\n`;
+          previousScenesContext += `- Location: ${prevScene.location || 'N/A'}\n`;
+          previousScenesContext += `- Visual Elements: ${prevScene.visualElements || 'N/A'}\n`;
+          previousScenesContext += `- Key Frame: ${prevScene.keyFrameDescription || 'N/A'}\n`;
+          if (prevScene.image && prevScene.image.url) {
+            previousScenesContext += `- Reference Image: Provided as visual reference\n`;
+          }
+          previousScenesContext += '\n';
+        });
+      } else {
+        previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+      }
+    } else {
+      previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+    }
+
+    // Get prompt template for image editing capability (includes modelConfig)
     const imageEditPromptTemplate = await PromptManager.getPromptByCapability(
       'stage_4_storyboard',
       'imageEditing',
@@ -73,8 +91,20 @@ router.post('/edit-image', async (req, res) => {
       db
     );
 
+    // Resolve image generation adaptor with model config from prompt
+    const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
+      projectId,
+      'stage_4_storyboard',
+      'imageGeneration',
+      db,
+      imageEditPromptTemplate.modelConfig  // Pass model config from prompt
+    );
+
+    console.log(`[Storyboard] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId} (source: ${imageAdaptor.source})`);
+
     // Build variables for the prompt
     const variables = {
+      previousScenesContext,
       title: sceneData.title || '',
       description: sceneData.description || '',
       location: sceneData.location || '',
@@ -96,7 +126,7 @@ router.post('/edit-image', async (req, res) => {
 
     console.log(`[Storyboard] Generated edit prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
-    // Collect reference images (original scene and product)
+    // Collect reference images (original scene, product, and previous scenes)
     const referenceImages = [];
     const originalImageUrl = sceneData.image?.url || sceneData.image;
     if (originalImageUrl) {
@@ -106,6 +136,16 @@ router.post('/edit-image', async (req, res) => {
     if (productImageUrl) {
       referenceImages.push(productImageUrl);
       console.log(`[Storyboard] Using product image reference`);
+    }
+    // Add previous scene images for visual continuity
+    if (currentSceneIndex > 0) {
+      const previousScenes = allScenes.slice(0, currentSceneIndex);
+      previousScenes.forEach((prevScene, idx) => {
+        if (prevScene.image && prevScene.image.url) {
+          referenceImages.push(prevScene.image.url);
+          console.log(`[Storyboard] Using previous scene ${idx + 1} image as reference`);
+        }
+      });
     }
 
     // Generate new image using adaptor with reference images

@@ -39,13 +39,54 @@ class VideoGenerationService {
         `[VideoGen] Generating ${screenplayScenes.length} videos for project ${projectId}`
       );
 
-      // Get video generation adaptor (Gemini for Veo API)
+      // Fetch project data to get persona image
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      const projectData = projectDoc.data();
+
+      // Get persona image from user selection or AI generated personas
+      let personaImageUri = null;
+      if (projectData?.userPersonaSelection?.image) {
+        personaImageUri = projectData.userPersonaSelection.image;
+        console.log(`[VideoGen] Using user-selected persona image`);
+      } else if (projectData?.aiGeneratedPersonas?.personas && projectData.aiGeneratedPersonas.personas.length > 0) {
+        // Use first AI generated persona image if no user selection
+        const firstPersona = projectData.aiGeneratedPersonas.personas[0];
+        personaImageUri = firstPersona?.image?.url || firstPersona?.image;
+        console.log(`[VideoGen] Using AI-generated persona image`);
+      }
+
+      if (personaImageUri) {
+        console.log(`[VideoGen] Persona image URI: ${personaImageUri}`);
+      } else {
+        console.warn(`[VideoGen] No persona image found for project ${projectId}`);
+      }
+
+      // Get video generation prompt config (for model configuration)
+      const PromptManager = require('./PromptManager.cjs');
+      let videoModelConfig = null;
+      try {
+        const videoPrompt = await PromptManager.getPromptByCapability(
+          'stage_6_video',
+          'videoGeneration',
+          projectId,
+          db
+        );
+        videoModelConfig = videoPrompt.modelConfig;
+        console.log(`[VideoGen] Using model config from prompt: ${videoModelConfig?.adaptorId}/${videoModelConfig?.modelId}`);
+      } catch (error) {
+        console.log(`[VideoGen] No prompt template found for video generation, using default model config`);
+      }
+
+      // Get video generation adaptor with model config from prompt
       const videoAdaptor = await AIAdaptorResolver.resolveAdaptor(
         projectId,
         'stage_6_video',
         'videoGeneration',
-        db
+        db,
+        videoModelConfig  // Pass model config from prompt
       );
+
+      console.log(`[VideoGen] Video adaptor: ${videoAdaptor.adaptorId}/${videoAdaptor.modelId} (source: ${videoAdaptor.source})`);
 
       const videos = [];
 
@@ -93,13 +134,19 @@ class VideoGenerationService {
           // Build video prompt (pass actualSceneNumber - 1 to maintain 0-based index for prompt builder)
           const prompt = this._buildVideoPrompt(combinedSceneData, actualSceneNumber - 1);
 
-          // Parse duration (remove 's' suffix if present)
-          const durationSeconds = parseInt(combinedSceneData.duration.toString().replace('s', ''));
+          // Build reference images array with scene image and persona image
+          const referenceImageUris = [
+            sceneImageGcsUri || sceneImageUrl,  // Scene image (required)
+            personaImageUri,                     // Persona image (optional)
+          ].filter(Boolean);  // Remove any null/undefined values
 
-          // Generate video using AI adaptor
-          const videoResult = await videoAdaptor.adaptor.generateVideo(prompt, {
-            imageGcsUri: sceneImageGcsUri || sceneImageUrl,
-            durationSeconds: durationSeconds || 6,
+          console.log(`[VideoGen] Using ${referenceImageUris.length} reference image(s) for video generation`);
+
+          // Generate video using AI adaptor with multiple reference images
+          // Note: Video generation with reference images only supports 8s duration
+          const videoResult = await videoAdaptor.adaptor.generateVideoWithReferenceImages(prompt, {
+            referenceImageUris: referenceImageUris,
+            durationSeconds: 8,  // Fixed to 8s - only supported duration for reference image video generation
             aspectRatio: combinedSceneData.aspectRatio,
             resolution: combinedSceneData.resolution,
             projectId: projectId,
@@ -122,6 +169,7 @@ class VideoGenerationService {
               backend: videoResult.backend,
               operationName: videoResult.operationName,
               prompt: prompt.substring(0, 200),
+              referenceImagesCount: videoResult.referenceImagesCount || referenceImageUris.length,
             },
           });
 

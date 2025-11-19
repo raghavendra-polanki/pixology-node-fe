@@ -38,23 +38,24 @@ class StoryboardGenerationService {
         `[StoryboardGen] Generating ${numberOfScenes} storyboard scenes for project ${projectId}`
       );
 
-      // 1. Resolve text generation adaptor
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_4_storyboard',
-        'textGeneration',
-        db
-      );
-
-      console.log(`[StoryboardGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
-
-      // 2. Get prompt template for text generation capability
+      // 1. Get prompt template for text generation capability (includes modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_4_storyboard',
         'textGeneration',
         projectId,
         db
       );
+
+      // 2. Resolve text generation adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_4_storyboard',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(`[StoryboardGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`);
 
       // 3. Build storyboard generation prompt
       const variables = {
@@ -143,17 +144,7 @@ class StoryboardGenerationService {
    */
   static async _generateSceneImages(projectId, scenes, selectedPersonaName, selectedPersonaDescription, selectedPersonaImage, productImageUrl, db, AIAdaptorResolver) {
     try {
-      // Resolve image generation adaptor
-      const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_4_storyboard',
-        'imageGeneration',
-        db
-      );
-
-      console.log(`[StoryboardGen] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`);
-
-      // Get prompt template for image generation capability
+      // Get prompt template for image generation capability (includes modelConfig)
       const imagePromptTemplate = await PromptManager.getPromptByCapability(
         'stage_4_storyboard',
         'imageGeneration',
@@ -161,16 +152,54 @@ class StoryboardGenerationService {
         db
       );
 
+      // Resolve image generation adaptor with model config from prompt
+      const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_4_storyboard',
+        'imageGeneration',
+        db,
+        imagePromptTemplate.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(`[StoryboardGen] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId} (source: ${imageAdaptor.source})`);
+
       const scenesWithImages = [];
 
       for (let i = 0; i < scenes.length; i++) {
         try {
           const scene = scenes[i];
 
+          // Build previous scenes context for visual continuity
+          let previousScenesContext = '';
+          if (i > 0) {
+            // Collect all scenes that have been generated before this one
+            const previousScenes = scenesWithImages.slice(0, i);
+
+            if (previousScenes.length > 0) {
+              previousScenesContext = '**Previous Scenes for Reference:**\n\n';
+              previousScenes.forEach((prevScene, idx) => {
+                previousScenesContext += `**Scene ${idx + 1}: ${prevScene.title || `Scene ${idx + 1}`}**\n`;
+                previousScenesContext += `- Description: ${prevScene.description || 'N/A'}\n`;
+                previousScenesContext += `- Location: ${prevScene.location || 'N/A'}\n`;
+                previousScenesContext += `- Visual Elements: ${prevScene.visualElements || 'N/A'}\n`;
+                previousScenesContext += `- Key Frame: ${prevScene.keyFrameDescription || 'N/A'}\n`;
+                if (prevScene.image && prevScene.image.url) {
+                  previousScenesContext += `- Reference Image: Provided as visual reference\n`;
+                }
+                previousScenesContext += '\n';
+              });
+            } else {
+              previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+            }
+          } else {
+            previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+          }
+
           // Build variables for this scene
           const variables = {
             selectedPersonaName,
             selectedPersonaDescription,
+            previousScenesContext,
             title: scene.title || '',
             description: scene.description || '',
             location: scene.location || '',
@@ -192,7 +221,7 @@ class StoryboardGenerationService {
 
           console.log(`[StoryboardGen] Generating image ${i + 1}/${scenes.length}`);
 
-          // Collect reference images (persona and product)
+          // Collect reference images (persona, product, and previous scenes)
           const referenceImages = [];
           if (selectedPersonaImage) {
             referenceImages.push(selectedPersonaImage);
@@ -201,6 +230,16 @@ class StoryboardGenerationService {
           if (productImageUrl) {
             referenceImages.push(productImageUrl);
             console.log(`[StoryboardGen] Using product image reference`);
+          }
+          // Add previous scene images for visual continuity
+          if (i > 0) {
+            const previousScenes = scenesWithImages.slice(0, i);
+            previousScenes.forEach((prevScene, idx) => {
+              if (prevScene.image && prevScene.image.url) {
+                referenceImages.push(prevScene.image.url);
+                console.log(`[StoryboardGen] Using previous scene ${idx + 1} image as reference`);
+              }
+            });
           }
 
           const imageResult = await imageAdaptor.adaptor.generateImage(imagePrompt, {
