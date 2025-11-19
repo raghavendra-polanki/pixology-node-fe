@@ -6,9 +6,12 @@
  * - Variable substitution
  * - Project-specific overrides
  * - Version management
+ * - Per-prompt model configuration
  *
  * Singleton pattern for consistent prompt management across application
  */
+
+const { getDefaultModel } = require('../config/availableModels.cjs');
 
 class PromptManager {
   constructor() {
@@ -73,7 +76,7 @@ class PromptManager {
    * @param {string} capability - Capability (e.g., "textGeneration")
    * @param {string} projectId - Project ID (optional)
    * @param {object} db - Firestore database instance
-   * @returns {Promise<object>} Prompt object for the capability
+   * @returns {Promise<object>} Prompt object for the capability with modelConfig
    */
   async getPromptByCapability(stageType, capability, projectId = null, db = null) {
     try {
@@ -92,7 +95,13 @@ class PromptManager {
           systemPrompt: '',
           userPromptTemplate: '',
           outputFormat: 'json',
+          modelConfig: this._getDefaultModelConfig(capability),
         };
+      }
+
+      // Ensure modelConfig exists, use default if not specified
+      if (!prompt.modelConfig) {
+        prompt.modelConfig = this._getDefaultModelConfig(capability);
       }
 
       return prompt;
@@ -342,6 +351,82 @@ class PromptManager {
       console.warn(`Failed to get default template for ${stageType}: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Update model configuration for a specific prompt
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} capability - Capability
+   * @param {object} modelConfig - { adaptorId, modelId }
+   * @param {string} projectId - Project ID (optional, for project-specific overrides)
+   * @param {object} db - Firestore database
+   */
+  async updatePromptModelConfig(stageType, capability, modelConfig, projectId = null, db) {
+    try {
+      if (!modelConfig || !modelConfig.adaptorId || !modelConfig.modelId) {
+        throw new Error('Invalid modelConfig: adaptorId and modelId are required');
+      }
+
+      // Get current template
+      const template = await this.getPromptTemplate(stageType, projectId, db);
+
+      // Find and update the prompt
+      const promptIndex = template.prompts.findIndex(p => p.capability === capability);
+
+      if (promptIndex === -1) {
+        throw new Error(`Prompt not found for ${stageType}:${capability}`);
+      }
+
+      template.prompts[promptIndex].modelConfig = modelConfig;
+
+      // Save as project override if projectId provided, otherwise update default template
+      if (projectId) {
+        await this.savePromptOverride(projectId, stageType, template.prompts, db);
+      } else {
+        // Update default template
+        await db.collection('prompt_templates').doc(stageType).update({
+          prompts: template.prompts,
+          updatedAt: new Date().toISOString(),
+        });
+
+        // Clear cache
+        this.templateCache.delete(stageType);
+      }
+
+      console.log(`Updated model config for ${stageType}:${capability} to ${modelConfig.adaptorId}/${modelConfig.modelId}`);
+    } catch (error) {
+      console.error(`Failed to update prompt model config: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get default model configuration for a capability
+   *
+   * @private
+   * @param {string} capability - Capability type
+   * @returns {object} Default model config { adaptorId, modelId }
+   */
+  _getDefaultModelConfig(capability) {
+    // Default to Gemini adaptor
+    const defaultModel = getDefaultModel(capability, 'gemini');
+
+    if (defaultModel) {
+      return {
+        adaptorId: defaultModel.adaptorId,
+        modelId: defaultModel.modelId,
+      };
+    }
+
+    // Fallback for capabilities not in availableModels config
+    return {
+      adaptorId: 'gemini',
+      modelId: capability === 'textGeneration' ? 'gemini-2.0-flash-exp' :
+               capability === 'imageGeneration' ? 'imagen-3.0-generate-001' :
+               capability === 'videoGeneration' ? 'veo-3.1-generate-preview' :
+               'gemini-2.0-flash-exp',
+    };
   }
 
   /**

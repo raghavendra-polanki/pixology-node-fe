@@ -17,17 +17,26 @@ class AIAdaptorResolver {
    * @param {string} stageType - Stage type (e.g., "stage_2_personas")
    * @param {string} capability - Capability (e.g., "textGeneration", "imageGeneration")
    * @param {object} db - Firestore database instance
+   * @param {object} modelConfigOverride - Optional model config override from prompt { adaptorId, modelId }
    * @returns {Promise<object>} { adaptorId, modelId, adaptor, config, credentials, source }
    */
-  async resolveAdaptor(projectId, stageType, capability, db) {
+  async resolveAdaptor(projectId, stageType, capability, db, modelConfigOverride = null) {
     try {
-      // 1. Get project-specific AI configuration from Firestore
+      // 0. Check for model config override from prompt (highest priority)
       let adaptorId = null;
       let modelId = null;
       let config = {};
       let source = 'global'; // where config came from
 
-      if (db && projectId) {
+      if (modelConfigOverride && modelConfigOverride.adaptorId && modelConfigOverride.modelId) {
+        adaptorId = modelConfigOverride.adaptorId;
+        modelId = modelConfigOverride.modelId;
+        source = 'prompt';
+        console.log(`[AIAdaptorResolver] Using model config from prompt: ${adaptorId}/${modelId}`);
+      }
+
+      // 1. Get project-specific AI configuration from Firestore (if no override)
+      if (!adaptorId && db && projectId) {
         try {
           const configDoc = await db.collection('project_ai_config').doc(projectId).get();
 
