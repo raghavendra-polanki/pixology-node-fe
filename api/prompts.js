@@ -8,6 +8,10 @@ import { db } from './config/firestore.js';
 import PromptTemplateService from './services/PromptTemplateService.js';
 import PromptManager from './services/PromptManager.cjs';
 import AIAdaptorResolver from './services/AIAdaptorResolver.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { getAvailableModelsForCapability } = require('./config/availableModels.cjs');
 
 const router = express.Router();
 
@@ -232,7 +236,7 @@ router.get('/variables', async (req, res) => {
  */
 router.post('/test', async (req, res) => {
   try {
-    const { stageType, projectId, capability, variables, customPrompt } = req.body;
+    const { stageType, projectId, capability, variables, customPrompt, modelConfig } = req.body;
 
     if (!stageType || !capability || !variables) {
       return res.status(400).json({
@@ -241,6 +245,9 @@ router.post('/test', async (req, res) => {
     }
 
     console.log(`[API] /test: Testing prompt for ${stageType}/${capability}`);
+    if (modelConfig) {
+      console.log(`[API] /test: Using custom model config: ${modelConfig.adaptorId}/${modelConfig.modelId}`);
+    }
 
     let fullPrompt;
 
@@ -294,10 +301,11 @@ router.post('/test', async (req, res) => {
       projectId,
       stageType,
       capability,
-      db
+      db,
+      modelConfig || null  // Use custom model config from editor if provided
     );
 
-    console.log(`[API] /test: Using adaptor '${resolution.adaptorId}' with model '${resolution.modelId}'`);
+    console.log(`[API] /test: Using adaptor '${resolution.adaptorId}' with model '${resolution.modelId}' (source: ${resolution.source})`);
 
     // Call the appropriate AI adaptor method based on capability
     let result;
@@ -353,6 +361,86 @@ router.post('/test', async (req, res) => {
     console.error('[API] /test: Error testing prompt:', error);
     res.status(500).json({
       error: 'Failed to test prompt',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/prompts/available-models
+ * Get available AI models for a specific capability
+ */
+router.get('/available-models', async (req, res) => {
+  try {
+    const { capability, adaptorId } = req.query;
+
+    if (!capability) {
+      return res.status(400).json({
+        error: 'capability is required',
+      });
+    }
+
+    const models = getAvailableModelsForCapability(capability, adaptorId || null);
+
+    res.json({
+      success: true,
+      capability,
+      models,
+    });
+  } catch (error) {
+    console.error('[API] /available-models: Error loading available models:', error);
+    res.status(500).json({
+      error: 'Failed to load available models',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/prompts/model-config
+ * Update model configuration for a specific prompt
+ */
+router.put('/model-config', async (req, res) => {
+  try {
+    const { stageType, capability, modelConfig, projectId } = req.body;
+
+    if (!stageType || !capability || !modelConfig) {
+      return res.status(400).json({
+        error: 'stageType, capability, and modelConfig are required',
+      });
+    }
+
+    if (!modelConfig.adaptorId || !modelConfig.modelId) {
+      return res.status(400).json({
+        error: 'modelConfig must include adaptorId and modelId',
+      });
+    }
+
+    console.log(`[API] /model-config: Updating model config for ${stageType}/${capability} to ${modelConfig.adaptorId}/${modelConfig.modelId}`);
+
+    await PromptManager.updatePromptModelConfig(
+      stageType,
+      capability,
+      modelConfig,
+      projectId || null,
+      db
+    );
+
+    // Clear the PromptManager cache to ensure fresh data on next load
+    PromptManager.clearCache();
+    console.log('[API] Cleared PromptManager cache after updating model config');
+
+    res.json({
+      success: true,
+      message: 'Model configuration updated',
+      stageType,
+      capability,
+      modelConfig,
+    });
+  } catch (error) {
+    console.error('[API] /model-config: Error updating model config:', error);
+    res.status(500).json({
+      error: 'Failed to update model configuration',
       message: error.message,
     });
   }
