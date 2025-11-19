@@ -301,6 +301,29 @@ export function Stage5Screenplay({
     setScreenplay(screenplay.map(s => s.sceneNumber === sceneNumber ? { ...s, [field]: value } : s));
   };
 
+  const handleSaveScene = async (sceneNumber: number) => {
+    try {
+      // Save the current screenplay state to the database
+      await updateAIScreenplay(
+        {
+          screenplay: screenplay,
+          generatedAt: project?.aiGeneratedScreenplay?.generatedAt || new Date(),
+          model: project?.aiGeneratedScreenplay?.model || 'unknown',
+          adaptor: project?.aiGeneratedScreenplay?.adaptor || 'unknown',
+        },
+        project?.id || propProjectId || ''
+      );
+
+      // Exit edit mode after successful save
+      setEditingId(null);
+
+      console.log(`Scene ${sceneNumber} saved successfully`);
+    } catch (error) {
+      console.error(`Failed to save scene ${sceneNumber}:`, error);
+      alert(`Failed to save changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
@@ -520,9 +543,15 @@ Camera Work: ${scene.cameraWork || 'Not specified'}`;
                           </p>
                         </div>
                         <Button
-                          onClick={() =>
-                            setEditingId(editingId === entry.sceneNumber.toString() ? null : entry.sceneNumber.toString())
-                          }
+                          onClick={() => {
+                            if (editingId === entry.sceneNumber.toString()) {
+                              // Save the changes
+                              handleSaveScene(entry.sceneNumber);
+                            } else {
+                              // Enter edit mode
+                              setEditingId(entry.sceneNumber.toString());
+                            }
+                          }}
                           variant="ghost"
                           size="sm"
                           className="text-gray-400 hover:text-white rounded-lg"
