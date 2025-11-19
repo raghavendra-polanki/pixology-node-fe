@@ -161,6 +161,7 @@ export function Stage4Storyboard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project.id,
+          campaignDescription: project.campaignDetails.campaignDescription || '',
           productDescription: project.campaignDetails.productDescription,
           targetAudience: project.campaignDetails.targetAudience,
           selectedPersonaName: selectedPersona.coreIdentity?.name || 'Unknown',
@@ -601,6 +602,7 @@ export function Stage4Storyboard({
         projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
         stageData={{
+          campaignDescription: project?.campaignDetails?.campaignDescription || '',
           productDescription: project?.campaignDetails?.productDescription || '',
           targetAudience: project?.campaignDetails?.targetAudience || '',
           videoDuration: project?.campaignDetails?.videoDuration || '30s',
@@ -954,7 +956,7 @@ export function Stage4Storyboard({
         setNewGeneratedImage(null);
         setAiEditPrompt('');
       }}>
-        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-4xl max-h-[90vh]">
+        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-6xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wand2 className="w-5 h-5 text-blue-500" />
@@ -962,28 +964,29 @@ export function Stage4Storyboard({
             </DialogTitle>
           </DialogHeader>
           {aiEditingScene && (
-            <ScrollArea className="max-h-[calc(90vh-8rem)]">
-              <div className="space-y-4 mt-4 pr-6">
-                {/* Image Preview - Show new image if generated, otherwise show original */}
-                <div className="space-y-2">
-                  <Label className="text-gray-300">
-                    {newGeneratedImage ? 'New Generated Image' : 'Current Image'}
-                  </Label>
-                  <div className="relative w-full rounded-lg overflow-hidden bg-gray-900">
-                    <ImageWithFallback
-                      src={newGeneratedImage || aiEditingScene.image}
-                      alt={aiEditingScene.title}
-                      className="w-full h-auto object-contain"
-                    />
-                  </div>
-                  {newGeneratedImage && (
-                    <p className="text-sm text-green-400 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      Image regenerated successfully! Click "Save & Apply" to update the storyboard.
-                    </p>
-                  )}
+            <div className="flex gap-6 mt-4 h-[calc(90vh-10rem)]">
+              {/* Left Side - Image Preview */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <Label className="text-gray-300 mb-2">
+                  {newGeneratedImage ? 'New Generated Image' : 'Current Image'}
+                </Label>
+                <div className="relative flex-1 rounded-lg overflow-hidden bg-gray-900 flex items-center justify-center">
+                  <ImageWithFallback
+                    src={newGeneratedImage || aiEditingScene.image}
+                    alt={aiEditingScene.title}
+                    className="max-w-full max-h-full object-contain"
+                  />
                 </div>
+                {newGeneratedImage && (
+                  <p className="text-sm text-green-400 flex items-center gap-2 mt-3">
+                    <Sparkles className="w-4 h-4" />
+                    Image regenerated successfully! Click "Save & Apply" to update the storyboard.
+                  </p>
+                )}
+              </div>
 
+              {/* Right Side - Controls */}
+              <div className="flex-1 flex flex-col gap-4 min-w-0">
                 {/* Edit Instructions */}
                 <div className="space-y-2">
                   <Label htmlFor="ai-edit-prompt" className="text-gray-300">
@@ -993,7 +996,7 @@ export function Stage4Storyboard({
                     id="ai-edit-prompt"
                     value={aiEditPrompt}
                     onChange={(e) => setAiEditPrompt(e.target.value)}
-                    className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-24"
+                    className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-32 resize-none"
                     placeholder="E.g., 'Make the lighting warmer', 'Change to outdoor setting', 'Add more products in the background', etc."
                     disabled={isRegeneratingImage}
                   />
@@ -1009,8 +1012,11 @@ export function Stage4Storyboard({
                   </p>
                 </div>
 
+                {/* Spacer to push buttons to bottom */}
+                <div className="flex-1"></div>
+
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-4">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-800">
                   <Button
                     onClick={() => {
                       setAiEditingScene(null);
@@ -1053,7 +1059,7 @@ export function Stage4Storyboard({
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           )}
         </DialogContent>
       </Dialog>

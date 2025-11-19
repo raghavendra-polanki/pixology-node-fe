@@ -231,7 +231,7 @@ export function PromptTemplateEditor({
               id="systemPrompt"
               value={currentPromptSet.systemPrompt}
               onChange={(e) => handlePromptChange('systemPrompt', e.target.value)}
-              placeholder="Enter the system prompt... Use {variableName} for variables"
+              placeholder="Enter the system prompt... Use {{variableName}} for variables"
               rows={4}
               disabled={isSaving}
               className="font-mono text-xs"
@@ -249,7 +249,7 @@ export function PromptTemplateEditor({
               id="userPrompt"
               value={currentPromptSet.userPromptTemplate}
               onChange={(e) => handlePromptChange('userPromptTemplate', e.target.value)}
-              placeholder="Enter the user prompt template... Use {variableName} for variables"
+              placeholder="Enter the user prompt template... Use {{variableName}} for variables"
               rows={4}
               disabled={isSaving}
               className="font-mono text-xs"

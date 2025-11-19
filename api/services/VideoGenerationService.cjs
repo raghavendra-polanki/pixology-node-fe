@@ -21,7 +21,7 @@ class VideoGenerationService {
       const {
         screenplayScenes = [],
         storyboardScenes = [],
-        videoDuration = '8s',
+        videoDuration = '6s',
         aspectRatio = '16:9',
         resolution = '720p',
       } = input;
@@ -142,7 +142,7 @@ class VideoGenerationService {
           // Generate video using AI adaptor
           const videoResult = await videoAdaptor.adaptor.generateVideo(prompt, {
             imageGcsUri: primaryImageUri,
-            durationSeconds: 8,
+            durationSeconds: 6,
             aspectRatio: combinedSceneData.aspectRatio,
             resolution: combinedSceneData.resolution,
             projectId: projectId,

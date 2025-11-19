@@ -46,6 +46,7 @@ class StoryboardStreamingService {
 
     try {
       const {
+        campaignDescription,
         productDescription,
         targetAudience,
         selectedPersonaName,
@@ -88,6 +89,7 @@ class StoryboardStreamingService {
 
       // Build prompt variables
       const variables = {
+        campaignDescription,
         productDescription,
         targetAudience,
         selectedPersonaName,

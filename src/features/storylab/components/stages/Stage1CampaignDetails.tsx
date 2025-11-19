@@ -37,6 +37,7 @@ export function Stage1CampaignDetails({
   // Local form state
   const [formData, setFormData] = useState({
     campaignName: '',
+    campaignDescription: '',
     productDescription: '',
     targetAudience: '',
     videoLength: '30s',
@@ -50,6 +51,7 @@ export function Stage1CampaignDetails({
       // Load existing campaign details
       setFormData({
         campaignName: project.campaignDetails.campaignName || '',
+        campaignDescription: project.campaignDetails.campaignDescription || '',
         productDescription: project.campaignDetails.productDescription || '',
         targetAudience: project.campaignDetails.targetAudience || '',
         videoLength: project.campaignDetails.videoLength || '30s',
@@ -63,6 +65,7 @@ export function Stage1CampaignDetails({
       // For new/temp projects, initialize with empty form (project will be created later)
       setFormData({
         campaignName: '',
+        campaignDescription: '',
         productDescription: '',
         targetAudience: '',
         videoLength: '30s',
@@ -228,6 +231,20 @@ export function Stage1CampaignDetails({
                 onChange={(e) => setFormData({ ...formData, campaignName: e.target.value })}
                 placeholder="e.g., Summer Product Launch 2025"
                 className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg focus:border-blue-500"
+              />
+            </div>
+
+            {/* Campaign Description */}
+            <div className="space-y-2">
+              <Label htmlFor="campaignDescription" className="text-gray-300">
+                Campaign Description
+              </Label>
+              <Textarea
+                id="campaignDescription"
+                value={formData.campaignDescription}
+                onChange={(e) => setFormData({ ...formData, campaignDescription: e.target.value })}
+                placeholder="Describe the overall campaign goals, key messaging, tone, and any specific requirements for the video narrative."
+                className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-24 focus:border-blue-500"
               />
             </div>
 

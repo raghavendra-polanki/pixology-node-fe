@@ -22,6 +22,7 @@ class StoryboardGenerationService {
   static async generateStoryboardScenes(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
+        campaignDescription,
         productDescription,
         targetAudience,
         selectedPersonaName,
@@ -59,6 +60,7 @@ class StoryboardGenerationService {
 
       // 3. Build storyboard generation prompt
       const variables = {
+        campaignDescription,
         productDescription,
         targetAudience,
         selectedPersonaName,

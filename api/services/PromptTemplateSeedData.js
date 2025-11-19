@@ -164,6 +164,7 @@ Generate {{numberOfNarratives}} completely **unique** and **high-impact** narrat
 }]`,
       outputFormat: 'json',
       variables: [
+        { name: 'campaignDescription', description: 'Overall campaign goals, messaging, and tone', placeholder: 'E.g., Launch campaign for summer collection' },
         { name: 'productDescription', description: 'Description of the product', placeholder: 'E.g., A sustainable water bottle' },
         { name: 'targetAudience', description: 'Target audience for the product', placeholder: 'E.g., Environmentally conscious millennials' },
         { name: 'selectedPersonas', description: 'Selected personas for the narrative', placeholder: 'Persona names or descriptions' },
@@ -230,6 +231,7 @@ Create {{numberOfScenes}} detailed storyboard scenes. Ensure the sequence visual
 }]`,
       outputFormat: 'json',
       variables: [
+        { name: 'campaignDescription', description: 'Overall campaign goals, messaging, and tone', placeholder: 'E.g., Launch campaign for summer collection' },
         { name: 'productDescription', description: 'Description of the product', placeholder: 'E.g., A sustainable water bottle' },
         { name: 'targetAudience', description: 'Target audience for the product', placeholder: 'E.g., Environmentally conscious millennials' },
         { name: 'videoDuration', description: 'Duration of the video', placeholder: '30s' },
@@ -256,8 +258,18 @@ Create {{numberOfScenes}} detailed storyboard scenes. Ensure the sequence visual
 ## 🎯 **CRITICAL VISUAL CONSISTENCY MANDATES:**
 1.  **PERSONA IDENTICALITY:** The primary character/persona in this scene **MUST be an absolute 1:1 match** to the provided persona reference image. Pay forensic attention to facial features, hair color and style, body build, skin tone, clothing aesthetic, and any distinguishing marks (scars, tattoos). The goal is *seamless, absolute continuity* across all generated scenes.
 2.  **PRODUCT FIDELITY:** Wherever the product appears, it **MUST be rendered identically** to the provided product reference image. No alterations to its shape, color, branding, texture, or design are permitted. It must be recognizably the exact same product.
+3.  **NARRATIVE CONTINUITY:** This scene is part of a sequential video story. Study the previous scenes carefully to maintain visual coherence in style, lighting quality, persona appearance, and overall cinematography. The current scene should feel like a natural continuation of the visual narrative established in earlier scenes.
 
-## 📄 **SCENE DATA FOR RENDERING:**
+## 📽️ **PREVIOUS SCENES CONTEXT (for visual continuity):**
+{{previousScenesContext}}
+
+**IMPORTANT:** Use the previous scenes as reference for:
+- Maintaining consistent visual style and color grading
+- Ensuring the persona's appearance remains identical (clothing changes are OK if narratively appropriate, but facial features, build, and overall look must match)
+- Keeping a coherent cinematographic language (similar camera quality, lighting approach, overall aesthetic)
+- Building visual progression that feels connected to the story arc
+
+## 📄 **CURRENT SCENE DATA FOR RENDERING:**
 
 * **Scene Title:** {{title}}
 * **Scene Description:** {{description}}
@@ -279,12 +291,14 @@ Create {{numberOfScenes}} detailed storyboard scenes. Ensure the sequence visual
 * **Composition & Framing:** Execute the \`{{cameraWork}}\` precisely. Use dynamic angles, deep focus where required, or shallow depth of field to draw attention to the subject/product.
 * **Emotion & Authenticity:** The persona's expression and body language must be genuine, unposed, and reflective of the scene's emotional tone and \`{{selectedPersonaDescription}}\`. Capture candid moments.
 * **Atmosphere:** Include subtle environmental details (e.g., dust motes, sweat, breath in cold air, texture of surfaces) to heighten immersion.
+* **Sequential Coherence:** While each scene has unique content, the overall visual DNA (color palette tendencies, lighting quality, camera feel) should harmonize with the previous scenes to create a unified video experience.
 
-**Deliver a visually striking, professional-grade keyframe that perfectly encapsulates the scene and maintains absolute consistency with the provided references.**`,
+**Deliver a visually striking, professional-grade keyframe that perfectly encapsulates the scene and maintains absolute consistency with the provided references and previous scenes.**`,
       outputFormat: 'text',
       variables: [
         { name: 'selectedPersonaName', description: 'Name of the selected persona', placeholder: 'Jane Smith' },
         { name: 'selectedPersonaDescription', description: 'Description of the selected persona', placeholder: 'A 28-year-old environmental activist' },
+        { name: 'previousScenesContext', description: 'Context from previous scenes including images and descriptions for visual continuity', placeholder: 'Scene 1: [Description]\nScene 2: [Description]...' },
         { name: 'title', description: 'Scene title', placeholder: 'Morning routine' },
         { name: 'description', description: 'Scene description', placeholder: 'Opening shot of persona starting their day' },
         { name: 'location', description: 'Scene location', placeholder: 'Modern apartment kitchen' },
@@ -310,6 +324,10 @@ Create {{numberOfScenes}} detailed storyboard scenes. Ensure the sequence visual
 **Reference Images:**
 - Original Scene Reference: The current scene image is provided for visual context and consistency
 - Product Reference Image: The actual product image is provided - maintain exact product appearance
+- Previous Scenes References: Images from earlier scenes in the sequence are provided for visual continuity
+
+**Previous Scenes Context (for visual continuity):**
+{{previousScenesContext}}
 
 **Original Scene Details:**
 Title: {{title}}
@@ -325,18 +343,20 @@ Key Frame Description: {{keyFrameDescription}}
 **Instructions:**
 Using the provided reference images as visual guides, apply the requested changes while maintaining the overall style, composition, and quality of the original scene. The edited image should:
 - Keep the same visual style and cinematography as the original scene reference
-- Maintain consistent lighting, color grading, and composition
+- Maintain consistent lighting, color grading, and composition with previous scenes in the sequence
 - Use the exact product from the product reference image - do not alter its appearance
 - Apply ONLY the specific changes requested in the edit prompt
 - Preserve all other elements that are not mentioned in the edit request
 - Remain high-quality, cinematic, and professional
 - Continue to be authentic and suitable for UGC marketing
+- Ensure visual coherence with the overall video narrative established in previous scenes
 
 IMPORTANT: If the product appears in the scene, ensure it looks identical to the product reference image provided. Do not alter the product's colors, design, or features.
 
-Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference images.`,
+Generate the edited scene image that seamlessly incorporates only the requested changes while keeping everything else consistent with the reference images and maintaining visual continuity with the previous scenes.`,
       outputFormat: 'text',
       variables: [
+        { name: 'previousScenesContext', description: 'Context from previous scenes including images and descriptions for visual continuity', placeholder: 'Scene 1: [Description]\nScene 2: [Description]...' },
         { name: 'title', description: 'Original scene title', placeholder: 'Morning routine' },
         { name: 'description', description: 'Original scene description', placeholder: 'Opening shot of persona starting their day' },
         { name: 'location', description: 'Original scene location', placeholder: 'Modern apartment kitchen' },

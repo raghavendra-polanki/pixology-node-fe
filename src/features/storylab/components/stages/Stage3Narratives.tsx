@@ -282,6 +282,7 @@ export function Stage3Narratives({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project.id,
+          campaignDescription: project.campaignDetails.campaignDescription || '',
           productDescription: project.campaignDetails.productDescription,
           targetAudience: project.campaignDetails.targetAudience,
           numberOfNarratives: 6,
@@ -453,6 +454,7 @@ export function Stage3Narratives({
         projectId={project?.id}
         onBack={() => setShowPromptEditor(false)}
         stageData={{
+          campaignDescription: project?.campaignDetails?.campaignDescription || '',
           productDescription: project?.campaignDetails?.productDescription || '',
           targetAudience: project?.campaignDetails?.targetAudience || '',
           selectedPersonas: selectedPersonasText || 'No personas selected',

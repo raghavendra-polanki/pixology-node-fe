@@ -36,6 +36,7 @@ class NarrativeStreamingService {
 
     try {
       const {
+        campaignDescription,
         productDescription,
         targetAudience,
         numberOfNarratives = 6,
@@ -72,6 +73,7 @@ class NarrativeStreamingService {
 
       // Build prompt variables
       const variables = {
+        campaignDescription,
         productDescription,
         targetAudience,
         numberOfNarratives,

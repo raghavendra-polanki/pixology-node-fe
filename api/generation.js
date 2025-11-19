@@ -181,6 +181,7 @@ router.post('/narratives', async (req, res) => {
   try {
     const {
       projectId,
+      campaignDescription,
       productDescription,
       targetAudience,
       numberOfNarratives = 6,
@@ -196,6 +197,7 @@ router.post('/narratives', async (req, res) => {
     console.log(`[Generation] Generating ${numberOfNarratives} narratives for project ${projectId}`);
 
     const input = {
+      campaignDescription,
       productDescription,
       targetAudience,
       numberOfNarratives,
@@ -228,6 +230,7 @@ router.post('/narratives-stream', async (req, res) => {
   try {
     const {
       projectId,
+      campaignDescription,
       productDescription,
       targetAudience,
       numberOfNarratives = 6,
@@ -273,6 +276,7 @@ router.post('/narratives-stream', async (req, res) => {
     });
 
     const input = {
+      campaignDescription,
       productDescription,
       targetAudience,
       numberOfNarratives,
@@ -326,6 +330,7 @@ router.post('/storyboard', async (req, res) => {
   try {
     const {
       projectId,
+      campaignDescription,
       productDescription,
       targetAudience,
       selectedPersonaName,
@@ -354,6 +359,7 @@ router.post('/storyboard', async (req, res) => {
     console.log(`[Generation] Generating ${numberOfScenes} storyboard scenes for project ${projectId}`);
 
     const input = {
+      campaignDescription,
       productDescription,
       targetAudience,
       selectedPersonaName,
@@ -392,6 +398,7 @@ router.post('/storyboard-stream', async (req, res) => {
   try {
     const {
       projectId,
+      campaignDescription,
       productDescription,
       targetAudience,
       selectedPersonaName,
@@ -451,6 +458,7 @@ router.post('/storyboard-stream', async (req, res) => {
     });
 
     const input = {
+      campaignDescription,
       productDescription,
       targetAudience,
       selectedPersonaName,

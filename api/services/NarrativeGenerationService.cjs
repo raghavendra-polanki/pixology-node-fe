@@ -20,6 +20,7 @@ class NarrativeGenerationService {
   static async generateNarratives(projectId, input, db, AIAdaptorResolver) {
     try {
       const {
+        campaignDescription,
         productDescription,
         targetAudience,
         numberOfNarratives = 6,
@@ -29,6 +30,7 @@ class NarrativeGenerationService {
       console.log(
         `[NarrativeGen] Generating ${numberOfNarratives} narrative themes for project ${projectId}`
       );
+      console.log(`[NarrativeGen] Campaign Description: ${campaignDescription || '(empty)'}`);
 
       // 1. Resolve text generation adaptor
       const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
@@ -50,11 +52,14 @@ class NarrativeGenerationService {
 
       // 3. Build narrative generation prompt
       const variables = {
+        campaignDescription,
         productDescription,
         targetAudience,
         numberOfNarratives,
         selectedPersonas,
       };
+
+      console.log(`[NarrativeGen] Prompt variables:`, JSON.stringify(variables, null, 2));
 
       const resolvedPrompt = PromptManager.resolvePrompt(
         textPrompt,

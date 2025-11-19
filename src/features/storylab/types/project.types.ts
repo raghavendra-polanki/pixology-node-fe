@@ -28,6 +28,7 @@ export interface PersonaData {
  */
 export interface UserInputCampaignDetails {
   campaignName: string;
+  campaignDescription?: string;
   productDescription: string;
   targetAudience: string;
   videoLength: string;

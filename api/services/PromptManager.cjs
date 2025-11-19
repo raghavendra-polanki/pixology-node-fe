@@ -114,7 +114,7 @@ class PromptManager {
   /**
    * Resolve template variables with actual values
    *
-   * @param {string} template - Template string with {variable} placeholders
+   * @param {string} template - Template string with {{variable}} placeholders
    * @param {object} variables - Variable values
    * @returns {string} Resolved prompt
    */
@@ -123,14 +123,14 @@ class PromptManager {
 
     let resolved = template;
 
-    // Replace all {variableName} with actual values
+    // Replace all {{variableName}} with actual values (double curly braces)
     Object.entries(variables).forEach(([key, value]) => {
-      const regex = new RegExp(`\\{${key}\\}`, 'g');
-      resolved = resolved.replace(regex, value);
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+      resolved = resolved.replace(regex, value || '');
     });
 
-    // Log any unresolvekvariables
-    const unresolvedMatches = resolved.match(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/g);
+    // Log any unresolved variables
+    const unresolvedMatches = resolved.match(/\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}/g);
 
     if (unresolvedMatches) {
       console.warn('Unresolved variables in prompt:', unresolvedMatches);
