@@ -613,6 +613,14 @@ export function Stage4Storyboard({
           productImageUrl: productImageUrl,
           narrativeTheme: narrativeTheme,
           narrativeStructure: narrativeStructure,
+          previousScenesContext: 'This is the first scene in the sequence. No previous scenes available for reference.',
+          title: 'Scene Title',
+          description: 'Scene description will be filled during generation',
+          location: 'Location details',
+          visualElements: 'Visual elements description',
+          cameraWork: 'Camera work details',
+          product: 'Product placement details',
+          keyFrameDescription: 'Key frame description for image generation',
         }}
       />
     );
