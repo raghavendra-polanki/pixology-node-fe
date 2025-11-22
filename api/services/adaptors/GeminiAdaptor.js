@@ -1,12 +1,12 @@
 /**
  * GeminiAdaptor
  *
- * Adaptor for Google Gemini API
+ * Adaptor for Google Gemini API using @google/genai SDK
  * Supports text generation, image generation, video generation, and vision capabilities
  */
 
 import BaseAIAdaptor from './BaseAIAdaptor.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { google } from 'googleapis';
 import fs from 'fs';
 
@@ -18,29 +18,22 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       throw new Error('Gemini API requires apiKey in credentials');
     }
 
-    this.client = new GoogleGenerativeAI(credentials.apiKey);
+    // Initialize GoogleGenAI client with new SDK
+    this.client = new GoogleGenAI({ apiKey: credentials.apiKey });
     this.modelId = modelId || 'gemini-2.0-flash';
   }
 
   /**
-   * Generate text using Gemini
+   * Generate text using Gemini with new SDK
    */
   async generateText(prompt, options = {}) {
     const mergedConfig = { ...this.config, ...options };
 
     try {
-      const model = this.client.getGenerativeModel({
+      const result = await this.client.models.generateContent({
         model: this.modelId,
-      });
-
-      const result = await model.generateContent({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
+        contents: prompt,
+        config: {
           temperature: mergedConfig.temperature !== undefined ? mergedConfig.temperature : 0.7,
           topK: mergedConfig.topK,
           topP: mergedConfig.topP,
@@ -48,8 +41,8 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         },
       });
 
-      const text = result.response.text();
-      const usageMetadata = result.response.usageMetadata || {};
+      const text = result.text || '';
+      const usageMetadata = result.usageMetadata || {};
 
       return {
         text,
@@ -74,24 +67,16 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
   }
 
   /**
-   * Generate text with streaming support using Gemini's native streaming API
+   * Generate text with streaming support using Gemini's new SDK
    */
   async generateTextStream(prompt, options = {}, onChunk = null) {
     const mergedConfig = { ...this.config, ...options };
 
     try {
-      const model = this.client.getGenerativeModel({
+      const stream = await this.client.models.generateContentStream({
         model: this.modelId,
-      });
-
-      const result = await model.generateContentStream({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
+        contents: prompt,
+        config: {
           temperature: mergedConfig.temperature !== undefined ? mergedConfig.temperature : 0.7,
           topK: mergedConfig.topK,
           topP: mergedConfig.topP,
@@ -103,8 +88,8 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       let usageMetadata = null;
 
       // Stream chunks
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
+      for await (const chunk of stream) {
+        const chunkText = chunk.text || '';
         fullText += chunkText;
 
         // Call onChunk callback for real-time processing
@@ -116,11 +101,12 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
             done: false,
           });
         }
-      }
 
-      // Get final response with usage metadata
-      const response = await result.response;
-      usageMetadata = response.usageMetadata || {};
+        // Capture usage metadata if available
+        if (chunk.usageMetadata) {
+          usageMetadata = chunk.usageMetadata;
+        }
+      }
 
       // Final callback
       if (onChunk) {
@@ -136,9 +122,9 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         model: this.modelId,
         backend: 'gemini',
         usage: {
-          inputTokens: usageMetadata.promptTokenCount || 0,
-          outputTokens: usageMetadata.candidatesTokenCount || 0,
-          totalTokens: usageMetadata.totalTokenCount || 0,
+          inputTokens: usageMetadata?.promptTokenCount || 0,
+          outputTokens: usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: usageMetadata?.totalTokenCount || 0,
         },
       };
     } catch (error) {
@@ -147,18 +133,13 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
   }
 
   /**
-   * Generate image using Gemini 2.5 Flash Image model
+   * Generate image using Gemini 2.5 Flash Image model with new SDK
    * @param {string} prompt - Text prompt for image generation
    * @param {object} options - Options object
    * @param {string|string[]} options.referenceImageUrl - Optional reference image URL(s) to guide generation
    */
   async generateImage(prompt, options = {}) {
     try {
-      // Use the specialized image generation model
-      const imageModel = this.client.getGenerativeModel({
-        model: 'gemini-2.5-flash-image',
-      });
-
       // Build content parts array
       const contentParts = [{ text: prompt }];
 
@@ -183,19 +164,18 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
         }
       }
 
-      const result = await imageModel.generateContent({
-        contents: [
-          {
-            role: 'user',
-            parts: contentParts,
-          },
-        ],
+      const result = await this.client.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: contentParts,
+        config: {
+          imageConfig: {
+            aspectRatio: '16:9'
+          }
+        }
       });
 
-      const response = result.response;
-
       // Extract the generated image from the response
-      const generatedImagePart = response.candidates[0].content.parts.find(
+      const generatedImagePart = result.candidates?.[0]?.content?.parts?.find(
         part => part.inlineData
       );
 
@@ -559,10 +539,11 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
    */
   async healthCheck() {
     try {
-      const model = this.client.getGenerativeModel({ model: this.modelId });
-
       const startTime = Date.now();
-      await model.generateContent('ping');
+      await this.client.models.generateContent({
+        model: this.modelId,
+        contents: 'ping',
+      });
       const latency = Date.now() - startTime;
 
       return {
