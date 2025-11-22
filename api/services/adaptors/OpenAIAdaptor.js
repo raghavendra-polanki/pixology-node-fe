@@ -21,7 +21,8 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
       organization: credentials.organization,
     });
 
-    this.modelId = modelId || 'gpt-4-turbo';
+    // Default to gpt-4o which has 128K context and is latest
+    this.modelId = modelId || 'gpt-4o';
   }
 
   /**
@@ -56,6 +57,83 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
     } catch (error) {
       throw new Error(`OpenAI text generation error: ${error.message}`);
     }
+  }
+
+  /**
+   * Generate text with streaming support
+   */
+  async generateTextStream(prompt, options = {}, onChunk = null) {
+    const mergedConfig = { ...this.config, ...options };
+
+    try {
+      const stream = await this.client.chat.completions.create({
+        model: this.modelId,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: mergedConfig.temperature !== undefined ? mergedConfig.temperature : 0.7,
+        max_tokens: mergedConfig.maxTokens || 2048,
+        stream: true,
+      });
+
+      let fullText = '';
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+
+        if (content) {
+          fullText += content;
+
+          if (onChunk) {
+            onChunk({
+              type: 'chunk',
+              text: content,
+              done: false,
+            });
+          }
+        }
+
+        // Track token usage if available
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens || 0;
+          outputTokens = chunk.usage.completion_tokens || 0;
+        }
+      }
+
+      // Send completion signal
+      if (onChunk) {
+        onChunk({
+          type: 'complete',
+          text: fullText,
+          done: true,
+        });
+      }
+
+      return {
+        text: fullText,
+        model: this.modelId,
+        backend: 'openai',
+        usage: {
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        },
+      };
+    } catch (error) {
+      throw new Error(`OpenAI streaming text generation error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if this adaptor supports streaming
+   */
+  supportsStreaming() {
+    return true;
   }
 
   /**
@@ -182,9 +260,45 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
   static async getAvailableModels() {
     return [
       {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        description: 'Latest and most capable OpenAI model with 128K context',
+        capabilities: {
+          textGeneration: true,
+          imageGeneration: false,
+          videoGeneration: false,
+          vision: true,
+          multimodal: true,
+        },
+        contextWindow: 128000,
+        maxOutputTokens: 16384,
+        costPer1MTokens: { input: 2.5, output: 10 },
+        isLatest: true,
+        isDeprecated: false,
+        releaseDate: new Date('2024-05-13'),
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        description: 'Fast and affordable model with 128K context',
+        capabilities: {
+          textGeneration: true,
+          imageGeneration: false,
+          videoGeneration: false,
+          vision: true,
+          multimodal: true,
+        },
+        contextWindow: 128000,
+        maxOutputTokens: 16384,
+        costPer1MTokens: { input: 0.15, output: 0.6 },
+        isLatest: false,
+        isDeprecated: false,
+        releaseDate: new Date('2024-07-18'),
+      },
+      {
         id: 'gpt-4-turbo',
         name: 'GPT-4 Turbo',
-        description: 'Most capable model, optimized for speed and intelligence',
+        description: 'Previous generation turbo model with 128K context',
         capabilities: {
           textGeneration: true,
           imageGeneration: false,
@@ -195,27 +309,9 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
         contextWindow: 128000,
         maxOutputTokens: 4096,
         costPer1MTokens: { input: 10, output: 30 },
-        isLatest: true,
-        isDeprecated: false,
-        releaseDate: new Date('2024-04-01'),
-      },
-      {
-        id: 'gpt-4o',
-        name: 'GPT-4o',
-        description: 'Optimized model with better performance',
-        capabilities: {
-          textGeneration: true,
-          imageGeneration: false,
-          videoGeneration: false,
-          vision: true,
-          multimodal: true,
-        },
-        contextWindow: 128000,
-        maxOutputTokens: 4096,
-        costPer1MTokens: { input: 5, output: 15 },
         isLatest: false,
         isDeprecated: false,
-        releaseDate: new Date('2024-05-01'),
+        releaseDate: new Date('2024-04-09'),
       },
       {
         id: 'gpt-3.5-turbo',

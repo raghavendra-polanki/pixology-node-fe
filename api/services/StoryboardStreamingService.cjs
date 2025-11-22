@@ -69,22 +69,25 @@ class StoryboardStreamingService {
       // STEP 1: Resolve Text Adaptor & Get Prompt
       // ========================================
 
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_4_storyboard',
-        'textGeneration',
-        db
-      );
-
-      console.log(
-        `[StoryboardStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`
-      );
-
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_4_storyboard',
         'textGeneration',
         projectId,
         db
+      );
+
+      // 2. Resolve text adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_4_storyboard',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(
+        `[StoryboardStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`
       );
 
       // Build prompt variables
@@ -227,22 +230,25 @@ class StoryboardStreamingService {
       // STEP 3: Generate Images Progressively
       // ========================================
 
-      const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_4_storyboard',
-        'imageGeneration',
-        db
-      );
-
-      console.log(
-        `[StoryboardStreamingService] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`
-      );
-
+      // Get image prompt template first (to access modelConfig)
       const imagePromptTemplate = await PromptManager.getPromptByCapability(
         'stage_4_storyboard',
         'imageGeneration',
         projectId,
         db
+      );
+
+      // Resolve image adaptor with model config from prompt
+      const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_4_storyboard',
+        'imageGeneration',
+        db,
+        imagePromptTemplate.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(
+        `[StoryboardStreamingService] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId} (source: ${imageAdaptor.source})`
       );
 
       for (let i = 0; i < scenes.length; i++) {
@@ -264,10 +270,37 @@ class StoryboardStreamingService {
             progress: 45 + Math.round(((i) / scenes.length) * 50), // 45-95%
           });
 
+          // Build previousScenesContext for visual continuity
+          let previousScenesContext = '';
+          if (i > 0) {
+            // Collect all scenes that have been generated before this one
+            const previousScenes = scenes.slice(0, i);
+
+            if (previousScenes.length > 0) {
+              previousScenesContext = '**Previous Scenes for Reference:**\n\n';
+              previousScenes.forEach((prevScene, idx) => {
+                previousScenesContext += `**Scene ${idx + 1}: ${prevScene.title || `Scene ${idx + 1}`}**\n`;
+                previousScenesContext += `- Description: ${prevScene.description || 'N/A'}\n`;
+                previousScenesContext += `- Location: ${prevScene.location || 'N/A'}\n`;
+                previousScenesContext += `- Visual Elements: ${prevScene.visualElements || 'N/A'}\n`;
+                previousScenesContext += `- Key Frame: ${prevScene.keyFrameDescription || 'N/A'}\n`;
+                if (prevScene.image && prevScene.image.url) {
+                  previousScenesContext += `- Reference Image: Provided as visual reference\n`;
+                }
+                previousScenesContext += '\n';
+              });
+            } else {
+              previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+            }
+          } else {
+            previousScenesContext = 'This is the first scene in the sequence. No previous scenes available for reference.';
+          }
+
           // Build variables for this scene's image
           const imageVariables = {
             selectedPersonaName,
             selectedPersonaDescription,
+            previousScenesContext,
             title: scene.title || '',
             description: scene.description || '',
             location: scene.location || '',

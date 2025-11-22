@@ -55,22 +55,25 @@ class PersonaStreamingService {
       // STEP 1: Resolve Text Adaptor & Get Prompt
       // ========================================
 
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_2_personas',
-        'textGeneration',
-        db
-      );
-
-      console.log(
-        `[PersonaStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`
-      );
-
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_2_personas',
         'textGeneration',
         projectId,
         db
+      );
+
+      // 2. Resolve text adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_2_personas',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(
+        `[PersonaStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`
       );
 
       // Build prompt variables
@@ -204,15 +207,25 @@ class PersonaStreamingService {
       // STEP 3: Generate Images Progressively
       // ========================================
 
+      // Get image prompt template first (to access modelConfig)
+      const imagePromptTemplate = await PromptManager.getPromptByCapability(
+        'stage_2_personas',
+        'imageGeneration',
+        projectId,
+        db
+      );
+
+      // Resolve image adaptor with model config from prompt
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
         projectId,
         'stage_2_personas',
         'imageGeneration',
-        db
+        db,
+        imagePromptTemplate.modelConfig  // Pass model config from prompt
       );
 
       console.log(
-        `[PersonaStreamingService] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`
+        `[PersonaStreamingService] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId} (source: ${imageAdaptor.source})`
       );
 
       for (let i = 0; i < personas.length; i++) {

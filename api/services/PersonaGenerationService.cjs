@@ -24,23 +24,24 @@ class PersonaGenerationService {
 
       console.log(`[PersonaGen] Generating ${numberOfPersonas} personas for project ${projectId}`);
 
-      // 1. Resolve text generation adaptor
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_2_personas',
-        'textGeneration',
-        db
-      );
-
-      console.log(`[PersonaGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
-
-      // 2. Get prompt template for text generation capability
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_2_personas',
         'textGeneration',
         projectId,
         db
       );
+
+      // 2. Resolve text generation adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_2_personas',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(`[PersonaGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`);
 
       // 3. Build persona generation prompt
       const variables = {
@@ -122,15 +123,24 @@ class PersonaGenerationService {
    */
   static async _generatePersonaImages(projectId, personas, db, AIAdaptorResolver) {
     try {
-      // Resolve image generation adaptor
+      // Get image prompt template first (to access modelConfig)
+      const imagePromptTemplate = await PromptManager.getPromptByCapability(
+        'stage_2_personas',
+        'imageGeneration',
+        projectId,
+        db
+      );
+
+      // Resolve image generation adaptor with model config from prompt
       const imageAdaptor = await AIAdaptorResolver.resolveAdaptor(
         projectId,
         'stage_2_personas',
         'imageGeneration',
-        db
+        db,
+        imagePromptTemplate.modelConfig  // Pass model config from prompt
       );
 
-      console.log(`[PersonaGen] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId}`);
+      console.log(`[PersonaGen] Image adaptor: ${imageAdaptor.adaptorId}/${imageAdaptor.modelId} (source: ${imageAdaptor.source})`);
 
       const personasWithImages = [];
 

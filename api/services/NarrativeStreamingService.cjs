@@ -53,22 +53,25 @@ class NarrativeStreamingService {
       // STEP 1: Resolve Text Adaptor & Get Prompt
       // ========================================
 
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_3_narratives',
-        'textGeneration',
-        db
-      );
-
-      console.log(
-        `[NarrativeStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`
-      );
-
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_3_narratives',
         'textGeneration',
         projectId,
         db
+      );
+
+      // 2. Resolve text adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_3_narratives',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(
+        `[NarrativeStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`
       );
 
       // Build prompt variables

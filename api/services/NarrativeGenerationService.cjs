@@ -32,23 +32,24 @@ class NarrativeGenerationService {
       );
       console.log(`[NarrativeGen] Campaign Description: ${campaignDescription || '(empty)'}`);
 
-      // 1. Resolve text generation adaptor
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_3_narratives',
-        'textGeneration',
-        db
-      );
-
-      console.log(`[NarrativeGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
-
-      // 2. Get prompt template for text generation capability
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_3_narratives',
         'textGeneration',
         projectId,
         db
       );
+
+      // 2. Resolve text generation adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_3_narratives',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(`[NarrativeGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`);
 
       // 3. Build narrative generation prompt
       const variables = {

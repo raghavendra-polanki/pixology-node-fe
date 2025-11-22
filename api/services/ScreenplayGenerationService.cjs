@@ -33,23 +33,24 @@ class ScreenplayGenerationService {
         `[ScreenplayGen] Generating screenplay for ${storyboardScenes.length} scenes for project ${projectId}`
       );
 
-      // 1. Resolve text generation adaptor
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_5_screenplay',
-        'textGeneration',
-        db
-      );
-
-      console.log(`[ScreenplayGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
-
-      // 2. Get prompt template for text generation capability
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_5_screenplay',
         'textGeneration',
         projectId,
         db
       );
+
+      // 2. Resolve text generation adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_5_screenplay',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(`[ScreenplayGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`);
 
       // 3. Build screenplay generation prompt
       const scenesDescription = storyboardScenes
@@ -81,7 +82,7 @@ Camera Work: ${scene.cameraWork || ''}`;
       // 4. Generate screenplay using adaptor
       const generationResult = await textAdaptor.adaptor.generateText(fullPrompt, {
         temperature: 0.6,
-        maxTokens: 8000,
+        maxTokens: 4096,
       });
 
       // 5. Parse response

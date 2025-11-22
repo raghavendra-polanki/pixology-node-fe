@@ -57,22 +57,25 @@ class ScreenplayStreamingService {
       // STEP 1: Resolve Text Adaptor & Get Prompt
       // ========================================
 
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
-        projectId,
-        'stage_5_screenplay',
-        'textGeneration',
-        db
-      );
-
-      console.log(
-        `[ScreenplayStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`
-      );
-
+      // 1. Get prompt template first (to access modelConfig)
       const textPrompt = await PromptManager.getPromptByCapability(
         'stage_5_screenplay',
         'textGeneration',
         projectId,
         db
+      );
+
+      // 2. Resolve text adaptor with model config from prompt
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_5_screenplay',
+        'textGeneration',
+        db,
+        textPrompt.modelConfig  // Pass model config from prompt
+      );
+
+      console.log(
+        `[ScreenplayStreamingService] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId} (source: ${textAdaptor.source})`
       );
 
       // Build prompt variables
@@ -170,7 +173,7 @@ Camera Work: ${scene.cameraWork || ''}`;
 
         await textAdaptor.adaptor.generateTextStream(
           fullPrompt,
-          { temperature: 0.6, maxTokens: 8000 },
+          { temperature: 0.6, maxTokens: 4096 },
           (chunk) => {
             if (chunk.type === 'chunk') {
               parseAndEmitEntries(chunk.text);
@@ -183,7 +186,7 @@ Camera Work: ${scene.cameraWork || ''}`;
         // Fallback to non-streaming
         const result = await textAdaptor.adaptor.generateText(fullPrompt, {
           temperature: 0.6,
-          maxTokens: 8000,
+          maxTokens: 4096,
         });
 
         const parsedEntries = ScreenplayGenerationService._parseScreenplayFromResponse(result.text);
