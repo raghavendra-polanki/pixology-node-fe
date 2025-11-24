@@ -490,6 +490,25 @@ The background score should be **{{BACKGROUND MUSIC VIBE}}**. Key audio synchron
       createdBy: 'system',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'prompt_videoGeneration_video_default',
+      capability: 'videoGeneration',
+      name: 'Video Generation Configuration',
+      description: 'Configuration for AI video generation models (Veo, Sora, etc.)',
+      systemPrompt: '',
+      userPromptTemplate: '',
+      outputFormat: 'video',
+      variables: [],
+      modelConfig: {
+        adaptorId: 'gemini',
+        modelId: 'gemini-2.5-flash-image'
+      },
+      isDefault: true,
+      isActive: true,
+      createdBy: 'system',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
   ],
   createdAt: new Date().toISOString(),
