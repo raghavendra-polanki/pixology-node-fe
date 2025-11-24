@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "start": "node server.js",
     "serve": "npm run build && npm run start",
-    "dev:server": "node --watch --env-file=.env.local --env-file=.env server.js"
+    "dev:server": "node --watch --env-file=.env.local server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

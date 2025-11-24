@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 // Load environment variables from a file based on NODE_ENV.
 // This is the backward-compatible method for older Node.js versions.
 // PM2 sets NODE_ENV from the --env flag (e.g., 'production').
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local';
 const envPath = path.join(__dirname, envFile);
 
 dotenv.config({ path: envPath });

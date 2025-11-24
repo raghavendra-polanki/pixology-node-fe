@@ -63,7 +63,7 @@ try {
     ignoreUndefinedProperties: true,
     databaseId: databaseId,
   });
-  console.log(`✓ Using Firestore database: ${databaseId}`);
+  console.log(`✓ Using Firestore database: ${databaseId || '(default)'}`);
 } catch (settingsError) {
   // If databaseId is not supported in settings, fall back to default
   console.log(`⚠️  Could not configure database ID via settings: ${settingsError.message}`);
