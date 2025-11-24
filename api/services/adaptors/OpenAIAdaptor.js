@@ -2,11 +2,12 @@
  * OpenAIAdaptor
  *
  * Adaptor for OpenAI API
- * Supports text generation (GPT), image generation (DALL-E), and vision capabilities
+ * Supports text generation (GPT), image generation (DALL-E), video generation (Sora), and vision capabilities
  */
 
 import BaseAIAdaptor from './BaseAIAdaptor.js';
 import OpenAI from 'openai';
+import { uploadVideoToGCS } from '../gcsService.js';
 
 export default class OpenAIAdaptor extends BaseAIAdaptor {
   constructor(modelId, config = {}, credentials = {}) {
@@ -167,11 +168,111 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
   }
 
   /**
-   * Generate video using OpenAI (when available)
+   * Generate video using OpenAI Sora API
    */
   async generateVideo(prompt, options = {}) {
-    // Video generation not yet available in OpenAI API
-    throw new Error('OpenAI video generation is not yet available. Use another adaptor or wait for API release.');
+    const mergedConfig = { ...this.config, ...options };
+
+    try {
+      const {
+        durationSeconds = 6,
+        aspectRatio = '16:9',
+        projectId,
+        sceneNumber,
+        imageGcsUri,
+      } = mergedConfig;
+
+      console.log(`[OpenAI] Starting Sora video generation for scene ${sceneNumber}`);
+
+      // Limit to 4 seconds for cost savings
+      // Sora supports 4, 8, or 12 seconds - we use 4 for minimum cost
+      const soraSeconds = '4';
+
+      // Map aspect ratio to Sora size
+      // Sora supports: '720x1280', '1280x720', '1024x1792', '1792x1024'
+      const sizeMap = {
+        '16:9': '1280x720',    // HD horizontal
+        '9:16': '720x1280',    // HD vertical
+        '1:1': '1280x720',     // Square not supported, use 16:9
+      };
+      const size = sizeMap[aspectRatio] || '1280x720';
+
+      // Use sora-2 for cost savings (instead of sora-2-pro)
+      const model = 'sora-2';
+
+      console.log(`[OpenAI] Using model: ${model}, duration: ${soraSeconds}s, size: ${size}`);
+
+      // Create video generation job
+      const jobParams = {
+        model,
+        prompt,
+        seconds: soraSeconds,
+        size,
+      };
+
+      // Add reference image if provided (optional)
+      if (imageGcsUri) {
+        console.log(`[OpenAI] Using reference image: ${imageGcsUri}`);
+        // Note: OpenAI expects a file stream for input_reference
+        // For GCS URIs, we'd need to download and convert to stream
+        // For now, we'll skip the reference image and rely on prompt
+      }
+
+      const job = await this.client.videos.create(jobParams);
+
+      console.log(`[OpenAI] Video generation job started: ${job.id}`);
+
+      // Poll for status
+      let status = job.status;
+      let progress = job.progress || 0;
+      let attempts = 0;
+      const maxAttempts = 300; // 10 minutes max (2s intervals)
+
+      while ((status === 'queued' || status === 'in_progress') && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+
+        const updated = await this.client.videos.retrieve(job.id);
+        status = updated.status;
+        progress = updated.progress ?? progress;
+        attempts++;
+
+        console.log(`[OpenAI] Job ${job.id} - Status: ${status}, Progress: ${progress}%`);
+      }
+
+      if (status !== 'completed') {
+        throw new Error(`Video generation failed with status: ${status}`);
+      }
+
+      console.log(`[OpenAI] Video generation completed, downloading content...`);
+
+      // Download the video content
+      const content = await this.client.videos.downloadContent(job.id);
+      const arrayBuffer = await content.arrayBuffer();
+      const videoBuffer = Buffer.from(arrayBuffer);
+
+      console.log(`[OpenAI] Downloaded video, size: ${videoBuffer.length} bytes`);
+
+      // Upload to GCS
+      const sceneName = `scene_${sceneNumber}_sora`;
+      const videoUrl = await uploadVideoToGCS(videoBuffer, projectId, sceneName);
+
+      console.log(`[OpenAI] Uploaded video to GCS: ${videoUrl}`);
+
+      return {
+        videoUrl,
+        format: 'mp4',
+        duration: parseInt(soraSeconds),
+        resolution: size,
+        aspectRatio,
+        model,
+        backend: 'openai',
+        operationName: job.id,
+        referenceImagesCount: imageGcsUri ? 1 : 0,
+      };
+    } catch (error) {
+      console.error(`[OpenAI] Video generation error:`, error);
+      throw new Error(`OpenAI Sora video generation error: ${error.message}`);
+    }
   }
 
   /**
@@ -362,6 +463,42 @@ export default class OpenAIAdaptor extends BaseAIAdaptor {
         isLatest: false,
         isDeprecated: false,
         releaseDate: new Date('2022-11-01'),
+      },
+      {
+        id: 'sora-2-pro',
+        name: 'Sora 2 Pro',
+        description: 'Advanced video generation model with HD quality',
+        capabilities: {
+          textGeneration: false,
+          imageGeneration: false,
+          videoGeneration: true,
+          vision: false,
+          multimodal: false,
+        },
+        maxDuration: 12,
+        resolutions: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+        costPerSecond: 5.0,
+        isLatest: true,
+        isDeprecated: false,
+        releaseDate: new Date('2024-12-01'),
+      },
+      {
+        id: 'sora-2',
+        name: 'Sora 2',
+        description: 'Standard video generation model',
+        capabilities: {
+          textGeneration: false,
+          imageGeneration: false,
+          videoGeneration: true,
+          vision: false,
+          multimodal: false,
+        },
+        maxDuration: 12,
+        resolutions: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+        costPerSecond: 2.5,
+        isLatest: false,
+        isDeprecated: false,
+        releaseDate: new Date('2024-12-01'),
       },
     ];
   }

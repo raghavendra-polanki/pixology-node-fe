@@ -84,6 +84,28 @@ const AVAILABLE_MODELS = {
           },
         ],
       },
+      videoGeneration: {
+        models: [
+          {
+            modelId: 'sora-2',
+            displayName: 'Sora 2',
+            description: 'Standard video generation model',
+            isDefault: true,
+            supportedDurations: [4, 8, 12],
+            supportedResolutions: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+            costPerSecond: 2.5,
+          },
+          {
+            modelId: 'sora-2-pro',
+            displayName: 'Sora 2 Pro',
+            description: 'Advanced video generation with HD quality',
+            isDefault: false,
+            supportedDurations: [4, 8, 12],
+            supportedResolutions: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+            costPerSecond: 5.0,
+          },
+        ],
+      },
     },
   },
 };
