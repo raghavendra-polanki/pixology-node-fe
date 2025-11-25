@@ -8,11 +8,15 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from 'dotenv';
 import admin from 'firebase-admin';
 import { GAMELAB_PROMPT_TEMPLATES } from '../api/products/gamelab/prompts/seedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env.local
+config({ path: path.resolve(__dirname, '../.env.local') });
 
 // Initialize Firebase Admin SDK
 const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
