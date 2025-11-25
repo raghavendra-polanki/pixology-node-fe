@@ -8,7 +8,7 @@
  */
 
 const PromptManager = require('../../../core/services/PromptManager.cjs');
-const GCSService = require('../../../core/services/GCSService.cjs');
+const GCSService = require('../../../core/services/gcsService');
 
 class ThemeStreamingService {
   /**
