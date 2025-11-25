@@ -10,6 +10,7 @@ export interface GameLabProject {
   createdAt: string | Date;
   updatedAt: string | Date;
   userId: string;
+  sportType?: string; // e.g., "Hockey", "Basketball", "Football", etc.
 
   // Stage Data
   contextBrief?: ContextBriefData;

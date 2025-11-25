@@ -57,6 +57,7 @@ export const GameLabPage = () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       userId: user?.uid || '',
+      sportType: 'Hockey', // Default to Hockey, will be configurable in future
       stageExecutions: {},
     };
 

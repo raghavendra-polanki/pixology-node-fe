@@ -181,6 +181,15 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
             Back to Projects
           </Button>
 
+          {/* Sport Type Badge */}
+          {project?.sportType && (
+            <div className="mb-3">
+              <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                {project.sportType}
+              </span>
+            </div>
+          )}
+
           {/* Project Info */}
           <h2 className="text-white mb-1">{project?.name || 'New Campaign'}</h2>
           <p className="text-gray-500">6-Stage Workflow</p>
