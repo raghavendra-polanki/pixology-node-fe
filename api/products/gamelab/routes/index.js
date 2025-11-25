@@ -3,10 +3,10 @@ import projectsRouter from './projects.js';
 
 const router = express.Router();
 
-// Mount FlairLab-specific routes
+// Mount GameLab-specific routes
 router.use('/projects', projectsRouter);
 
-// TODO: Add other FlairLab routes as needed
+// TODO: Add other GameLab routes as needed
 // router.use('/generation', generationRouter);
 // router.use('/gallery', galleryRouter);
 // etc.

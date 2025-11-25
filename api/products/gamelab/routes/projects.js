@@ -78,7 +78,7 @@ const verifyToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('[FlairLab] Token verification failed:', error.message);
+    console.error('[GameLab] Token verification failed:', error.message);
     return res.status(401).json({
       success: false,
       error: 'Invalid or expired token',
@@ -87,8 +87,8 @@ const verifyToken = async (req, res, next) => {
 };
 
 /**
- * GET /api/flairlab/projects
- * Get all FlairLab projects accessible to the authenticated user
+ * GET /api/gamelab/projects
+ * Get all GameLab projects accessible to the authenticated user
  */
 router.get('/', verifyToken, async (req, res) => {
   try {
@@ -110,7 +110,7 @@ router.get('/', verifyToken, async (req, res) => {
       projects: projectsWithMemberInfo,
     });
   } catch (error) {
-    console.error('[FlairLab] Error fetching projects:', error);
+    console.error('[GameLab] Error fetching projects:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch projects',
@@ -119,8 +119,8 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/flairlab/projects/:projectId
- * Get a specific FlairLab project
+ * GET /api/gamelab/projects/:projectId
+ * Get a specific GameLab project
  */
 router.get('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -153,7 +153,7 @@ router.get('/:projectId', verifyToken, async (req, res) => {
       project: serializeFirestoreDates(project),
     });
   } catch (error) {
-    console.error('[FlairLab] Error fetching project:', error);
+    console.error('[GameLab] Error fetching project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch project',
@@ -162,8 +162,8 @@ router.get('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/flairlab/projects
- * Create a new FlairLab project
+ * POST /api/gamelab/projects
+ * Create a new GameLab project
  */
 router.post('/', verifyToken, async (req, res) => {
   try {
@@ -190,7 +190,7 @@ router.post('/', verifyToken, async (req, res) => {
       }),
     });
   } catch (error) {
-    console.error('[FlairLab] Error creating project:', error);
+    console.error('[GameLab] Error creating project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to create project',
@@ -199,8 +199,8 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 /**
- * PUT /api/flairlab/projects/:projectId
- * Update a FlairLab project
+ * PUT /api/gamelab/projects/:projectId
+ * Update a GameLab project
  */
 router.put('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -247,7 +247,7 @@ router.put('/:projectId', verifyToken, async (req, res) => {
       project: serializeFirestoreDates(updatedProject),
     });
   } catch (error) {
-    console.error('[FlairLab] Error updating project:', error);
+    console.error('[GameLab] Error updating project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to update project',
@@ -256,7 +256,7 @@ router.put('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * PUT /api/flairlab/projects/:projectId/stages/:stageName
+ * PUT /api/gamelab/projects/:projectId/stages/:stageName
  * Update stage execution status
  */
 router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
@@ -311,7 +311,7 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
       project: serializeFirestoreDates(updatedProject),
     });
   } catch (error) {
-    console.error('[FlairLab] Error updating stage execution:', error);
+    console.error('[GameLab] Error updating stage execution:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to update stage execution',
@@ -320,8 +320,8 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
 });
 
 /**
- * DELETE /api/flairlab/projects/:projectId
- * Delete a FlairLab project
+ * DELETE /api/gamelab/projects/:projectId
+ * Delete a GameLab project
  */
 router.delete('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -353,7 +353,7 @@ router.delete('/:projectId', verifyToken, async (req, res) => {
       message: 'Project deleted successfully',
     });
   } catch (error) {
-    console.error('[FlairLab] Error deleting project:', error);
+    console.error('[GameLab] Error deleting project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to delete project',
@@ -362,7 +362,7 @@ router.delete('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/flairlab/projects/:projectId/members
+ * GET /api/gamelab/projects/:projectId/members
  * Get project members
  */
 router.get('/:projectId/members', verifyToken, async (req, res) => {
@@ -377,7 +377,7 @@ router.get('/:projectId/members', verifyToken, async (req, res) => {
       members,
     });
   } catch (error) {
-    console.error('[FlairLab] Error fetching project members:', error);
+    console.error('[GameLab] Error fetching project members:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch project members',
@@ -386,7 +386,7 @@ router.get('/:projectId/members', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/flairlab/projects/:projectId/members
+ * POST /api/gamelab/projects/:projectId/members
  * Add a member to the project
  */
 router.post('/:projectId/members', verifyToken, async (req, res) => {
@@ -420,7 +420,7 @@ router.post('/:projectId/members', verifyToken, async (req, res) => {
       message: 'Member added successfully',
     });
   } catch (error) {
-    console.error('[FlairLab] Error adding project member:', error);
+    console.error('[GameLab] Error adding project member:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to add project member',

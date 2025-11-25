@@ -1,6 +1,6 @@
-// FlairLab Project Types
+// GameLab Project Types
 
-export interface FlairLabProject {
+export interface GameLabProject {
   id: string;
   name: string; // User-facing name
   title: string; // Backend field (same as name)
@@ -186,7 +186,7 @@ export interface UpdateProjectInput {
   kineticActivation?: Partial<KineticActivationData>;
   polishDownload?: Partial<PolishDownloadData>;
   stageExecutions?: Record<string, StageExecution>;
-  metadata?: Partial<FlairLabProject['metadata']>;
+  metadata?: Partial<GameLabProject['metadata']>;
 }
 
 /**
@@ -203,7 +203,7 @@ export interface UpdateStageInput {
  * Response for list of projects
  */
 export interface ProjectListResponse {
-  projects: FlairLabProject[];
+  projects: GameLabProject[];
   total: number;
   page: number;
   limit: number;
@@ -223,7 +223,7 @@ export interface WorkflowStage {
 }
 
 /**
- * Default workflow stages for FlairLab
+ * Default workflow stages for GameLab
  */
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   {

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { ArrowRight, Flame, Users as UsersIcon, Check } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import type { FlairLabProject, Player, CreateProjectInput } from '../../types/project.types';
+import type { GameLabProject, Player, CreateProjectInput } from '../../types/project.types';
 
 interface Stage3Props {
-  project: FlairLabProject;
+  project: GameLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
-  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
+  loadProject: (projectId: string) => Promise<GameLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
 }
 
 const PLAYERS: Player[] = [
@@ -123,8 +123,8 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-orange-600/20 flex items-center justify-center">
-            <UsersIcon className="w-6 h-6 text-orange-500" />
+          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            <UsersIcon className="w-6 h-6 text-emerald-500" />
           </div>
           <div>
             <h2 className="text-white">Suggest Players</h2>
@@ -143,18 +143,18 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
               onClick={() => togglePlayer(player)}
               className={`group relative rounded-xl border-2 transition-all text-left overflow-hidden bg-[#151515] ${
                 isSelected
-                  ? 'border-orange-500 ring-2 ring-orange-500'
+                  ? 'border-emerald-500 ring-2 ring-emerald-500'
                   : 'border-gray-800 hover:border-gray-700'
               }`}
             >
               {/* Background gradient fill for selected */}
               {isSelected && (
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-600/10 to-red-600/10" />
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 to-lime-400/10" />
               )}
 
               {/* Check mark for selected */}
               {isSelected && (
-                <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg">
                   <Check className="w-5 h-5 text-white" />
                 </div>
               )}
@@ -166,17 +166,17 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
                       <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
                     </div>
                   ) : (
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-600 to-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
                       <span className="text-xl font-bold text-white">#{player.number}</span>
                     </div>
                   )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-white">{player.name}</h3>
-                      {player.isHighlighted && <Flame className="w-4 h-4 text-orange-500" />}
+                      {player.isHighlighted && <Flame className="w-4 h-4 text-emerald-500" />}
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 bg-orange-600/20 text-orange-400 rounded">#{player.number}</span>
+                      <span className="text-xs px-2 py-0.5 bg-emerald-600/20 text-lime-400 rounded">#{player.number}</span>
                       <span className="text-gray-400">{player.position}</span>
                     </div>
                     <div className="text-sm text-gray-500">
@@ -195,7 +195,7 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
         <Button
           onClick={handleContinue}
           disabled={selectedPlayers.length === 0 || isSaving}
-          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Images'}

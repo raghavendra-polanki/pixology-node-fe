@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
-import FlairLabProjectService from '@/shared/services/flairLabProjectService';
+import GameLabProjectService from '@/shared/services/flairLabProjectService';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { WorkflowView } from '../components/WorkflowView';
-import type { FlairLabProject } from '../types/project.types';
+import type { GameLabProject } from '../types/project.types';
 
-const flairLabProjectService = new FlairLabProjectService();
+const flairLabProjectService = new GameLabProjectService();
 
-export const FlairLabPage = () => {
+export const GameLabPage = () => {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
-  const [projects, setProjects] = useState<FlairLabProject[]>([]);
+  const [projects, setProjects] = useState<GameLabProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'projects' | 'workflow'>('projects');
-  const [selectedProject, setSelectedProject] = useState<FlairLabProject | null>(null);
+  const [selectedProject, setSelectedProject] = useState<GameLabProject | null>(null);
 
   // Fetch projects after authentication is verified
   useEffect(() => {
@@ -47,7 +47,7 @@ export const FlairLabPage = () => {
     // Create a temporary local project without saving to database yet
     // It will be saved when the user completes Stage 1 and clicks "Continue"
     const tempId = `temp-${Date.now()}`;
-    const newProject: FlairLabProject = {
+    const newProject: GameLabProject = {
       id: tempId,
       name: 'New Campaign',
       title: 'New Campaign',
@@ -65,7 +65,7 @@ export const FlairLabPage = () => {
     setCurrentView('workflow');
   };
 
-  const handleSelectProject = (project: FlairLabProject) => {
+  const handleSelectProject = (project: GameLabProject) => {
     setSelectedProject(project);
     setCurrentView('workflow');
   };
@@ -99,7 +99,7 @@ export const FlairLabPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin mb-4 inline-block">
-            <div className="h-12 w-12 border-4 border-orange-600 border-t-transparent rounded-full"></div>
+            <div className="h-12 w-12 border-4 border-emerald-600 border-t-transparent rounded-full"></div>
           </div>
           <p className="text-gray-400">Loading...</p>
         </div>

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Pixology backend supports multiple products (StoryLab and FlairLab) from a single Node.js server while maintaining complete data isolation through separate Firestore databases.
+The Pixology backend supports multiple products (StoryLab and GameLab) from a single Node.js server while maintaining complete data isolation through separate Firestore databases.
 
 ## Architecture Principles
 
@@ -18,7 +18,7 @@ The Pixology backend supports multiple products (StoryLab and FlairLab) from a s
 - Authentication middleware
 
 ### 3. **Product-Scoped Routing**
-- Routes are prefixed by product: `/api/storylab/*` and `/api/flairlab/*`
+- Routes are prefixed by product: `/api/storylab/*` and `/api/gamelab/*`
 - Product context middleware automatically connects to the correct database
 - Backward compatibility for legacy StoryLab routes
 
@@ -34,8 +34,8 @@ The Pixology backend supports multiple products (StoryLab and FlairLab) from a s
 # StoryLab Database (existing)
 STORYLAB_DATABASE_ID=pixology-v2
 
-# FlairLab Database (new)
-FLAIRLAB_DATABASE_ID=pixology-flairlab
+# GameLab Database (new)
+GAMELAB_DATABASE_ID=pixology-gamelab
 ```
 
 ### Database Mapping
@@ -43,7 +43,7 @@ FLAIRLAB_DATABASE_ID=pixology-flairlab
 | Product   | Environment Variable    | Database ID          | Purpose                          |
 |-----------|------------------------|----------------------|----------------------------------|
 | StoryLab  | `STORYLAB_DATABASE_ID` | `pixology-v2`        | Existing StoryLab projects/data  |
-| FlairLab  | `FLAIRLAB_DATABASE_ID` | `pixology-flairlab`  | FlairLab projects/data           |
+| GameLab  | `GAMELAB_DATABASE_ID` | `pixology-gamelab`  | GameLab projects/data           |
 
 ### Firestore Manager
 
@@ -56,8 +56,8 @@ import { firestoreManager } from './core/config/firestore.js';
 // Get StoryLab database
 const storylabDb = firestoreManager.getDatabase('storylab');
 
-// Get FlairLab database
-const flairlabDb = firestoreManager.getDatabase('flairlab');
+// Get GameLab database
+const gamelabDb = firestoreManager.getDatabase('gamelab');
 ```
 
 **Features:**
@@ -75,11 +75,11 @@ const flairlabDb = firestoreManager.getDatabase('flairlab');
 The `productContext` middleware extracts the product ID from the request path and attaches the correct database to `req.db`.
 
 ```javascript
-// Middleware flow for: POST /api/flairlab/generation/themes
+// Middleware flow for: POST /api/gamelab/generation/themes
 productContext(req, res, next)
   ↓
-req.productId = 'flairlab'
-req.db = firestoreManager.getDatabase('flairlab')  // pixology-flairlab database
+req.productId = 'gamelab'
+req.db = firestoreManager.getDatabase('gamelab')  // pixology-gamelab database
   ↓
 next() → route handler
 ```
@@ -95,8 +95,8 @@ next() → route handler
 ```
 POST /api/storylab/projects
 GET  /api/storylab/generation/personas
-POST /api/flairlab/generation/themes
-GET  /api/flairlab/projects/:projectId
+POST /api/gamelab/generation/themes
+GET  /api/gamelab/projects/:projectId
 ```
 
 ### Legacy Support
@@ -155,7 +155,7 @@ The `legacyStoryLabContext` middleware automatically sets `req.productId = 'stor
   │   │   └── prompts/
   │   │       └── seedData.js
   │   │
-  │   └── flairlab/
+  │   └── gamelab/
   │       ├── routes/
   │       │   ├── projects.js
   │       │   ├── generation.js
@@ -165,7 +165,7 @@ The `legacyStoryLabContext` middleware automatically sets `req.productId = 'stor
   │       │   ├── PlayerSelectionService.js
   │       │   └── ...
   │       ├── models/
-  │       │   └── FlairLabProject.js
+  │       │   └── GameLabProject.js
   │       └── prompts/
   │           └── seedData.js
   │
@@ -179,7 +179,7 @@ The `legacyStoryLabContext` middleware automatically sets `req.productId = 'stor
 ### In Route Handlers
 
 ```javascript
-// api/products/flairlab/routes/generation.js
+// api/products/gamelab/routes/generation.js
 import express from 'express';
 import { verifyToken } from '../../../core/middleware/auth.js';
 
@@ -188,7 +188,7 @@ const router = express.Router();
 router.post('/themes', verifyToken, async (req, res) => {
   try {
     // req.db is automatically set by productContext middleware
-    // It points to the FlairLab database (pixology-flairlab)
+    // It points to the GameLab database (pixology-gamelab)
     const { projectId } = req.body;
 
     // All database operations use the correct database
@@ -213,18 +213,18 @@ export default router;
 ### In Services
 
 ```javascript
-// api/products/flairlab/services/ThemeGenerationService.js
+// api/products/gamelab/services/ThemeGenerationService.js
 export class ThemeGenerationService {
   static async generateThemes(projectId, input, db, resolver) {
     // db parameter is passed from route handler (req.db)
-    // It's the FlairLab database
+    // It's the GameLab database
 
-    // Get prompt template from FlairLab database
+    // Get prompt template from GameLab database
     const prompt = await PromptManager.getPromptByCapability(
       'stage2_themes',
       'textGeneration',
       projectId,
-      db  // Uses FlairLab database
+      db  // Uses GameLab database
     );
 
     // Resolve AI adaptor configuration
@@ -232,13 +232,13 @@ export class ThemeGenerationService {
       projectId,
       'stage2_themes',
       'textGeneration',
-      db,  // Uses FlairLab database
+      db,  // Uses GameLab database
       prompt.modelConfig
     );
 
     // ... AI generation
 
-    // Save to FlairLab database
+    // Save to GameLab database
     await db.collection('projects').doc(projectId).update({
       'data.conceptGallery': themes,
     });
@@ -261,7 +261,7 @@ import { initializeAdaptors } from './core/adaptors/index.js';
 
 // Import product routes
 import storylabRoutes from './products/storylab/routes/index.js';
-import flairlabRoutes from './products/flairlab/routes/index.js';
+import gamelabRoutes from './products/gamelab/routes/index.js';
 
 const app = express();
 
@@ -270,7 +270,7 @@ initializeAdaptors();
 
 // Product-scoped routes
 app.use('/api/storylab', productContext, storylabRoutes);
-app.use('/api/flairlab', productContext, flairlabRoutes);
+app.use('/api/gamelab', productContext, gamelabRoutes);
 
 // Legacy routes (backward compatibility)
 app.use('/api/projects', legacyStoryLabContext, storylabRoutes);
@@ -304,7 +304,7 @@ Each product has its own generation services:
 - ScreenplayGenerationService
 - VideoGenerationService
 
-**FlairLab:**
+**GameLab:**
 - ThemeGenerationService
 - PlayerSelectionService
 - ImageGenerationService
@@ -330,12 +330,12 @@ Both products use the same collection structure (in their respective databases):
 
 ### Collection Isolation
 
-| Collection           | StoryLab DB (pixology-v2) | FlairLab DB (pixology-flairlab) |
+| Collection           | StoryLab DB (pixology-v2) | GameLab DB (pixology-gamelab) |
 |---------------------|---------------------------|--------------------------------|
-| `projects`          | StoryLab projects         | FlairLab projects              |
+| `projects`          | StoryLab projects         | GameLab projects              |
 | `users`             | Shared (replicated)       | Shared (replicated)            |
-| `prompt_templates`  | StoryLab prompts          | FlairLab prompts               |
-| `project_ai_config` | StoryLab AI config        | FlairLab AI config             |
+| `prompt_templates`  | StoryLab prompts          | GameLab prompts               |
+| `project_ai_config` | StoryLab AI config        | GameLab AI config             |
 
 ---
 
@@ -350,7 +350,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json
 
 # Firestore Databases (REQUIRED)
 STORYLAB_DATABASE_ID=pixology-v2
-FLAIRLAB_DATABASE_ID=pixology-flairlab
+GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Providers
 GEMINI_API_KEY=your_key
@@ -369,15 +369,15 @@ The `FirestoreManager` validates all database IDs on initialization:
 ```
 ✓ Database configuration validated
   - StoryLab database: pixology-v2
-  - FlairLab database: pixology-flairlab
+  - GameLab database: pixology-gamelab
 ```
 
 If any database ID is missing:
 
 ```
-❌ Missing database configuration for products: flairlab
+❌ Missing database configuration for products: gamelab
    Please set the following environment variables:
-   - FLAIRLAB_DATABASE_ID
+   - GAMELAB_DATABASE_ID
 ```
 
 ---
@@ -389,10 +389,10 @@ If any database ID is missing:
 1. Add to `.env`:
    ```bash
    STORYLAB_DATABASE_ID=pixology-v2
-   FLAIRLAB_DATABASE_ID=pixology-flairlab
+   GAMELAB_DATABASE_ID=pixology-gamelab
    ```
 
-2. Create FlairLab database in Firestore Console
+2. Create GameLab database in Firestore Console
 
 ### Phase 2: Update Imports
 
@@ -422,12 +422,12 @@ Verify that operations on one product don't affect the other:
 // Create project in StoryLab
 POST /api/storylab/projects → writes to pixology-v2
 
-// Create project in FlairLab
-POST /api/flairlab/projects → writes to pixology-flairlab
+// Create project in GameLab
+POST /api/gamelab/projects → writes to pixology-gamelab
 
 // Verify isolation
 GET /api/storylab/projects → only StoryLab projects
-GET /api/flairlab/projects → only FlairLab projects
+GET /api/gamelab/projects → only GameLab projects
 ```
 
 ---
@@ -441,7 +441,7 @@ GET /api/flairlab/projects → only FlairLab projects
 **Solution:** Add to `.env`:
 ```bash
 STORYLAB_DATABASE_ID=pixology-v2
-FLAIRLAB_DATABASE_ID=pixology-flairlab
+GAMELAB_DATABASE_ID=pixology-gamelab
 ```
 
 ### Error: "Invalid product identifier"
@@ -451,7 +451,7 @@ FLAIRLAB_DATABASE_ID=pixology-flairlab
 **Solution:** Use correct path format:
 ```
 ✅ /api/storylab/projects
-✅ /api/flairlab/generation/themes
+✅ /api/gamelab/generation/themes
 ❌ /api/projects (use legacy routes or update to product-scoped)
 ```
 
@@ -469,7 +469,7 @@ FLAIRLAB_DATABASE_ID=pixology-flairlab
 ## Benefits
 
 ### ✅ Complete Data Isolation
-- StoryLab and FlairLab data never mix
+- StoryLab and GameLab data never mix
 - Independent backups and scaling
 - Product-specific security policies
 
@@ -508,7 +508,7 @@ FLAIRLAB_DATABASE_ID=pixology-flairlab
    ```javascript
    this.databaseConfig = {
      storylab: process.env.STORYLAB_DATABASE_ID,
-     flairlab: process.env.FLAIRLAB_DATABASE_ID,
+     gamelab: process.env.GAMELAB_DATABASE_ID,
      newproduct: process.env.NEWPRODUCT_DATABASE_ID,
    };
    ```
@@ -539,4 +539,4 @@ The multi-product architecture provides:
 4. **Product Routing** - Automatic context based on URL path
 5. **Backward Compatible** - Legacy routes still work
 
-All database names are configured through environment variables (`STORYLAB_DATABASE_ID` and `FLAIRLAB_DATABASE_ID`), with no hardcoded values in the codebase.
+All database names are configured through environment variables (`STORYLAB_DATABASE_ID` and `GAMELAB_DATABASE_ID`), with no hardcoded values in the codebase.

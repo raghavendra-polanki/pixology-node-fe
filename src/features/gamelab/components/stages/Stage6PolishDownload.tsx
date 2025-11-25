@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Download, FileVideo, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Progress } from '../ui/progress';
-import type { FlairLabProject, ExportFormat, CreateProjectInput } from '../../types/project.types';
+import type { GameLabProject, ExportFormat, CreateProjectInput } from '../../types/project.types';
 
 interface Stage6Props {
-  project: FlairLabProject;
+  project: GameLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
-  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
+  loadProject: (projectId: string) => Promise<GameLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
 }
 
 export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Props) => {
@@ -77,8 +77,8 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-orange-600/20 flex items-center justify-center">
-            <Download className="w-6 h-6 text-orange-500" />
+          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            <Download className="w-6 h-6 text-emerald-500" />
           </div>
           <div>
             <h2 className="text-white">Export</h2>
@@ -95,7 +95,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
             onClick={() => setFormat('ProRes 4444')}
             className={`p-6 rounded-xl border-2 transition-all text-center ${
               format === 'ProRes 4444'
-                ? 'border-orange-600 bg-orange-950/30'
+                ? 'border-emerald-600 bg-orange-950/30'
                 : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
             }`}
           >
@@ -107,7 +107,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
             onClick={() => setFormat('H.264 MP4')}
             className={`p-6 rounded-xl border-2 transition-all text-center ${
               format === 'H.264 MP4'
-                ? 'border-orange-600 bg-orange-950/30'
+                ? 'border-emerald-600 bg-orange-950/30'
                 : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
             }`}
           >
@@ -144,7 +144,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
         <div className="mb-8">
           <Button
             onClick={handleProcessAsset}
-            className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
             size="lg"
           >
             <FileVideo className="w-5 h-5 mr-2" />
@@ -161,7 +161,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
               <span className="text-sm font-medium text-white">
                 {progress < 50 ? 'Encoding...' : 'Adding Metadata...'}
               </span>
-              <span className="text-sm text-orange-400 font-mono">{progress}%</span>
+              <span className="text-sm text-lime-400 font-mono">{progress}%</span>
             </div>
             <Progress value={progress} className="h-3" />
           </div>
@@ -184,7 +184,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
           <Button
             onClick={handleDownload}
             disabled={isSaving}
-            className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
             size="lg"
           >
             <Download className="w-5 h-5 mr-2" />

@@ -2,7 +2,7 @@
 
 ## Completed: November 24, 2024
 
-This document summarizes the refactoring performed to support both StoryLab and FlairLab from a single Node.js backend with complete database isolation.
+This document summarizes the refactoring performed to support both StoryLab and GameLab from a single Node.js backend with complete database isolation.
 
 ---
 
@@ -64,7 +64,7 @@ Organized product-specific code into isolated modules:
   │   └── prompts/
   │       └── seedData.js        # StoryLab prompt templates
   │
-  └── flairlab/                  # (Ready for implementation)
+  └── gamelab/                  # (Ready for implementation)
       ├── routes/
       ├── services/
       ├── models/
@@ -85,7 +85,7 @@ Organized product-specific code into isolated modules:
 **Database Mapping:**
 ```bash
 STORYLAB_DATABASE_ID=pixology-v2           → StoryLab database
-FLAIRLAB_DATABASE_ID=pixology-flairlab     → FlairLab database
+GAMELAB_DATABASE_ID=pixology-gamelab     → GameLab database
 ```
 
 ### 4. **Created Product Context Middleware**
@@ -100,17 +100,17 @@ FLAIRLAB_DATABASE_ID=pixology-flairlab     → FlairLab database
 
 **Example:**
 ```javascript
-POST /api/flairlab/generation/themes
+POST /api/gamelab/generation/themes
   ↓ productContext middleware
-  req.productId = 'flairlab'
-  req.db = firestoreManager.getDatabase('flairlab')  // pixology-flairlab
+  req.productId = 'gamelab'
+  req.db = firestoreManager.getDatabase('gamelab')  // pixology-gamelab
 ```
 
 ### 5. **Updated server.js**
 
 **Changes:**
 - ✅ Imports from new `/api/core/` locations
-- ✅ Product-scoped routing: `/api/storylab/*` and `/api/flairlab/*`
+- ✅ Product-scoped routing: `/api/storylab/*` and `/api/gamelab/*`
 - ✅ Legacy route support for backward compatibility
 - ✅ Clean separation of shared vs product-specific routes
 
@@ -123,7 +123,7 @@ app.use('/api/adaptors', adaptorsRouter);
 
 // Product-scoped routes
 app.use('/api/storylab', productContext, storylabRoutes);
-// app.use('/api/flairlab', productContext, flairlabRoutes);  // Ready to uncomment
+// app.use('/api/gamelab', productContext, gamelabRoutes);  // Ready to uncomment
 
 // Legacy routes (backward compatibility)
 app.use('/api/projects', legacyStoryLabContext, storylabRoutes);
@@ -150,7 +150,7 @@ Added configuration sections:
 ```bash
 # Firestore Database IDs (REQUIRED for multi-product support)
 STORYLAB_DATABASE_ID=pixology-v2
-FLAIRLAB_DATABASE_ID=pixology-flairlab
+GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Provider API Keys (for multi-adaptor support)
 OPENAI_API_KEY=your_openai_api_key
@@ -180,7 +180,7 @@ DEFAULT_AI_MODEL=gemini-2.0-flash-exp
 - ✅ No syntax errors in server.js
 
 ### Ready for Next Steps
-- ⏳ FlairLab directory structure created (empty, ready for implementation)
+- ⏳ GameLab directory structure created (empty, ready for implementation)
 - ⏳ Environment variables documented
 - ⏳ Server ready to start with multi-product support
 
@@ -199,7 +199,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKeyGoogle.json
 
 # Database IDs (REQUIRED)
 STORYLAB_DATABASE_ID=pixology-v2
-FLAIRLAB_DATABASE_ID=pixology-flairlab
+GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Provider Keys
 GEMINI_API_KEY=your_gemini_api_key
@@ -219,15 +219,15 @@ The server will validate database configuration:
 ```
 ✓ Database configuration validated
   - StoryLab database: pixology-v2
-  - FlairLab database: pixology-flairlab
+  - GameLab database: pixology-gamelab
 ✓ Connected to storylab database: pixology-v2
 ```
 
 ❌ **Missing Configuration:**
 ```
-❌ Missing database configuration for products: flairlab
+❌ Missing database configuration for products: gamelab
    Please set the following environment variables:
-   - FLAIRLAB_DATABASE_ID
+   - GAMELAB_DATABASE_ID
 ```
 
 ---
@@ -243,35 +243,35 @@ The server will validate database configuration:
 - [x] Import path updates
 - [x] Documentation
 
-### Phase 2: Next Steps (FlairLab Implementation)
+### Phase 2: Next Steps (GameLab Implementation)
 
-1. **Create FlairLab database** in Firestore Console
-   - Database ID: `pixology-flairlab`
+1. **Create GameLab database** in Firestore Console
+   - Database ID: `pixology-gamelab`
    - Collections: Same structure as StoryLab
 
-2. **Implement FlairLab services**
-   - `/api/products/flairlab/services/ThemeGenerationService.js`
-   - `/api/products/flairlab/services/PlayerSelectionService.js`
-   - `/api/products/flairlab/services/ImageGenerationService.js`
-   - `/api/products/flairlab/services/VideoAnimationService.js`
-   - `/api/products/flairlab/services/ExportService.js`
+2. **Implement GameLab services**
+   - `/api/products/gamelab/services/ThemeGenerationService.js`
+   - `/api/products/gamelab/services/PlayerSelectionService.js`
+   - `/api/products/gamelab/services/ImageGenerationService.js`
+   - `/api/products/gamelab/services/VideoAnimationService.js`
+   - `/api/products/gamelab/services/ExportService.js`
 
-3. **Create FlairLab routes**
-   - `/api/products/flairlab/routes/generation.js`
-   - `/api/products/flairlab/routes/projects.js`
-   - `/api/products/flairlab/routes/index.js`
+3. **Create GameLab routes**
+   - `/api/products/gamelab/routes/generation.js`
+   - `/api/products/gamelab/routes/projects.js`
+   - `/api/products/gamelab/routes/index.js`
 
-4. **Create FlairLab prompt templates**
-   - `/api/products/flairlab/prompts/seedData.js`
-   - Seed to FlairLab database
+4. **Create GameLab prompt templates**
+   - `/api/products/gamelab/prompts/seedData.js`
+   - Seed to GameLab database
 
-5. **Uncomment FlairLab routes in server.js**
+5. **Uncomment GameLab routes in server.js**
    ```javascript
-   app.use('/api/flairlab', productContext, flairlabRoutes);
+   app.use('/api/gamelab', productContext, gamelabRoutes);
    ```
 
-6. **Test FlairLab endpoints**
-   - Create FlairLab project
+6. **Test GameLab endpoints**
+   - Create GameLab project
    - Test all 6 stages
    - Verify database isolation
 
@@ -302,13 +302,13 @@ GET  http://localhost:3000/api/projects/:projectId
 POST /api/storylab/projects
 → Writes to pixology-v2 database
 
-# Create project in FlairLab (when implemented)
-POST /api/flairlab/projects
-→ Writes to pixology-flairlab database
+# Create project in GameLab (when implemented)
+POST /api/gamelab/projects
+→ Writes to pixology-gamelab database
 
 # Verify separation
 GET /api/storylab/projects    → Only StoryLab projects
-GET /api/flairlab/projects    → Only FlairLab projects
+GET /api/gamelab/projects    → Only GameLab projects
 ```
 
 ---
@@ -316,7 +316,7 @@ GET /api/flairlab/projects    → Only FlairLab projects
 ## 🎨 Benefits Achieved
 
 ### ✅ Complete Data Isolation
-- StoryLab and FlairLab data never mix
+- StoryLab and GameLab data never mix
 - Independent backups and scaling
 - Product-specific security policies
 
@@ -386,16 +386,16 @@ GET /api/flairlab/projects    → Only FlairLab projects
 
 ## 🚀 Next Actions
 
-1. **Create FlairLab database in Firestore**
-   - Name: `pixology-flairlab`
+1. **Create GameLab database in Firestore**
+   - Name: `pixology-gamelab`
    - Same collection structure as StoryLab
 
 2. **Set environment variables**
    ```bash
-   FLAIRLAB_DATABASE_ID=pixology-flairlab
+   GAMELAB_DATABASE_ID=pixology-gamelab
    ```
 
-3. **Start implementing FlairLab services**
+3. **Start implementing GameLab services**
    - Follow the architecture in `MULTI_PRODUCT_ARCHITECTURE.md`
    - Use StoryLab services as reference
    - Each stage should follow the same pattern
@@ -423,5 +423,5 @@ For questions or issues with the refactored architecture:
 
 The backend refactoring is complete and ready for:
 - StoryLab production deployment (backward compatible)
-- FlairLab development and implementation
+- GameLab development and implementation
 - Adding additional products in the future

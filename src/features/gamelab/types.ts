@@ -1,4 +1,4 @@
-import type { FlairLabProject } from './types/project.types';
+import type { GameLabProject } from './types/project.types';
 
 // Simplified Project type for UI
 export interface Project {
@@ -7,7 +7,7 @@ export interface Project {
   status: 'draft' | 'generating' | 'complete';
   currentStage: number; // 1-6
   createdAt: string;
-  data: FlairLabProject;
+  data: GameLabProject;
 }
 
 export * from './types/project.types';

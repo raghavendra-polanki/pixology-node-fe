@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { ArrowRight, Play, Zap } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Slider } from '../ui/slider';
-import type { FlairLabProject, MotionPreset, CreateProjectInput } from '../../types/project.types';
+import type { GameLabProject, MotionPreset, CreateProjectInput } from '../../types/project.types';
 
 interface Stage5Props {
-  project: FlairLabProject;
+  project: GameLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
-  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
+  loadProject: (projectId: string) => Promise<GameLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
 }
 
 const MOTION_PRESETS: MotionPreset[] = ['Loop', 'Slow Zoom', 'Action Pan'];
@@ -53,8 +53,8 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-orange-600/20 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-orange-500" />
+          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            <Zap className="w-6 h-6 text-emerald-500" />
           </div>
           <div>
             <h2 className="text-white">Animate Videos</h2>
@@ -73,7 +73,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
               onClick={() => setSelectedMotion(preset)}
               className={`p-6 rounded-xl border-2 transition-all text-center ${
                 selectedMotion === preset
-                  ? 'border-orange-600 bg-orange-950/30'
+                  ? 'border-emerald-600 bg-orange-950/30'
                   : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
               }`}
             >
@@ -86,7 +86,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
       {/* Render Preview Button */}
       <div className="mb-8">
         <Button
-          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
           size="lg"
         >
           <Play className="w-5 h-5 mr-2" />
@@ -98,7 +98,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
       <div className="mb-8">
         <h3 className="text-white mb-4">Preview</h3>
         <div className="aspect-video bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border-2 border-slate-700 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-red-500/10 animate-pulse" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-red-500/10 animate-pulse" />
           <div className="relative text-center text-white">
             <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-lg font-semibold">Motion Preview</p>
@@ -114,7 +114,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-white">Speed</label>
-              <span className="text-sm text-orange-400 font-mono">{speed.toFixed(1)}x</span>
+              <span className="text-sm text-lime-400 font-mono">{speed.toFixed(1)}x</span>
             </div>
             <Slider
               value={[speed]}
@@ -128,7 +128,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-white">Intensity</label>
-              <span className="text-sm text-orange-400 font-mono">{intensity}%</span>
+              <span className="text-sm text-lime-400 font-mono">{intensity}%</span>
             </div>
             <Slider
               value={[intensity]}
@@ -147,7 +147,7 @@ export const Stage5KineticActivation = ({ project, markStageCompleted, navigateT
         <Button
           onClick={handleContinue}
           disabled={isSaving}
-          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Export'}

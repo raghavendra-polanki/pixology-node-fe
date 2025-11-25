@@ -3,15 +3,15 @@ import { ArrowRight, Shield } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import type { FlairLabProject, ContextPill, CampaignGoal, CreateProjectInput } from '../../types/project.types';
+import type { GameLabProject, ContextPill, CampaignGoal, CreateProjectInput } from '../../types/project.types';
 
 interface Stage1Props {
-  project: FlairLabProject;
+  project: GameLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
-  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
-  updateContextBrief: (contextBrief: any, projectId?: string) => Promise<FlairLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
+  loadProject: (projectId: string) => Promise<GameLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
+  updateContextBrief: (contextBrief: any, projectId?: string) => Promise<GameLabProject | null>;
 }
 
 const TEAMS = [
@@ -20,7 +20,7 @@ const TEAMS = [
     name: 'Colorado',
     subtitle: 'Avalanche',
     emoji: '🏔️',
-    color: 'from-blue-600 to-red-600',
+    color: 'from-blue-600 to-lime-400',
     logo: '/images/teams/colorado-avalanche.png'
   },
   {
@@ -139,8 +139,8 @@ export const Stage1ContextBrief = ({
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-orange-600/20 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-orange-500" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-emerald-500" />
           </div>
           <div>
             <h2 className="text-lg text-white">Setup Project</h2>
@@ -158,7 +158,7 @@ export const Stage1ContextBrief = ({
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
           placeholder="Enter project name (e.g., Avalanche vs Lightning Hype)"
-          className="bg-[#151515] border-gray-800 text-white placeholder:text-gray-500 focus-visible:border-orange-500 focus-visible:ring-orange-500/50"
+          className="bg-[#151515] border-gray-800 text-white placeholder:text-gray-500 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/50"
         />
       </div>
 
@@ -180,7 +180,7 @@ export const Stage1ContextBrief = ({
                   disabled={isDisabled}
                   className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
                     homeTeam === team.id
-                      ? 'border-orange-500 ring-2 ring-orange-500'
+                      ? 'border-emerald-500 ring-2 ring-emerald-500'
                       : isDisabled
                       ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
                       : 'border-gray-800 bg-[#151515] hover:border-gray-700'
@@ -211,7 +211,7 @@ export const Stage1ContextBrief = ({
                   disabled={isDisabled}
                   className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
                     awayTeam === team.id
-                      ? 'border-orange-500 ring-2 ring-orange-500'
+                      ? 'border-emerald-500 ring-2 ring-emerald-500'
                       : isDisabled
                       ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
                       : 'border-gray-800 bg-[#151515] hover:border-gray-700'
@@ -233,7 +233,7 @@ export const Stage1ContextBrief = ({
 
         {/* Match-up Preview Card */}
         <div className="mt-4 p-5 rounded-xl border-2 border-slate-700 bg-slate-900/50">
-          <div className="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-3">Match-up Preview</div>
+          <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wide mb-3">Match-up Preview</div>
           <div className="flex items-center justify-center gap-12">
             {/* Home Team */}
             <div className="flex-1 flex flex-col items-center">
@@ -251,7 +251,7 @@ export const Stage1ContextBrief = ({
             </div>
 
             {/* VS */}
-            <div className="text-2xl font-bold text-orange-500">VS</div>
+            <div className="text-2xl font-bold text-emerald-500">VS</div>
 
             {/* Away Team */}
             <div className="flex-1 flex flex-col items-center">
@@ -281,7 +281,7 @@ export const Stage1ContextBrief = ({
               onClick={() => togglePill(pill)}
               className={`px-4 py-2 text-sm rounded-lg border transition-all ${
                 contextPills.includes(pill)
-                  ? 'border-orange-600 bg-orange-950/30 text-white'
+                  ? 'border-emerald-600 bg-orange-950/30 text-white'
                   : 'border-slate-800 bg-slate-900/30 text-slate-400 hover:border-slate-700'
               }`}
             >
@@ -301,7 +301,7 @@ export const Stage1ContextBrief = ({
               onClick={() => setCampaignGoal(goal)}
               className={`p-3 rounded-lg border-2 transition-all text-center ${
                 campaignGoal === goal
-                  ? 'border-orange-600 bg-orange-950/30'
+                  ? 'border-emerald-600 bg-orange-950/30'
                   : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
               }`}
             >
@@ -316,7 +316,7 @@ export const Stage1ContextBrief = ({
         <Button
           onClick={handleContinue}
           disabled={!projectName.trim() || isSaving}
-          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Themes'}

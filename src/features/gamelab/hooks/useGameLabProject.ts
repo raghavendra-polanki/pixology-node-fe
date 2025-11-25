@@ -1,13 +1,13 @@
 /**
- * FlairLab Project Hook
- * Central state management for FlairLab projects
+ * GameLab Project Hook
+ * Central state management for GameLab projects
  * Based on the same pattern as useStoryLabProject
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import FlairLabProjectService from '@/shared/services/flairLabProjectService';
+import GameLabProjectService from '@/shared/services/flairLabProjectService';
 import {
-  FlairLabProject,
+  GameLabProject,
   CreateProjectInput,
   UpdateProjectInput,
   ContextBriefData,
@@ -19,41 +19,41 @@ import {
   DEFAULT_WORKFLOW_STAGES,
 } from '../types/project.types';
 
-export interface UseFlairLabProjectOptions {
+export interface UseGameLabProjectOptions {
   autoLoad?: boolean;
   projectId?: string;
-  onProjectChange?: (project: FlairLabProject | null) => void;
+  onProjectChange?: (project: GameLabProject | null) => void;
   onError?: (error: Error) => void;
 }
 
-export interface UseFlairLabProjectResult {
+export interface UseGameLabProjectResult {
   // State
-  project: FlairLabProject | null;
+  project: GameLabProject | null;
   isLoading: boolean;
   isSaving: boolean;
   error: Error | null;
   hasUnsavedChanges: boolean;
 
   // CRUD Operations
-  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
-  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
-  saveProject: () => Promise<FlairLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
+  loadProject: (projectId: string) => Promise<GameLabProject | null>;
+  saveProject: () => Promise<GameLabProject | null>;
   deleteProject: (projectId?: string) => Promise<void>;
-  updateProject: (updates: UpdateProjectInput, projectId?: string) => Promise<FlairLabProject | null>;
+  updateProject: (updates: UpdateProjectInput, projectId?: string) => Promise<GameLabProject | null>;
 
   // Stage-specific updates
-  updateContextBrief: (contextBrief: Partial<ContextBriefData>, projectId?: string) => Promise<FlairLabProject | null>;
-  updateConceptGallery: (conceptGallery: Partial<ConceptGalleryData>, projectId?: string) => Promise<FlairLabProject | null>;
-  updateCastingCall: (castingCall: Partial<CastingCallData>, projectId?: string) => Promise<FlairLabProject | null>;
-  updateHighFidelityCapture: (capture: Partial<HighFidelityCaptureData>, projectId?: string) => Promise<FlairLabProject | null>;
-  updateKineticActivation: (activation: Partial<KineticActivationData>, projectId?: string) => Promise<FlairLabProject | null>;
-  updatePolishDownload: (polish: Partial<PolishDownloadData>, projectId?: string) => Promise<FlairLabProject | null>;
+  updateContextBrief: (contextBrief: Partial<ContextBriefData>, projectId?: string) => Promise<GameLabProject | null>;
+  updateConceptGallery: (conceptGallery: Partial<ConceptGalleryData>, projectId?: string) => Promise<GameLabProject | null>;
+  updateCastingCall: (castingCall: Partial<CastingCallData>, projectId?: string) => Promise<GameLabProject | null>;
+  updateHighFidelityCapture: (capture: Partial<HighFidelityCaptureData>, projectId?: string) => Promise<GameLabProject | null>;
+  updateKineticActivation: (activation: Partial<KineticActivationData>, projectId?: string) => Promise<GameLabProject | null>;
+  updatePolishDownload: (polish: Partial<PolishDownloadData>, projectId?: string) => Promise<GameLabProject | null>;
 
   // Stage execution operations
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: UpdateProjectInput) => Promise<FlairLabProject | null>;
-  markStageInProgress: (stageName: string) => Promise<FlairLabProject | null>;
-  markStageFailed: (stageName: string, error: any) => Promise<FlairLabProject | null>;
-  advanceToNextStage: () => Promise<FlairLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: UpdateProjectInput) => Promise<GameLabProject | null>;
+  markStageInProgress: (stageName: string) => Promise<GameLabProject | null>;
+  markStageFailed: (stageName: string, error: any) => Promise<GameLabProject | null>;
+  advanceToNextStage: () => Promise<GameLabProject | null>;
 
   // Utility methods
   resetError: () => void;
@@ -62,14 +62,14 @@ export interface UseFlairLabProjectResult {
 
 const TOTAL_STAGES = DEFAULT_WORKFLOW_STAGES.length;
 
-export function useFlairLabProject(options: UseFlairLabProjectOptions = {}): UseFlairLabProjectResult {
+export function useGameLabProject(options: UseGameLabProjectOptions = {}): UseGameLabProjectResult {
   const { autoLoad = false, projectId, onProjectChange, onError } = options;
 
   // Service instance (singleton per hook instance)
-  const projectService = useRef(new FlairLabProjectService());
+  const projectService = useRef(new GameLabProjectService());
 
   // State
-  const [project, setProject] = useState<FlairLabProject | null>(null);
+  const [project, setProject] = useState<GameLabProject | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);

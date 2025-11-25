@@ -3,17 +3,17 @@ import { firestoreManager } from '../config/firestore.js';
 /**
  * Product Context Middleware
  * Identifies the product from the request path and attaches:
- * - req.productId: 'storylab' or 'flairlab'
+ * - req.productId: 'storylab' or 'gamelab'
  * - req.db: Product-specific Firestore database instance
  *
  * Expected path format: /api/{productId}/*
  * Example: /api/storylab/projects -> productId = 'storylab'
- *          /api/flairlab/generation/themes -> productId = 'flairlab'
+ *          /api/gamelab/generation/themes -> productId = 'gamelab'
  */
 export function productContext(req, res, next) {
   try {
     // Extract product ID from baseUrl: /api/{productId}
-    // When mounted at app.use('/api/flairlab', ...), baseUrl = '/api/flairlab'
+    // When mounted at app.use('/api/gamelab', ...), baseUrl = '/api/gamelab'
     const baseUrlParts = req.baseUrl.split('/').filter(part => part.length > 0);
 
     // baseUrl should be /api/{productId}
@@ -22,7 +22,7 @@ export function productContext(req, res, next) {
         error: 'Invalid request path',
         message: 'Request path must include product identifier',
         expectedFormat: '/api/{productId}/*',
-        validProducts: ['storylab', 'flairlab'],
+        validProducts: ['storylab', 'gamelab'],
         receivedBaseUrl: req.baseUrl,
       });
     }
@@ -31,11 +31,11 @@ export function productContext(req, res, next) {
     const productId = baseUrlParts[1];
 
     // Validate product ID
-    if (!['storylab', 'flairlab'].includes(productId)) {
+    if (!['storylab', 'gamelab'].includes(productId)) {
       return res.status(400).json({
         error: 'Invalid product identifier',
         message: `Product '${productId}' is not recognized`,
-        validProducts: ['storylab', 'flairlab'],
+        validProducts: ['storylab', 'gamelab'],
         receivedBaseUrl: req.baseUrl,
         receivedPath: req.path,
       });

@@ -20,7 +20,7 @@ if (result.error) {
 
 // Debug: Check if database vars are loaded
 console.log(`DEBUG: STORYLAB_DATABASE_ID = ${process.env.STORYLAB_DATABASE_ID}`);
-console.log(`DEBUG: FLAIRLAB_DATABASE_ID = ${process.env.FLAIRLAB_DATABASE_ID}`);
+console.log(`DEBUG: GAMELAB_DATABASE_ID = ${process.env.GAMELAB_DATABASE_ID}`);
 
 // Validate critical environment variables
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
@@ -29,15 +29,15 @@ if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_SERVICE_A
   process.exit(1);
 }
 
-if (!process.env.STORYLAB_DATABASE_ID || !process.env.FLAIRLAB_DATABASE_ID) {
+if (!process.env.STORYLAB_DATABASE_ID || !process.env.GAMELAB_DATABASE_ID) {
   console.error('❌ Database environment variables are required:');
   console.error('   - STORYLAB_DATABASE_ID');
-  console.error('   - FLAIRLAB_DATABASE_ID');
+  console.error('   - GAMELAB_DATABASE_ID');
   process.exit(1);
 }
 
 console.log(`✓ StoryLab Database: ${process.env.STORYLAB_DATABASE_ID}`);
-console.log(`✓ FlairLab Database: ${process.env.FLAIRLAB_DATABASE_ID}`);
+console.log(`✓ GameLab Database: ${process.env.GAMELAB_DATABASE_ID}`);
 
 // --- Now safe to import other modules ---
 import express from 'express';
@@ -54,7 +54,7 @@ import { productContext, legacyStoryLabContext } from './api/core/middleware/pro
 
 // Product-specific route modules
 import storylabRoutes from './api/products/storylab/routes/index.js';
-import flairlabRoutes from './api/products/flairlab/routes/index.js';
+import gamelabRoutes from './api/products/gamelab/routes/index.js';
 
 // Individual StoryLab routers for legacy routes (direct mounting)
 import projectsRouter from './api/products/storylab/routes/projects.js';
@@ -186,8 +186,8 @@ app.use('/api/adaptors', adaptorsRouter);
 // StoryLab routes (with product context middleware)
 app.use('/api/storylab', productContext, storylabRoutes);
 
-// FlairLab routes (with product context middleware)
-app.use('/api/flairlab', productContext, flairlabRoutes);
+// GameLab routes (with product context middleware)
+app.use('/api/gamelab', productContext, gamelabRoutes);
 
 // ===== Legacy Routes (Backward Compatibility) =====
 // Map legacy routes to StoryLab for existing clients

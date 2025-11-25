@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import { Beaker, Zap, ArrowRight, LogOut, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { Beaker, Activity, ArrowRight, LogOut, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 
 export const ProductSelectionPage = () => {
@@ -12,8 +12,8 @@ export const ProductSelectionPage = () => {
     navigate('/storylab');
   };
 
-  const handleNavigateToFlairLab = () => {
-    navigate('/flairlab');
+  const handleNavigateToGameLab = () => {
+    navigate('/gamelab');
   };
 
   const handleLogout = async () => {
@@ -135,18 +135,18 @@ export const ProductSelectionPage = () => {
               </CardContent>
             </Card>
 
-            {/* FlairLab Card */}
-            <Card className="bg-gradient-to-br from-slate-900/80 to-orange-950/40 border-slate-800/50 hover:border-orange-600/50 transition-all duration-300 group hover:shadow-2xl hover:shadow-orange-600/10 hover:-translate-y-1">
+            {/* GameLab Card */}
+            <Card className="bg-gradient-to-br from-slate-900/80 to-emerald-950/40 border-slate-800/50 hover:border-emerald-600/50 transition-all duration-300 group hover:shadow-2xl hover:shadow-emerald-600/10 hover:-translate-y-1">
               <CardHeader className="space-y-6">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-600 to-red-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Zap className="w-8 h-8 text-white" />
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-lime-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Activity className="w-8 h-8 text-white" />
                 </div>
 
                 {/* Title */}
                 <div className="space-y-2">
-                  <CardTitle className="text-3xl font-bold text-white group-hover:text-orange-400 transition-colors">
-                    FlairLab
+                  <CardTitle className="text-3xl font-bold text-white group-hover:text-emerald-400 transition-colors">
+                    GameLab
                   </CardTitle>
                   <CardDescription className="text-slate-400 text-base leading-relaxed">
                     Transform static sports media assets into cinematic broadcast-ready content. Generate rights-cleared, context-aware B-roll from standard headshots with deep technical integrations.
@@ -156,19 +156,19 @@ export const ProductSelectionPage = () => {
                 {/* Features */}
                 <ul className="space-y-3 text-sm">
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Context-Aware B-Roll Generation</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Alpha Channel Support (ProRes 4444)</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Rights-Cleared Clean Data Model</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Broadcast pipeline integration</span>
                   </li>
                 </ul>
@@ -176,11 +176,11 @@ export const ProductSelectionPage = () => {
 
               <CardContent>
                 <Button
-                  onClick={handleNavigateToFlairLab}
-                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-6 rounded-xl group-hover:shadow-lg group-hover:shadow-orange-600/20 transition-all"
+                  onClick={handleNavigateToGameLab}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-lime-400 hover:from-emerald-700 hover:to-lime-500 text-white font-semibold py-6 rounded-xl group-hover:shadow-lg group-hover:shadow-emerald-600/20 transition-all"
                   size="lg"
                 >
-                  Open FlairLab
+                  Open GameLab
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </CardContent>
