@@ -233,7 +233,7 @@ Generate a single, high-quality image that broadcasters would proudly use.`,
       ],
       modelConfig: {
         adaptorId: 'gemini',
-        modelId: 'imagen-3.0-generate-001',
+        modelId: 'gemini-2.5-flash-image',
       },
       isActive: true,
     },
