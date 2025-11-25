@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import GameLabProjectService from '@/shared/services/flairLabProjectService';
+import GameLabProjectService from '@/shared/services/gameLabProjectService';
 import {
   GameLabProject,
   CreateProjectInput,

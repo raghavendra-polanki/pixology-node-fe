@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
-import GameLabProjectService from '@/shared/services/flairLabProjectService';
+import GameLabProjectService from '@/shared/services/gameLabProjectService';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { WorkflowView } from '../components/WorkflowView';
 import type { GameLabProject } from '../types/project.types';
 
-const flairLabProjectService = new GameLabProjectService();
+const gameLabProjectService = new GameLabProjectService();
 
 export const GameLabPage = () => {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
@@ -32,7 +32,7 @@ export const GameLabPage = () => {
       setIsLoading(true);
       setError(null);
 
-      const response = await flairLabProjectService.getProjects();
+      const response = await gameLabProjectService.getProjects();
       setProjects(response.projects);
     } catch (err) {
       console.error('Error fetching projects:', err);
@@ -73,7 +73,7 @@ export const GameLabPage = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       setError(null);
-      await flairLabProjectService.deleteProject(projectId);
+      await gameLabProjectService.deleteProject(projectId);
 
       // Remove project from local state
       setProjects(projects.filter((p) => p.id !== projectId));
