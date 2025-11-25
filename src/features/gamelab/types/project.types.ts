@@ -65,11 +65,14 @@ export interface Team {
 export type ContextPill = 'Playoff Intensity' | 'Rivalry' | 'Holiday' | 'Buzzer Beater';
 export type CampaignGoal = 'Social Hype' | 'Broadcast B-Roll' | 'Stadium Ribbon';
 
-// Stage 2: Concept Gallery
+// Stage 2: Concept Gallery (Themes)
 export interface ConceptGallery {
   selectedStyle?: StyleCard;
   availableStyles: StyleCard[];
   selectedAt?: Date;
+
+  // AI-generated themes
+  aiGeneratedThemes?: AIGeneratedThemes;
 }
 
 // Type alias for service compatibility
@@ -81,6 +84,34 @@ export interface StyleCard {
   description: string;
   thumbnailUrl?: string;
   tags: string[];
+}
+
+// AI-Generated Themes Structure
+export interface AIGeneratedThemes {
+  themes: Theme[];
+  generatedAt: Date;
+  model?: string;
+  count: number;
+}
+
+export interface Theme {
+  id: string;
+  title: string;
+  description: string;
+  imagePrompt?: string; // The prompt used for image generation
+  image?: {
+    url: string;
+    metadata?: any;
+  };
+  tags?: string[];
+  // Metadata from Stage 1 context
+  contextMetadata?: {
+    sportType?: string;
+    homeTeam?: string;
+    awayTeam?: string;
+    contextPills?: string[];
+    campaignGoal?: string;
+  };
 }
 
 // Stage 3: Casting Call
