@@ -164,7 +164,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
             </div>
             <div>
               <h1 className="text-lg font-bold">
-                <span className="text-white">Flair</span>
+                <span className="text-white">Game</span>
                 <span className="text-green-500">Lab</span>
               </h1>
               <p className="text-xs text-gray-500">by pixology.ai</p>
@@ -203,7 +203,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                   w-full text-left px-4 py-3 rounded-lg transition-all
                   ${isActive ? 'bg-green-500' : 'hover:bg-gray-800/50'}
                   ${isCompleted && !isActive && !isStale ? 'bg-gray-800/30' : ''}
-                  ${isStale ? 'bg-orange-900/20 border border-green-500/30' : ''}
+                  ${isStale ? 'bg-orange-900/20 border border-orange-500/30' : ''}
                   ${!isAccessible ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
               >
@@ -213,7 +213,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                       w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm
                       ${isActive ? 'bg-white text-green-500' : ''}
                       ${isCompleted && !isActive && !isStale ? 'bg-green-500/20 text-green-400' : ''}
-                      ${isStale ? 'bg-green-500/20 text-green-500' : ''}
+                      ${isStale ? 'bg-orange-500/20 text-orange-500' : ''}
                       ${!isActive && !isCompleted && !isStale ? 'bg-gray-700 text-gray-300' : ''}
                     `}
                   >
@@ -233,7 +233,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                       <div className="text-xs text-green-500 mt-0.5">Completed</div>
                     )}
                     {isStale && (
-                      <div className="text-xs text-green-500 mt-0.5">Needs Regeneration</div>
+                      <div className="text-xs text-orange-500 mt-0.5">Needs Regeneration</div>
                     )}
                   </div>
                 </div>
