@@ -42,12 +42,13 @@ try {
 }
 
 const db = admin.firestore();
-db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2' });
+const gamelabDatabaseId = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
+db.settings({ databaseId: gamelabDatabaseId });
 
 async function seedGameLabPrompts() {
   try {
     console.log('🎮 Starting GameLab prompt template seeding...\n');
-    console.log(`Database: ${process.env.FIRESTORE_DATABASE_ID || 'pixology-v2'}`);
+    console.log(`Database: ${gamelabDatabaseId}`);
     console.log('This will create/update GameLab prompt templates');
     console.log(`Total templates to process: ${GAMELAB_PROMPT_TEMPLATES.length}\n`);
 
