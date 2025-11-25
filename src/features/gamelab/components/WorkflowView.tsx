@@ -182,10 +182,10 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           </Button>
 
           {/* Sport Type Badge */}
-          {project?.sportType && (
+          {project && (
             <div className="mb-3">
               <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                {project.sportType}
+                {project.sportType || 'Hockey'}
               </span>
             </div>
           )}
