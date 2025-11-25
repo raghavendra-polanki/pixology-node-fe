@@ -9,20 +9,10 @@
  */
 
 import express from 'express';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import AIAdaptorResolver from '../../../core/services/AIAdaptorResolver.js';
 import ThemeStreamingService from '../services/ThemeStreamingService.cjs';
 
 const router = express.Router();
-
-// Initialize Firestore (if not already initialized)
-let db;
-try {
-  db = getFirestore();
-} catch (error) {
-  console.error('[GameLab Generation Routes] Firestore initialization error:', error);
-}
 
 /**
  * POST /api/gamelab/generation/themes-stream
@@ -45,12 +35,20 @@ router.post('/themes-stream', async (req, res) => {
   const { projectId, sportType, homeTeam, awayTeam, contextPills, campaignGoal, numberOfThemes = 6 } = req.body;
 
   try {
+    // Get GameLab database from middleware
+    const db = req.db;
+    if (!db) {
+      console.error('[GameLab Theme Generation] Database not found in request');
+      return res.status(500).json({ error: 'Database configuration error' });
+    }
+
     // Validate required fields
     if (!projectId) {
       return res.status(400).json({ error: 'Project ID is required' });
     }
 
     console.log('[GameLab Theme Generation] Starting theme generation for project:', projectId);
+    console.log('[GameLab Theme Generation] Using database:', db._settings?.databaseId || 'default');
     console.log('[GameLab Theme Generation] Input:', {
       sportType,
       homeTeam,
