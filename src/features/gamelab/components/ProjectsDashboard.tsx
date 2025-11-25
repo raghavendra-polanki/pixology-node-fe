@@ -72,12 +72,12 @@ export const ProjectsDashboard = ({
         <div className="mb-12 flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-600 to-lime-400 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">
-                  Game<span className="text-emerald-400">Lab</span>
+                  Game<span className="text-green-400">Lab</span>
                 </h1>
                 <p className="text-xs text-gray-500">by pixology.ai</p>
               </div>
@@ -103,7 +103,7 @@ export const ProjectsDashboard = ({
         <Button
           onClick={handleCreateNew}
           disabled={isLoading}
-          className="mb-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+          className="mb-8 bg-green-500 hover:bg-green-600 text-white rounded-xl"
           size="lg"
         >
           <Plus className="w-5 h-5 mr-2" />
@@ -114,7 +114,7 @@ export const ProjectsDashboard = ({
         {isLoading && projects.length === 0 ? (
           <div className="flex justify-center py-16">
             <div className="animate-spin">
-              <div className="h-12 w-12 border-4 border-emerald-600 border-t-transparent rounded-full"></div>
+              <div className="h-12 w-12 border-4 border-green-500 border-t-transparent rounded-full"></div>
             </div>
           </div>
         ) : projects.length === 0 ? (
@@ -126,7 +126,7 @@ export const ProjectsDashboard = ({
             </p>
             <Button
               onClick={handleCreateNew}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl"
+              className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
             >
               <Plus className="w-5 h-5 mr-2" />
               Create Project
@@ -145,7 +145,7 @@ export const ProjectsDashboard = ({
                   {/* Project Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <h3 className="text-white mb-2 group-hover:text-emerald-400 transition-colors">
+                      <h3 className="text-white mb-2 group-hover:text-green-400 transition-colors">
                         {project.name}
                       </h3>
                       <p className="text-gray-500">
@@ -185,7 +185,7 @@ export const ProjectsDashboard = ({
                       project.status === 'complete'
                         ? 'bg-green-500/10 text-green-500 border-green-500/20'
                         : project.status === 'generating'
-                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                        ? 'bg-green-500/10 text-green-500 border-green-500/20'
                         : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
                     }`}>
                       <Clock className="w-4 h-4" />
@@ -201,7 +201,7 @@ export const ProjectsDashboard = ({
                     </div>
                     <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-emerald-600 to-lime-400 rounded-full transition-all"
+                        className="h-full bg-green-500 rounded-full transition-all"
                         style={{ width: `${Math.round(((project.currentStageIndex || 0) + 1) / 6 * 100)}%` }}
                       />
                     </div>

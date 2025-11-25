@@ -99,7 +99,7 @@ export const GameLabPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin mb-4 inline-block">
-            <div className="h-12 w-12 border-4 border-emerald-600 border-t-transparent rounded-full"></div>
+            <div className="h-12 w-12 border-4 border-green-500 border-t-transparent rounded-full"></div>
           </div>
           <p className="text-gray-400">Loading...</p>
         </div>

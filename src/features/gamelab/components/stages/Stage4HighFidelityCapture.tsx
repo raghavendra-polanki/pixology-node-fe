@@ -79,8 +79,8 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
-            <Camera className="w-6 h-6 text-emerald-500" />
+          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+            <Camera className="w-6 h-6 text-green-500" />
           </div>
           <div>
             <h2 className="text-white">Create Images</h2>
@@ -92,7 +92,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
       {/* Generate Button */}
       <div className="mb-8">
         <Button
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           <Sparkles className="w-5 h-5 mr-2" />
@@ -108,7 +108,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
             onClick={() => setSelectedImage(image)}
             className={`rounded-xl border-2 overflow-hidden transition-all text-left bg-[#151515] ${
               selectedImage?.id === image.id
-                ? 'border-emerald-500 ring-2 ring-emerald-500'
+                ? 'border-green-500 ring-2 ring-green-500'
                 : 'border-gray-800 hover:border-gray-700'
             }`}
           >
@@ -132,7 +132,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                   className="absolute inset-0 w-full h-full object-cover"
                 />
               ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/20 to-red-500/20 flex items-center justify-center">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-red-500/20 flex items-center justify-center">
                   <div className="text-center text-white">
                     <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p className="text-sm opacity-50">Generated Image {image.id}</p>
@@ -141,7 +141,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
               )}
 
               {selectedImage?.id === image.id && (
-                <div className="absolute top-3 right-3 w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg z-10">
+                <div className="absolute top-3 right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
                   <Check className="w-5 h-5 text-white" />
                 </div>
               )}
@@ -165,7 +165,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
         <Button
           onClick={handleContinue}
           disabled={!selectedImage || isSaving}
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Animate'}

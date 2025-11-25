@@ -123,8 +123,8 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
-            <UsersIcon className="w-6 h-6 text-emerald-500" />
+          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+            <UsersIcon className="w-6 h-6 text-green-500" />
           </div>
           <div>
             <h2 className="text-white">Suggest Players</h2>
@@ -143,18 +143,18 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
               onClick={() => togglePlayer(player)}
               className={`group relative rounded-xl border-2 transition-all text-left overflow-hidden bg-[#151515] ${
                 isSelected
-                  ? 'border-emerald-500 ring-2 ring-emerald-500'
+                  ? 'border-green-500 ring-2 ring-green-500'
                   : 'border-gray-800 hover:border-gray-700'
               }`}
             >
               {/* Background gradient fill for selected */}
               {isSelected && (
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 to-lime-400/10" />
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-lime-400/10" />
               )}
 
               {/* Check mark for selected */}
               {isSelected && (
-                <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg">
+                <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
                   <Check className="w-5 h-5 text-white" />
                 </div>
               )}
@@ -166,17 +166,17 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
                       <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
                     </div>
                   ) : (
-                    <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
                       <span className="text-xl font-bold text-white">#{player.number}</span>
                     </div>
                   )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-white">{player.name}</h3>
-                      {player.isHighlighted && <Flame className="w-4 h-4 text-emerald-500" />}
+                      {player.isHighlighted && <Flame className="w-4 h-4 text-green-500" />}
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 bg-emerald-600/20 text-lime-400 rounded">#{player.number}</span>
+                      <span className="text-xs px-2 py-0.5 bg-green-500/20 text-lime-400 rounded">#{player.number}</span>
                       <span className="text-gray-400">{player.position}</span>
                     </div>
                     <div className="text-sm text-gray-500">
@@ -195,7 +195,7 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
         <Button
           onClick={handleContinue}
           disabled={selectedPlayers.length === 0 || isSaving}
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Images'}

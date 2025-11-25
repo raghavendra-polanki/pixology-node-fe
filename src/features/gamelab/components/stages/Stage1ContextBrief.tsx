@@ -139,8 +139,8 @@ export const Stage1ContextBrief = ({
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600/20 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-emerald-500" />
+          <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-green-500" />
           </div>
           <div>
             <h2 className="text-lg text-white">Setup Project</h2>
@@ -158,7 +158,7 @@ export const Stage1ContextBrief = ({
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
           placeholder="Enter project name (e.g., Avalanche vs Lightning Hype)"
-          className="bg-[#151515] border-gray-800 text-white placeholder:text-gray-500 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/50"
+          className="bg-[#151515] border-gray-800 text-white placeholder:text-gray-500 focus-visible:border-green-500 focus-visible:ring-green-500/50"
         />
       </div>
 
@@ -180,7 +180,7 @@ export const Stage1ContextBrief = ({
                   disabled={isDisabled}
                   className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
                     homeTeam === team.id
-                      ? 'border-emerald-500 ring-2 ring-emerald-500'
+                      ? 'border-green-500 ring-2 ring-green-500'
                       : isDisabled
                       ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
                       : 'border-gray-800 bg-[#151515] hover:border-gray-700'
@@ -211,7 +211,7 @@ export const Stage1ContextBrief = ({
                   disabled={isDisabled}
                   className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
                     awayTeam === team.id
-                      ? 'border-emerald-500 ring-2 ring-emerald-500'
+                      ? 'border-green-500 ring-2 ring-green-500'
                       : isDisabled
                       ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
                       : 'border-gray-800 bg-[#151515] hover:border-gray-700'
@@ -233,7 +233,7 @@ export const Stage1ContextBrief = ({
 
         {/* Match-up Preview Card */}
         <div className="mt-4 p-5 rounded-xl border-2 border-slate-700 bg-slate-900/50">
-          <div className="text-xs font-semibold text-emerald-500 uppercase tracking-wide mb-3">Match-up Preview</div>
+          <div className="text-xs font-semibold text-green-500 uppercase tracking-wide mb-3">Match-up Preview</div>
           <div className="flex items-center justify-center gap-12">
             {/* Home Team */}
             <div className="flex-1 flex flex-col items-center">
@@ -251,7 +251,7 @@ export const Stage1ContextBrief = ({
             </div>
 
             {/* VS */}
-            <div className="text-2xl font-bold text-emerald-500">VS</div>
+            <div className="text-2xl font-bold text-green-500">VS</div>
 
             {/* Away Team */}
             <div className="flex-1 flex flex-col items-center">
@@ -281,7 +281,7 @@ export const Stage1ContextBrief = ({
               onClick={() => togglePill(pill)}
               className={`px-4 py-2 text-sm rounded-lg border transition-all ${
                 contextPills.includes(pill)
-                  ? 'border-emerald-600 bg-orange-950/30 text-white'
+                  ? 'border-green-500 bg-orange-950/30 text-white'
                   : 'border-slate-800 bg-slate-900/30 text-slate-400 hover:border-slate-700'
               }`}
             >
@@ -301,7 +301,7 @@ export const Stage1ContextBrief = ({
               onClick={() => setCampaignGoal(goal)}
               className={`p-3 rounded-lg border-2 transition-all text-center ${
                 campaignGoal === goal
-                  ? 'border-emerald-600 bg-orange-950/30'
+                  ? 'border-green-500 bg-orange-950/30'
                   : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
               }`}
             >
@@ -316,7 +316,7 @@ export const Stage1ContextBrief = ({
         <Button
           onClick={handleContinue}
           disabled={!projectName.trim() || isSaving}
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Themes'}

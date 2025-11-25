@@ -136,16 +136,16 @@ export const ProductSelectionPage = () => {
             </Card>
 
             {/* GameLab Card */}
-            <Card className="bg-gradient-to-br from-slate-900/80 to-emerald-950/40 border-slate-800/50 hover:border-emerald-600/50 transition-all duration-300 group hover:shadow-2xl hover:shadow-emerald-600/10 hover:-translate-y-1">
+            <Card className="bg-gradient-to-br from-slate-900/80 to-green-950/40 border-slate-800/50 hover:border-green-500/50 transition-all duration-300 group hover:shadow-2xl hover:shadow-green-500/10 hover:-translate-y-1">
               <CardHeader className="space-y-6">
                 {/* Icon */}
-                <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-lime-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Activity className="w-8 h-8 text-white" />
                 </div>
 
                 {/* Title */}
                 <div className="space-y-2">
-                  <CardTitle className="text-3xl font-bold text-white group-hover:text-emerald-400 transition-colors">
+                  <CardTitle className="text-3xl font-bold text-white group-hover:text-green-400 transition-colors">
                     GameLab
                   </CardTitle>
                   <CardDescription className="text-slate-400 text-base leading-relaxed">
@@ -156,19 +156,19 @@ export const ProductSelectionPage = () => {
                 {/* Features */}
                 <ul className="space-y-3 text-sm">
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Context-Aware B-Roll Generation</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Alpha Channel Support (ProRes 4444)</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Rights-Cleared Clean Data Model</span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
                     <span className="text-slate-300">Broadcast pipeline integration</span>
                   </li>
                 </ul>
@@ -177,7 +177,7 @@ export const ProductSelectionPage = () => {
               <CardContent>
                 <Button
                   onClick={handleNavigateToGameLab}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-lime-400 hover:from-emerald-700 hover:to-lime-500 text-white font-semibold py-6 rounded-xl group-hover:shadow-lg group-hover:shadow-emerald-600/20 transition-all"
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-6 rounded-xl group-hover:shadow-lg group-hover:shadow-green-500/20 transition-all"
                   size="lg"
                 >
                   Open GameLab

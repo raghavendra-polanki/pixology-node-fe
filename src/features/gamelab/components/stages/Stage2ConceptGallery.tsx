@@ -22,7 +22,7 @@ const CONCEPTS: ConceptWithGradient[] = [
     name: 'Gladiator Arena',
     description: 'Epic warrior theme with dramatic lighting and battle-ready intensity',
     tags: ['intense', 'dramatic', 'cinematic'],
-    gradient: 'from-emerald-600 via-red-500 to-emerald-500',
+    gradient: 'from-green-500 via-red-500 to-green-500',
     previewImage: 'https://images.unsplash.com/photo-1516450137517-162bfbeb8dba?w=600&h=400&fit=crop'
   },
   {
@@ -46,7 +46,7 @@ const CONCEPTS: ConceptWithGradient[] = [
     name: 'Fire & Ice',
     description: 'Contrasting elements with bold color dynamics',
     tags: ['dynamic', 'bold', 'elemental'],
-    gradient: 'from-emerald-600 via-emerald-500 to-yellow-500',
+    gradient: 'from-green-500 via-green-500 to-yellow-500',
     previewImage: 'https://images.unsplash.com/photo-1516339901601-2e1b62dc0c45?w=600&h=400&fit=crop'
   },
   {
@@ -54,7 +54,7 @@ const CONCEPTS: ConceptWithGradient[] = [
     name: 'Championship Gold',
     description: 'Premium metallic finish with luxury appeal',
     tags: ['luxurious', 'professional', 'elite'],
-    gradient: 'from-yellow-600 via-amber-500 to-emerald-500',
+    gradient: 'from-yellow-600 via-amber-500 to-green-500',
     previewImage: 'https://images.unsplash.com/photo-1563291074-2bf8677ac0e5?w=600&h=400&fit=crop'
   },
   {
@@ -105,8 +105,8 @@ export const Stage2ConceptGallery = ({ project, markStageCompleted, navigateToSt
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 flex items-center justify-center">
-            <Palette className="w-6 h-6 text-emerald-500" />
+          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+            <Palette className="w-6 h-6 text-green-500" />
           </div>
           <div>
             <h2 className="text-white">Generate Themes</h2>
@@ -118,7 +118,7 @@ export const Stage2ConceptGallery = ({ project, markStageCompleted, navigateToSt
       {/* Generate Button */}
       <div className="mb-8">
         <Button
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           <Sparkles className="w-5 h-5 mr-2" />
@@ -136,8 +136,8 @@ export const Stage2ConceptGallery = ({ project, markStageCompleted, navigateToSt
               onClick={() => setSelectedConcept(concept)}
               className={`group rounded-xl border-2 transition-all text-left overflow-hidden relative ${
                 selectedConcept?.id === concept.id
-                  ? 'border-emerald-500 ring-4 ring-emerald-500/20'
-                  : 'border-gray-700 hover:border-emerald-500/50'
+                  ? 'border-green-500 ring-4 ring-green-500/20'
+                  : 'border-gray-700 hover:border-green-500/50'
               }`}
             >
               {/* Image/Gradient top section */}
@@ -154,7 +154,7 @@ export const Stage2ConceptGallery = ({ project, markStageCompleted, navigateToSt
 
                 {/* Check mark for selected */}
                 {selectedConcept?.id === concept.id && (
-                  <div className="absolute top-4 right-4 w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg z-10">
+                  <div className="absolute top-4 right-4 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
                     <Check className="w-5 h-5 text-white" />
                   </div>
                 )}
@@ -182,7 +182,7 @@ export const Stage2ConceptGallery = ({ project, markStageCompleted, navigateToSt
         <Button
           onClick={handleContinue}
           disabled={!selectedConcept || isSaving}
-          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl"
+          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
           size="lg"
         >
           {isSaving ? 'Saving...' : 'Continue to Players'}
