@@ -1,40 +1,86 @@
 import { useState } from 'react';
-import { CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
+import { ArrowRight, Flame, Users as UsersIcon, Check } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Flame, Sparkles } from 'lucide-react';
-import type { Project, Player } from '../../types';
+import type { FlairLabProject, Player, CreateProjectInput } from '../../types/project.types';
 
 interface Stage3Props {
-  project: Project;
-  onNext: () => void;
-  onPrevious: () => void;
-  onUpdateProject: (project: Project) => void;
+  project: FlairLabProject;
+  navigateToStage: (stage: number) => void;
+  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
 }
 
-const MOCK_PLAYERS: Player[] = [
-  { id: '1', name: 'John Smith', number: '23', position: 'Forward', teamId: 'home', performanceScore: 95, socialSentiment: 88, isHighlighted: true },
-  { id: '2', name: 'Mike Johnson', number: '7', position: 'Guard', teamId: 'home', performanceScore: 82, socialSentiment: 76 },
-  { id: '3', name: 'Chris Davis', number: '12', position: 'Center', teamId: 'home', performanceScore: 78, socialSentiment: 71 },
-  { id: '4', name: 'Tom Wilson', number: '34', position: 'Forward', teamId: 'away', performanceScore: 91, socialSentiment: 85, isHighlighted: true },
-  { id: '5', name: 'Dave Brown', number: '10', position: 'Guard', teamId: 'away', performanceScore: 75, socialSentiment: 69 },
+const PLAYERS: Player[] = [
+  {
+    id: '1',
+    name: 'Connor McDavid',
+    number: '97',
+    position: 'Center',
+    teamId: 'home',
+    performanceScore: 95,
+    socialSentiment: 88,
+    isHighlighted: true,
+    photoUrl: 'https://images.unsplash.com/photo-1546525848-3ce03ca516f6?w=200&h=200&fit=crop'
+  },
+  {
+    id: '2',
+    name: 'Nathan MacKinnon',
+    number: '29',
+    position: 'Center',
+    teamId: 'home',
+    performanceScore: 92,
+    socialSentiment: 85,
+    isHighlighted: true,
+    photoUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&h=200&fit=crop'
+  },
+  {
+    id: '3',
+    name: 'Cale Makar',
+    number: '8',
+    position: 'Defense',
+    teamId: 'home',
+    performanceScore: 88,
+    socialSentiment: 82,
+    isHighlighted: true,
+    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop'
+  },
+  {
+    id: '4',
+    name: 'Mikko Rantanen',
+    number: '96',
+    position: 'Right Wing',
+    teamId: 'home',
+    performanceScore: 86,
+    socialSentiment: 79,
+    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop'
+  },
+  {
+    id: '5',
+    name: 'Gabriel Landeskog',
+    number: '92',
+    position: 'Left Wing',
+    teamId: 'home',
+    performanceScore: 84,
+    socialSentiment: 77,
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop'
+  },
+  {
+    id: '6',
+    name: 'Devon Toews',
+    number: '7',
+    position: 'Defense',
+    teamId: 'home',
+    performanceScore: 82,
+    socialSentiment: 74,
+    photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&h=200&fit=crop'
+  },
 ];
 
-export const Stage3CastingCall = ({ project, onNext, onPrevious, onUpdateProject }: Stage3Props) => {
-  const [availablePlayers, setAvailablePlayers] = useState<Player[]>(
-    project.data.castingCall?.availablePlayers || []
-  );
-  const [selectedPlayers, setSelectedPlayers] = useState<Player[]>(
-    project.data.castingCall?.selectedPlayers || []
-  );
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleGenerate = () => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      setAvailablePlayers(MOCK_PLAYERS);
-      setIsGenerating(false);
-    }, 1500);
-  };
+export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage }: Stage3Props) => {
+  const [players] = useState<Player[]>(PLAYERS); // Pre-populated
+  const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([PLAYERS[0], PLAYERS[1]]); // Pre-select 2
+  const [isSaving, setIsSaving] = useState(false);
 
   const togglePlayer = (player: Player) => {
     setSelectedPlayers(prev =>
@@ -44,122 +90,118 @@ export const Stage3CastingCall = ({ project, onNext, onPrevious, onUpdateProject
     );
   };
 
-  const handleSave = () => {
-    onUpdateProject({
-      ...project,
-      data: {
-        ...project.data,
-        castingCall: {
-          selectedPlayers,
-          availablePlayers,
-        },
-      },
-    });
-    onNext();
+  const handleContinue = async () => {
+    if (selectedPlayers.length === 0) return;
+
+    try {
+      setIsSaving(true);
+
+      const castingCallData = {
+        selectedPlayers,
+        availablePlayers: players,
+        selectedAt: new Date(),
+      };
+
+      // Mark stage as completed with casting call data
+      await markStageCompleted('casting-call', undefined, {
+        castingCall: castingCallData,
+      });
+      // Navigate to next stage (Stage 4 - High-Fidelity Capture)
+      if (navigateToStage) {
+        navigateToStage(4);
+      }
+    } catch (error) {
+      console.error('[Stage3] Failed to save casting call:', error);
+      alert('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <>
-      <CardHeader className="border-b border-slate-800/50">
-        <CardTitle className="text-2xl text-white">Stage 3: Casting Call</CardTitle>
-        <CardDescription className="text-slate-400">
-          Identify the best players for the clip
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="p-8 space-y-8">
-        {/* Top Action Area */}
-        <div className="bg-gradient-to-r from-orange-950/30 to-red-950/30 border border-orange-900/50 rounded-xl p-6">
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-6 text-lg"
-            size="lg"
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            {isGenerating ? 'Analyzing...' : 'Generate Player Suggestions'}
-          </Button>
-          <p className="text-sm text-slate-400 mt-3 text-center">
-            Based on last 5 games performance & social sentiment
-          </p>
+    <div className="max-w-6xl mx-auto p-8 lg:p-12">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-orange-600/20 flex items-center justify-center">
+            <UsersIcon className="w-6 h-6 text-orange-500" />
+          </div>
+          <div>
+            <h2 className="text-white">Suggest Players</h2>
+            <p className="text-gray-400">Select the players to feature in the clip</p>
+          </div>
         </div>
+      </div>
 
-        {/* The Roster List */}
-        {availablePlayers.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Available Players</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {availablePlayers.map(player => (
-                <div
-                  key={player.id}
-                  onClick={() => togglePlayer(player)}
-                  className={`cursor-pointer p-4 rounded-lg border-2 transition-all ${
-                    selectedPlayers.some(p => p.id === player.id)
-                      ? 'border-orange-600 bg-orange-950/30'
-                      : 'border-slate-700 bg-slate-800/30 hover:border-orange-600/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{player.name}</span>
-                        {player.isHighlighted && <Flame className="w-4 h-4 text-orange-500" />}
-                      </div>
-                      <div className="text-sm text-slate-400">
-                        #{player.number} • {player.position}
-                      </div>
+      {/* Players Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {players.map((player) => {
+          const isSelected = selectedPlayers.some(p => p.id === player.id);
+          return (
+            <button
+              key={player.id}
+              onClick={() => togglePlayer(player)}
+              className={`group relative rounded-xl border-2 transition-all text-left overflow-hidden bg-[#151515] ${
+                isSelected
+                  ? 'border-orange-500 ring-2 ring-orange-500'
+                  : 'border-gray-800 hover:border-gray-700'
+              }`}
+            >
+              {/* Background gradient fill for selected */}
+              {isSelected && (
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-600/10 to-red-600/10" />
+              )}
+
+              {/* Check mark for selected */}
+              {isSelected && (
+                <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Check className="w-5 h-5 text-white" />
+                </div>
+              )}
+
+              <div className="relative p-5">
+                <div className="flex items-start gap-4">
+                  {player.photoUrl ? (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-800">
+                      <img src={player.photoUrl} alt={player.name} className="w-full h-full object-cover" />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-slate-400">Performance</div>
-                      <div className="text-white font-semibold">{player.performanceScore}%</div>
+                  ) : (
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-600 to-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl font-bold text-white">#{player.number}</span>
                     </div>
-                    <div>
-                      <div className="text-slate-400">Sentiment</div>
-                      <div className="text-white font-semibold">{player.socialSentiment}%</div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-white">{player.name}</h3>
+                      {player.isHighlighted && <Flame className="w-4 h-4 text-orange-500" />}
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs px-2 py-0.5 bg-orange-600/20 text-orange-400 rounded">#{player.number}</span>
+                      <span className="text-gray-400">{player.position}</span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {player.performanceScore && `${player.performanceScore}G, ${player.socialSentiment}A last 5 games`}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Selected Players */}
-        {selectedPlayers.length > 0 && (
-          <div className="bg-slate-800/30 rounded-lg p-6 border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Selected Players ({selectedPlayers.length})
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {selectedPlayers.map(player => (
-                <div
-                  key={player.id}
-                  className="px-3 py-2 bg-orange-950/30 border border-orange-600/50 rounded-lg text-white text-sm"
-                >
-                  {player.name} #{player.number}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Bottom Navigation */}
-        <div className="pt-6 border-t border-slate-800/50 flex justify-between">
-          <Button onClick={onPrevious} variant="outline" className="border-slate-700 text-white">
-            Previous
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={selectedPlayers.length === 0}
-            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-8"
-            size="lg"
-          >
-            Continue with Selected Players
-          </Button>
-        </div>
-      </CardContent>
-    </>
+      {/* Continue Button */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleContinue}
+          disabled={selectedPlayers.length === 0 || isSaving}
+          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          size="lg"
+        >
+          {isSaving ? 'Saving...' : 'Continue to Images'}
+          {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+        </Button>
+      </div>
+    </div>
   );
 };

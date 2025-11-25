@@ -1,50 +1,71 @@
+// --- CRITICAL: Load environment variables FIRST before any imports ---
+// ES6 imports are hoisted, so we need to load env vars before importing modules
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- Start of Environment Variable Loading ---
-// Load environment variables from a file based on NODE_ENV.
-// This is the backward-compatible method for older Node.js versions.
-// PM2 sets NODE_ENV from the --env flag (e.g., 'production').
+// Load environment variables from a file based on NODE_ENV
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local';
 const envPath = path.join(__dirname, envFile);
+const result = dotenv.config({ path: envPath });
 
-dotenv.config({ path: envPath });
+if (result.error) {
+  console.error(`❌ Error loading env file from ${envPath}:`, result.error.message);
+} else {
+  console.log(`✅ Loaded environment variables from: ${envPath}`);
+}
 
-console.log(`✅ Attempting to load environment variables from: ${envPath}`);
-// --- End of Environment Variable Loading ---
+// Debug: Check if database vars are loaded
+console.log(`DEBUG: STORYLAB_DATABASE_ID = ${process.env.STORYLAB_DATABASE_ID}`);
+console.log(`DEBUG: FLAIRLAB_DATABASE_ID = ${process.env.FLAIRLAB_DATABASE_ID}`);
 
-// --- Start of Firestore Credentials Configuration ---
-// GOOGLE_APPLICATION_CREDENTIALS environment variable MUST be set
-// This ensures the Firebase Admin SDK can authenticate correctly.
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS environment variable is not set');
-  console.error('   Set it in .env or your environment to point to the service account key file');
+// Validate critical environment variables
+if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  console.error('❌ GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_SERVICE_ACCOUNT_JSON must be set');
   console.error('   Example: GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKeyGoogle.json');
   process.exit(1);
-} else {
-  console.log(`✓ Using GOOGLE_APPLICATION_CREDENTIALS from environment: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
 }
-// --- End of Firestore Credentials Configuration ---
 
+if (!process.env.STORYLAB_DATABASE_ID || !process.env.FLAIRLAB_DATABASE_ID) {
+  console.error('❌ Database environment variables are required:');
+  console.error('   - STORYLAB_DATABASE_ID');
+  console.error('   - FLAIRLAB_DATABASE_ID');
+  process.exit(1);
+}
+
+console.log(`✓ StoryLab Database: ${process.env.STORYLAB_DATABASE_ID}`);
+console.log(`✓ FlairLab Database: ${process.env.FLAIRLAB_DATABASE_ID}`);
+
+// --- Now safe to import other modules ---
 import express from 'express';
 import compression from 'compression';
 import helmet from 'helmet';
+
+// Shared routes (product-agnostic)
 import authRouter from './api/auth.js';
 import allowlistRouter from './api/allowlist.js';
-import projectsRouter from './api/projects.js';
-import videosRouter from './api/videos.js';
-import storyboardRouter from './api/storyboard.js';
-
-// New AI Adaptor Architecture routes
 import adaptorsRouter from './api/adaptors.js';
-import promptsRouter from './api/prompts.js';
-import generationRouter from './api/generation.js';
-import realPersonasRouter from './api/realPersonas.js';
-import { initializeAdaptors } from './api/services/adaptors/index.js';
+
+// Product context middleware
+import { productContext, legacyStoryLabContext } from './api/core/middleware/productContext.js';
+
+// Product-specific route modules
+import storylabRoutes from './api/products/storylab/routes/index.js';
+import flairlabRoutes from './api/products/flairlab/routes/index.js';
+
+// Individual StoryLab routers for legacy routes (direct mounting)
+import projectsRouter from './api/products/storylab/routes/projects.js';
+import generationRouter from './api/products/storylab/routes/generation.js';
+import storyboardRouter from './api/products/storylab/routes/storyboard.js';
+import promptsRouter from './api/products/storylab/routes/prompts.js';
+import videosRouter from './api/products/storylab/routes/videos.js';
+import realPersonasRouter from './api/products/storylab/routes/realPersonas.js';
+
+// AI Adaptor initialization
+import { initializeAdaptors } from './api/core/adaptors/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -151,32 +172,33 @@ try {
   console.error('[Server] Continuing with server startup - generation endpoints may not work');
 }
 
+// ===== Shared Routes (Product-Agnostic) =====
 // Authentication API routes
 app.use('/api/auth', authRouter);
 
 // Allowlist management routes
 app.use('/api/allowlist', allowlistRouter);
 
-// Projects API routes
-app.use('/api/projects', projectsRouter);
-
-// Video generation API routes
-app.use('/api/videos', videosRouter);
-
-// Storyboard API routes
-app.use('/api/storyboard', storyboardRouter);
-
 // AI Adaptor management API routes
 app.use('/api/adaptors', adaptorsRouter);
 
-// Prompt template management API routes
-app.use('/api/prompts', promptsRouter);
+// ===== Product-Scoped Routes =====
+// StoryLab routes (with product context middleware)
+app.use('/api/storylab', productContext, storylabRoutes);
 
-// V2 Generation API routes (adaptor-aware generation)
-app.use('/api/generation', generationRouter);
+// FlairLab routes (with product context middleware)
+app.use('/api/flairlab', productContext, flairlabRoutes);
 
-// Real Personas API routes (global personas available across projects)
-app.use('/api/real-personas', realPersonasRouter);
+// ===== Legacy Routes (Backward Compatibility) =====
+// Map legacy routes to StoryLab for existing clients
+// These routes automatically use the StoryLab database
+// Mount individual routers directly to avoid double-pathing
+app.use('/api/projects', legacyStoryLabContext, projectsRouter);
+app.use('/api/generation', legacyStoryLabContext, generationRouter);
+app.use('/api/storyboard', legacyStoryLabContext, storyboardRouter);
+app.use('/api/prompts', legacyStoryLabContext, promptsRouter);
+app.use('/api/videos', legacyStoryLabContext, videosRouter);
+app.use('/api/real-personas', legacyStoryLabContext, realPersonasRouter);
 
 // SPA fallback - serve index.html for all non-static routes
 app.get('*', (req, res) => {

@@ -4,7 +4,7 @@ import {
   removeFromAllowlist,
   getAllowlist,
   bulkAddToAllowlist,
-} from './utils/firestoreUtils.js';
+} from './core/utils/firestoreUtils.js';
 
 const router = express.Router();
 

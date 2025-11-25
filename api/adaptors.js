@@ -4,9 +4,9 @@
  */
 
 import express from 'express';
-import { db } from './config/firestore.js';
-import AIAdaptorResolver from './services/AIAdaptorResolver.js';
-import { AdaptorRegistry } from './services/adaptors/index.js';
+import { db } from './core/config/firestore.js';
+import AIAdaptorResolver from './core/services/AIAdaptorResolver.js';
+import { AdaptorRegistry } from './core/adaptors/index.js';
 
 const router = express.Router();
 

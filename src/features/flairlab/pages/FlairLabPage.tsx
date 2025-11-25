@@ -1,33 +1,111 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/shared/contexts/AuthContext';
+import FlairLabProjectService from '@/shared/services/flairLabProjectService';
 import { ProjectsDashboard } from '../components/ProjectsDashboard';
 import { WorkflowView } from '../components/WorkflowView';
-import type { Project } from '../types';
+import type { FlairLabProject } from '../types/project.types';
+
+const flairLabProjectService = new FlairLabProjectService();
 
 export const FlairLabPage = () => {
+  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const [projects, setProjects] = useState<FlairLabProject[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'projects' | 'workflow'>('projects');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<FlairLabProject | null>(null);
 
-  const handleCreateProject = (project: Project) => {
-    setProjects([project, ...projects]);
+  // Fetch projects after authentication is verified
+  useEffect(() => {
+    // Only fetch projects after auth check is complete and user is authenticated
+    if (!authLoading && isAuthenticated) {
+      fetchProjects();
+    } else if (!authLoading && !isAuthenticated) {
+      // If auth check is complete but user is not authenticated, show error
+      setIsLoading(false);
+      setError('Please log in to view projects');
+    }
+  }, [authLoading, isAuthenticated]);
+
+  const fetchProjects = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await flairLabProjectService.getProjects();
+      setProjects(response.projects);
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load projects';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    // Create a temporary local project without saving to database yet
+    // It will be saved when the user completes Stage 1 and clicks "Continue"
+    const tempId = `temp-${Date.now()}`;
+    const newProject: FlairLabProject = {
+      id: tempId,
+      name: 'New Campaign',
+      title: 'New Campaign',
+      status: 'draft',
+      currentStageIndex: 0,
+      completionPercentage: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      userId: user?.uid || '',
+      stageExecutions: {},
+    };
+
+    setProjects([newProject, ...projects]);
+    setSelectedProject(newProject);
+    setCurrentView('workflow');
+  };
+
+  const handleSelectProject = (project: FlairLabProject) => {
     setSelectedProject(project);
     setCurrentView('workflow');
   };
 
-  const handleOpenProject = (project: Project) => {
-    setSelectedProject(project);
-    setCurrentView('workflow');
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      setError(null);
+      await flairLabProjectService.deleteProject(projectId);
+
+      // Remove project from local state
+      setProjects(projects.filter((p) => p.id !== projectId));
+    } catch (err) {
+      console.error('Error deleting project:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete project');
+    }
   };
 
   const handleBackToProjects = () => {
     setCurrentView('projects');
     setSelectedProject(null);
+    fetchProjects(); // Refresh projects
   };
 
-  const handleUpdateProject = (updatedProject: Project) => {
-    setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
-    setSelectedProject(updatedProject);
+  const handleLogout = async () => {
+    await logout();
+    // Router will handle redirect to login page
   };
+
+  if (isLoading && projects.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin mb-4 inline-block">
+            <div className="h-12 w-12 border-4 border-orange-600 border-t-transparent rounded-full"></div>
+          </div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900">
@@ -35,15 +113,19 @@ export const FlairLabPage = () => {
         <ProjectsDashboard
           projects={projects}
           onCreateProject={handleCreateProject}
-          onOpenProject={handleOpenProject}
+          onSelectProject={handleSelectProject}
+          onDeleteProject={handleDeleteProject}
+          onLogout={handleLogout}
+          isLoading={isLoading}
+          error={error}
+          onRetry={fetchProjects}
         />
-      ) : (
+      ) : selectedProject ? (
         <WorkflowView
-          project={selectedProject!}
+          projectId={selectedProject.id}
           onBack={handleBackToProjects}
-          onUpdateProject={handleUpdateProject}
         />
-      )}
+      ) : null}
     </div>
   );
 };

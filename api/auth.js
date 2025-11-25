@@ -1,6 +1,6 @@
 import express from 'express';
 import { OAuth2Client } from 'google-auth-library';
-import { saveUser, getUser, isUserAllowed } from './utils/firestoreUtils.js';
+import { saveUser, getUser, isUserAllowed } from './core/utils/firestoreUtils.js';
 
 const router = express.Router();
 

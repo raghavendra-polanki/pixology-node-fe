@@ -1,171 +1,328 @@
 import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Shield } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Card } from '@/shared/components/ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Badge } from '../ui/badge';
-import type { Project, ContextPill, CampaignGoal } from '../../types';
+import type { FlairLabProject, ContextPill, CampaignGoal, CreateProjectInput } from '../../types/project.types';
 
 interface Stage1Props {
-  project: Project;
-  onNext: () => void;
-  onPrevious: () => void;
-  onUpdateProject: (project: Project) => void;
+  project: FlairLabProject;
+  navigateToStage: (stage: number) => void;
+  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
+  updateContextBrief: (contextBrief: any, projectId?: string) => Promise<FlairLabProject | null>;
 }
 
-const CONTEXT_PILLS: ContextPill[] = ['Playoff Intensity', 'Rivalry', 'Holiday', 'Buzzer Beater'];
-const CAMPAIGN_GOALS: CampaignGoal[] = ['Social Hype', 'Broadcast B-Roll', 'Stadium Ribbon'];
+const TEAMS = [
+  {
+    id: 'colorado',
+    name: 'Colorado',
+    subtitle: 'Avalanche',
+    emoji: '🏔️',
+    color: 'from-blue-600 to-red-600',
+    logo: '/images/teams/colorado-avalanche.png'
+  },
+  {
+    id: 'tampa',
+    name: 'Tampa Bay',
+    subtitle: 'Lightning',
+    emoji: '⚡',
+    color: 'from-blue-500 to-blue-700',
+    logo: '/images/teams/tampa-bay-lightning.png'
+  },
+  {
+    id: 'boston',
+    name: 'Boston',
+    subtitle: 'Bruins',
+    emoji: '🐻',
+    color: 'from-yellow-600 to-black',
+    logo: '/images/teams/boston-bruins.png'
+  },
+  {
+    id: 'toronto',
+    name: 'Toronto',
+    subtitle: 'Maple Leafs',
+    emoji: '🍁',
+    color: 'from-blue-600 to-white',
+    logo: '/images/teams/toronto-maple-leafs.png'
+  },
+];
 
-export const Stage1ContextBrief = ({ project, onNext, onUpdateProject }: Stage1Props) => {
-  // Pre-populate with dummy data
-  const [homeTeam, setHomeTeam] = useState(
-    project.data.contextBrief?.homeTeam?.name || 'Los Angeles Lakers'
-  );
-  const [awayTeam, setAwayTeam] = useState(
-    project.data.contextBrief?.awayTeam?.name || 'Boston Celtics'
-  );
-  const [selectedPills, setSelectedPills] = useState<ContextPill[]>(
-    project.data.contextBrief?.contextPills || ['Rivalry', 'Playoff Intensity']
-  );
-  const [campaignGoal, setCampaignGoal] = useState<CampaignGoal>(
-    project.data.contextBrief?.campaignGoal || 'Broadcast B-Roll'
-  );
+const CONTEXT_PILLS = ['Playoff Intensity', 'Rivalry Game', 'Holiday Special', 'Buzzer Beater'];
+const CAMPAIGN_GOALS = [
+  'Social Media Hype',
+  'Broadcast B-Roll',
+  'Stadium Ribbon Display',
+  'Post-Game Highlights'
+];
 
-  const togglePill = (pill: ContextPill) => {
-    setSelectedPills(prev =>
+export const Stage1ContextBrief = ({
+  project,
+  navigateToStage,
+  createProject,
+  loadProject,
+  markStageCompleted
+}: Stage1Props) => {
+  const [projectName, setProjectName] = useState(project?.name || '');
+  const [homeTeam, setHomeTeam] = useState(TEAMS[0].id);
+  const [awayTeam, setAwayTeam] = useState(TEAMS[1].id);
+  const [contextPills, setContextPills] = useState<string[]>(['Playoff Intensity', 'Rivalry Game']);
+  const [campaignGoal, setCampaignGoal] = useState('Broadcast B-Roll');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const togglePill = (pill: string) => {
+    setContextPills(prev =>
       prev.includes(pill) ? prev.filter(p => p !== pill) : [...prev, pill]
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onUpdateProject({
-      ...project,
-      data: {
-        ...project.data,
-        contextBrief: {
-          homeTeam: { id: 'home', name: homeTeam },
-          awayTeam: { id: 'away', name: awayTeam },
-          contextPills: selectedPills,
-          campaignGoal,
+  const handleContinue = async () => {
+    try {
+      setIsSaving(true);
+
+      const contextBriefData = {
+        homeTeam: {
+          id: homeTeam,
+          name: TEAMS.find(t => t.id === homeTeam)?.name || '',
+          logoUrl: TEAMS.find(t => t.id === homeTeam)?.logo,
         },
-      },
-    });
-    onNext();
+        awayTeam: {
+          id: awayTeam,
+          name: TEAMS.find(t => t.id === awayTeam)?.name || '',
+          logoUrl: TEAMS.find(t => t.id === awayTeam)?.logo,
+        },
+        contextPills: contextPills as ContextPill[],
+        campaignGoal: campaignGoal as CampaignGoal,
+        updatedAt: new Date(),
+      };
+
+      // For NEW projects (id starts with "temp-" or project is null)
+      if (!project || project.id.startsWith('temp-')) {
+        console.log('[Stage1] Creating new project...');
+
+        // Create the project with context brief
+        const newProject = await createProject({
+          name: projectName || 'New Campaign',
+          description: '',
+          contextBrief: contextBriefData,
+        });
+
+        // After creating, reload the project and mark stage as completed
+        if (newProject) {
+          await loadProject(newProject.id);
+          // Mark stage as completed to set currentStageIndex to 1
+          // This will trigger WorkflowView to advance to stage 2
+          await markStageCompleted('context-brief');
+        }
+      } else {
+        // Update context brief and mark stage as completed in a single save
+        await markStageCompleted('context-brief', undefined, {
+          name: projectName || project.name,
+          contextBrief: contextBriefData,
+        });
+        // Navigate to next stage (Stage 2 - Concept Gallery)
+        if (navigateToStage) {
+          navigateToStage(2);
+        }
+      }
+    } catch (error) {
+      console.error('[Stage1] Failed to save context brief:', error);
+      alert('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-6">
+    <div className="max-w-6xl mx-auto p-6 lg:p-8">
       {/* Header */}
-      <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-white">Context Brief</h2>
-        <p className="text-slate-400">Define the match-up and atmospheric context for your video</p>
-      </div>
-
-      {/* Team Selection Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Home Team */}
-        <Card className="p-6 bg-slate-900/50 border-slate-800">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="homeTeam" className="text-white">Home Team</Label>
-              <Input
-                id="homeTeam"
-                value={homeTeam}
-                onChange={(e) => setHomeTeam(e.target.value)}
-                placeholder="Enter home team name"
-                className="bg-slate-800 border-slate-700 text-white"
-                required
-              />
-            </div>
-            <div className="aspect-square bg-gradient-to-br from-purple-600/20 to-yellow-600/20 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-700">
-              <div className="text-center text-slate-400">
-                <p className="text-sm">Team Logo</p>
-                <p className="text-xs mt-1">{homeTeam}</p>
-              </div>
-            </div>
+      <div className="mb-5">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-orange-600/20 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-orange-500" />
           </div>
-        </Card>
-
-        {/* Away Team */}
-        <Card className="p-6 bg-slate-900/50 border-slate-800">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="awayTeam" className="text-white">Away Team</Label>
-              <Input
-                id="awayTeam"
-                value={awayTeam}
-                onChange={(e) => setAwayTeam(e.target.value)}
-                placeholder="Enter away team name"
-                className="bg-slate-800 border-slate-700 text-white"
-                required
-              />
-            </div>
-            <div className="aspect-square bg-gradient-to-br from-green-600/20 to-white/10 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-700">
-              <div className="text-center text-slate-400">
-                <p className="text-sm">Team Logo</p>
-                <p className="text-xs mt-1">{awayTeam}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Context Pills */}
-      <Card className="p-6 bg-slate-900/50 border-slate-800">
-        <div className="space-y-4">
-          <Label className="text-white">Game Context</Label>
-          <p className="text-sm text-slate-400">Select all that apply to set the emotional tone</p>
-          <div className="flex flex-wrap gap-3">
-            {CONTEXT_PILLS.map(pill => (
-              <Badge
-                key={pill}
-                variant={selectedPills.includes(pill) ? 'default' : 'outline'}
-                className={`cursor-pointer px-4 py-2 text-sm transition-all ${
-                  selectedPills.includes(pill)
-                    ? 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600'
-                    : 'bg-slate-800/50 hover:bg-slate-800 text-slate-300 border-slate-700 hover:border-orange-600/50'
-                }`}
-                onClick={() => togglePill(pill)}
-              >
-                {pill}
-              </Badge>
-            ))}
+          <div>
+            <h2 className="text-lg text-white">Setup Project</h2>
+            <p className="text-sm text-gray-400">Define the match-up and game context</p>
           </div>
         </div>
-      </Card>
+      </div>
+
+      {/* Project Name */}
+      <div className="mb-6">
+        <Label htmlFor="projectName" className="text-white mb-2 block">Project Name</Label>
+        <Input
+          id="projectName"
+          type="text"
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
+          placeholder="Enter project name (e.g., Avalanche vs Lightning Hype)"
+          className="bg-[#151515] border-gray-800 text-white placeholder:text-gray-500 focus-visible:border-orange-500 focus-visible:ring-orange-500/50"
+        />
+      </div>
+
+      {/* Match-up Section */}
+      <div className="mb-6">
+        <h3 className="text-base font-semibold text-white mb-3">Match-up</h3>
+
+        {/* Team Grid */}
+        <div className="grid grid-cols-2 gap-6 mb-5">
+          <div>
+            <div className="text-xs text-slate-500 uppercase mb-2">Home Team</div>
+            <div className="grid grid-cols-2 gap-3">
+              {TEAMS.map(team => {
+                const isDisabled = team.id === awayTeam;
+                return (
+                <button
+                  key={`home-${team.id}`}
+                  onClick={() => !isDisabled && setHomeTeam(team.id)}
+                  disabled={isDisabled}
+                  className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
+                    homeTeam === team.id
+                      ? 'border-orange-500 ring-2 ring-orange-500'
+                      : isDisabled
+                      ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
+                      : 'border-gray-800 bg-[#151515] hover:border-gray-700'
+                  }`}
+                >
+                  {team.logo && (
+                    <div className="w-20 h-20 mx-auto mb-2 rounded-lg flex items-center justify-center bg-white p-2">
+                      <img src={team.logo} alt={team.name} className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <div className="text-sm font-semibold text-white text-center">{team.name}</div>
+                  <div className="text-xs text-gray-400 text-center">{team.subtitle}</div>
+                </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-500 uppercase mb-2">Away Team</div>
+            <div className="grid grid-cols-2 gap-3">
+              {TEAMS.map(team => {
+                const isDisabled = team.id === homeTeam;
+                return (
+                <button
+                  key={`away-${team.id}`}
+                  onClick={() => !isDisabled && setAwayTeam(team.id)}
+                  disabled={isDisabled}
+                  className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
+                    awayTeam === team.id
+                      ? 'border-orange-500 ring-2 ring-orange-500'
+                      : isDisabled
+                      ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
+                      : 'border-gray-800 bg-[#151515] hover:border-gray-700'
+                  }`}
+                >
+                  {team.logo && (
+                    <div className="w-20 h-20 mx-auto mb-2 rounded-lg flex items-center justify-center bg-white p-2">
+                      <img src={team.logo} alt={team.name} className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <div className="text-sm font-semibold text-white text-center">{team.name}</div>
+                  <div className="text-xs text-gray-400 text-center">{team.subtitle}</div>
+                </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Match-up Preview Card */}
+        <div className="mt-4 p-5 rounded-xl border-2 border-slate-700 bg-slate-900/50">
+          <div className="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-3">Match-up Preview</div>
+          <div className="flex items-center justify-center gap-12">
+            {/* Home Team */}
+            <div className="flex-1 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-lg flex items-center justify-center bg-white p-2 mb-2">
+                <img
+                  src={TEAMS.find(t => t.id === homeTeam)?.logo}
+                  alt={TEAMS.find(t => t.id === homeTeam)?.name}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="text-white font-semibold text-center">
+                {TEAMS.find(t => t.id === homeTeam)?.name} {TEAMS.find(t => t.id === homeTeam)?.subtitle}
+              </div>
+              <div className="text-xs text-gray-400 uppercase mt-1">Home</div>
+            </div>
+
+            {/* VS */}
+            <div className="text-2xl font-bold text-orange-500">VS</div>
+
+            {/* Away Team */}
+            <div className="flex-1 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-lg flex items-center justify-center bg-white p-2 mb-2">
+                <img
+                  src={TEAMS.find(t => t.id === awayTeam)?.logo}
+                  alt={TEAMS.find(t => t.id === awayTeam)?.name}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="text-white font-semibold text-center">
+                {TEAMS.find(t => t.id === awayTeam)?.name} {TEAMS.find(t => t.id === awayTeam)?.subtitle}
+              </div>
+              <div className="text-xs text-gray-400 uppercase mt-1">Away</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Game Context */}
+      <div className="mb-6">
+        <h3 className="text-base font-semibold text-white mb-3">Game Context (Optional)</h3>
+        <div className="flex flex-wrap gap-2">
+          {CONTEXT_PILLS.map(pill => (
+            <button
+              key={pill}
+              onClick={() => togglePill(pill)}
+              className={`px-4 py-2 text-sm rounded-lg border transition-all ${
+                contextPills.includes(pill)
+                  ? 'border-orange-600 bg-orange-950/30 text-white'
+                  : 'border-slate-800 bg-slate-900/30 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              {pill}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Campaign Goal */}
-      <Card className="p-6 bg-slate-900/50 border-slate-800">
-        <div className="space-y-4">
-          <Label htmlFor="campaignGoal" className="text-white">Campaign Goal</Label>
-          <p className="text-sm text-slate-400">What's the primary use case for this content?</p>
-          <Select value={campaignGoal} onValueChange={(value) => setCampaignGoal(value as CampaignGoal)}>
-            <SelectTrigger id="campaignGoal" className="bg-slate-800 border-slate-700 text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CAMPAIGN_GOALS.map(goal => (
-                <SelectItem key={goal} value={goal}>{goal}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="mb-6">
+        <h3 className="text-base font-semibold text-white mb-3">Campaign Goal</h3>
+        <div className="grid grid-cols-4 gap-3">
+          {CAMPAIGN_GOALS.map(goal => (
+            <button
+              key={goal}
+              onClick={() => setCampaignGoal(goal)}
+              className={`p-3 rounded-lg border-2 transition-all text-center ${
+                campaignGoal === goal
+                  ? 'border-orange-600 bg-orange-950/30'
+                  : 'border-slate-800 bg-slate-900/30 hover:border-slate-700'
+              }`}
+            >
+              <div className="text-sm font-medium text-white">{goal}</div>
+            </button>
+          ))}
         </div>
-      </Card>
+      </div>
 
-      {/* Submit Button */}
-      <div className="flex justify-end pt-6 border-t border-slate-800">
+      {/* Continue Button */}
+      <div className="flex justify-end">
         <Button
-          type="submit"
-          className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 px-8"
+          onClick={handleContinue}
+          disabled={!projectName.trim() || isSaving}
+          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
           size="lg"
         >
-          Continue
-          <ArrowRight className="w-4 h-4 ml-2" />
+          {isSaving ? 'Saving...' : 'Continue to Themes'}
+          {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
         </Button>
       </div>
-    </form>
+    </div>
   );
 };

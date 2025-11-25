@@ -1,147 +1,177 @@
 import { useState } from 'react';
-import { CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
+import { ArrowRight, Camera, Sparkles, Check } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Sparkles, Check } from 'lucide-react';
-import type { Project, GeneratedImage } from '../../types';
+import type { FlairLabProject, GeneratedImage, CreateProjectInput } from '../../types/project.types';
 
 interface Stage4Props {
-  project: Project;
-  onNext: () => void;
-  onPrevious: () => void;
-  onUpdateProject: (project: Project) => void;
+  project: FlairLabProject;
+  navigateToStage: (stage: number) => void;
+  createProject: (input: CreateProjectInput) => Promise<FlairLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlairLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlairLabProject | null>;
 }
 
-export const Stage4HighFidelityCapture = ({ project, onNext, onPrevious, onUpdateProject }: Stage4Props) => {
-  const [images, setImages] = useState<GeneratedImage[]>(
-    project.data.highFidelityCapture?.generatedImages || []
-  );
-  const [selectedImage, setSelectedImage] = useState<GeneratedImage | undefined>();
-  const [isGenerating, setIsGenerating] = useState(false);
+const GENERATED_IMAGES: GeneratedImage[] = [
+  {
+    id: '1',
+    url: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&h=600&fit=crop',
+    hasAlphaChannel: true,
+    resolution: '1920x1080',
+    generatedAt: new Date().toISOString()
+  },
+  {
+    id: '2',
+    url: 'https://images.unsplash.com/photo-1546525848-3ce03ca516f6?w=800&h=600&fit=crop',
+    hasAlphaChannel: true,
+    resolution: '1920x1080',
+    generatedAt: new Date().toISOString()
+  },
+  {
+    id: '3',
+    url: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
+    hasAlphaChannel: true,
+    resolution: '1920x1080',
+    generatedAt: new Date().toISOString()
+  },
+  {
+    id: '4',
+    url: 'https://images.unsplash.com/photo-1578924608019-47d540a18107?w=800&h=600&fit=crop',
+    hasAlphaChannel: true,
+    resolution: '1920x1080',
+    generatedAt: new Date().toISOString()
+  },
+];
 
-  const handleGenerate = () => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      const mockImages: GeneratedImage[] = [
-        { id: '1', url: '', hasAlphaChannel: true, resolution: '1920x1080', generatedAt: new Date().toISOString() },
-        { id: '2', url: '', hasAlphaChannel: true, resolution: '1920x1080', generatedAt: new Date().toISOString() },
-        { id: '3', url: '', hasAlphaChannel: true, resolution: '1920x1080', generatedAt: new Date().toISOString() },
-        { id: '4', url: '', hasAlphaChannel: true, resolution: '1920x1080', generatedAt: new Date().toISOString() },
-      ];
-      setImages(mockImages);
-      setIsGenerating(false);
-    }, 2000);
-  };
+export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigateToStage }: Stage4Props) => {
+  const [images] = useState<GeneratedImage[]>(GENERATED_IMAGES); // Pre-populated
+  const [selectedImage, setSelectedImage] = useState<GeneratedImage | undefined>(GENERATED_IMAGES[0]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSelectImage = (image: GeneratedImage) => {
-    setSelectedImage(image);
-  };
+  const handleContinue = async () => {
+    if (!selectedImage) return;
 
-  const handleSave = () => {
-    if (selectedImage) {
-      onUpdateProject({
-        ...project,
-        data: {
-          ...project.data,
-          highFidelityCapture: {
-            generatedImages: images,
-          },
-        },
+    try {
+      setIsSaving(true);
+
+      const highFidelityCaptureData = {
+        generatedImages: images,
+        generatedAt: new Date(),
+      };
+
+      // Mark stage as completed with high-fidelity capture data
+      await markStageCompleted('high-fidelity-capture', undefined, {
+        highFidelityCapture: highFidelityCaptureData,
       });
-      onNext();
+      // Navigate to next stage (Stage 5 - Kinetic Activation)
+      if (navigateToStage) {
+        navigateToStage(5);
+      }
+    } catch (error) {
+      console.error('[Stage4] Failed to save high-fidelity capture:', error);
+      alert('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <>
-      <CardHeader className="border-b border-slate-800/50">
-        <CardTitle className="text-2xl text-white">Stage 4: High-Fidelity Capture</CardTitle>
-        <CardDescription className="text-slate-400">
-          Create the base visual assets
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="p-8 space-y-8">
-        {/* Top Action Area */}
-        <div className="bg-gradient-to-r from-orange-950/30 to-red-950/30 border border-orange-900/50 rounded-xl p-6">
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-semibold py-6 text-lg"
-            size="lg"
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            {isGenerating ? 'Generating...' : 'Generate High-Fidelity Stills'}
-          </Button>
+    <div className="max-w-6xl mx-auto p-8 lg:p-12">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-orange-600/20 flex items-center justify-center">
+            <Camera className="w-6 h-6 text-orange-500" />
+          </div>
+          <div>
+            <h2 className="text-white">Create Images</h2>
+            <p className="text-gray-400">Generate and select your image</p>
+          </div>
         </div>
+      </div>
 
-        {/* The Lightbox - Image Gallery */}
-        {images.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Generated Images</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {images.map(image => (
-                <div
-                  key={image.id}
-                  onClick={() => handleSelectImage(image)}
-                  className={`cursor-pointer rounded-xl border-2 overflow-hidden transition-all ${
-                    selectedImage?.id === image.id
-                      ? 'border-orange-600 ring-4 ring-orange-600/20'
-                      : 'border-slate-700 hover:border-orange-600/50'
-                  }`}
-                >
-                  {/* Checkerboard background for alpha transparency */}
-                  <div
-                    className="aspect-video relative"
-                    style={{
-                      backgroundImage: 'linear-gradient(45deg, #1e293b 25%, transparent 25%), linear-gradient(-45deg, #1e293b 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e293b 75%), linear-gradient(-45deg, transparent 75%, #1e293b 75%)',
-                      backgroundSize: '20px 20px',
-                      backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-                    }}
-                  >
-                    {/* Placeholder image content */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
-                      <div className="text-center text-white">
-                        <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm opacity-50">Generated Image {image.id}</p>
-                      </div>
-                    </div>
-                    {selectedImage?.id === image.id && (
-                      <div className="absolute top-2 right-2 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
-                        <Check className="w-5 h-5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="bg-slate-800/50 p-3 border-t border-slate-700">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-400">{image.resolution}</span>
-                      {image.hasAlphaChannel && (
-                        <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
-                          Alpha Channel ✓
-                        </span>
-                      )}
-                    </div>
+      {/* Generate Button */}
+      <div className="mb-8">
+        <Button
+          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          size="lg"
+        >
+          <Sparkles className="w-5 h-5 mr-2" />
+          Generate Images
+        </Button>
+      </div>
+
+      {/* Generated Images Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {images.map(image => (
+          <button
+            key={image.id}
+            onClick={() => setSelectedImage(image)}
+            className={`rounded-xl border-2 overflow-hidden transition-all text-left bg-[#151515] ${
+              selectedImage?.id === image.id
+                ? 'border-orange-500 ring-2 ring-orange-500'
+                : 'border-gray-800 hover:border-gray-700'
+            }`}
+          >
+            {/* Image with checkerboard background for alpha transparency */}
+            <div className="aspect-video relative overflow-hidden">
+              {/* Checkerboard pattern */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: 'linear-gradient(45deg, #1e293b 25%, transparent 25%), linear-gradient(-45deg, #1e293b 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e293b 75%), linear-gradient(-45deg, transparent 75%, #1e293b 75%)',
+                  backgroundSize: '20px 20px',
+                  backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+                }}
+              />
+
+              {/* Generated image */}
+              {image.url ? (
+                <img
+                  src={image.url}
+                  alt={`Generated ${image.id}`}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
+                  <div className="text-center text-white">
+                    <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm opacity-50">Generated Image {image.id}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              )}
 
-        {/* Bottom Navigation */}
-        <div className="pt-6 border-t border-slate-800/50 flex justify-between">
-          <Button onClick={onPrevious} variant="outline" className="border-slate-700 text-white">
-            Previous
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!selectedImage}
-            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-8"
-            size="lg"
-          >
-            Save & Proceed to Motion
-          </Button>
-        </div>
-      </CardContent>
-    </>
+              {selectedImage?.id === image.id && (
+                <div className="absolute top-3 right-3 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center shadow-lg z-10">
+                  <Check className="w-5 h-5 text-white" />
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-gray-800">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">{image.resolution}</span>
+                {image.hasAlphaChannel && (
+                  <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
+                    Alpha Channel
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Continue Button */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleContinue}
+          disabled={!selectedImage || isSaving}
+          className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white rounded-xl"
+          size="lg"
+        >
+          {isSaving ? 'Saving...' : 'Continue to Animate'}
+          {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+        </Button>
+      </div>
+    </div>
   );
 };
