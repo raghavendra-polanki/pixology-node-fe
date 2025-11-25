@@ -271,11 +271,13 @@ class ThemeStreamingService {
         count: themes.length,
       };
 
-      // Update project with generated themes
-      await db.collection('gamelab_projects').doc(projectId).update({
-        'conceptGallery.aiGeneratedThemes': themeData,
+      // Update project with generated themes (use set with merge to create if doesn't exist)
+      await db.collection('projects').doc(projectId).set({
+        conceptGallery: {
+          aiGeneratedThemes: themeData,
+        },
         updatedAt: new Date(),
-      });
+      }, { merge: true });
 
       console.log('[ThemeStreamingService] Themes saved to database');
 

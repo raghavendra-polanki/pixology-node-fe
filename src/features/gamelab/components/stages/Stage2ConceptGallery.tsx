@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle, X, Maximize2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 import type { GameLabProject, Theme, CreateProjectInput } from '../../types/project.types';
 
 interface Stage2Props {
@@ -29,6 +35,10 @@ export const Stage2ConceptGallery = ({
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<Theme | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Dialog state for viewing theme details
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewingTheme, setViewingTheme] = useState<Theme | null>(null);
 
   // Load existing themes from project on mount
   useEffect(() => {
@@ -352,6 +362,21 @@ export const Stage2ConceptGallery = ({
                       <Check className="w-5 h-5 text-white" />
                     </div>
                   )}
+
+                  {/* Maximize button - only show if image is loaded */}
+                  {theme.image?.url && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingTheme(theme);
+                        setViewDialogOpen(true);
+                      }}
+                      className="absolute top-4 left-4 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      title="View full size"
+                    >
+                      <Maximize2 className="w-4 h-4 text-white" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Content section */}
@@ -390,6 +415,135 @@ export const Stage2ConceptGallery = ({
           </Button>
         </div>
       )}
+
+      {/* Theme Details Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="!max-w-[90vw] !w-[90vw] !h-[85vh] p-0 bg-gray-900 border-gray-700 sm:!max-w-[90vw]">
+          <DialogHeader className="px-6 py-4 border-b border-gray-700">
+            <DialogTitle className="text-2xl font-bold text-white">
+              {viewingTheme?.title}
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewingTheme && (
+            <div className="flex h-[calc(85vh-80px)] overflow-hidden">
+              {/* Left Side - Full Size Image */}
+              <div className="flex-1 flex items-center justify-center bg-black p-8">
+                {viewingTheme.image?.url ? (
+                  <img
+                    src={viewingTheme.image.url}
+                    alt={viewingTheme.title}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="w-12 h-12 text-gray-600 animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Side - Details Panel */}
+              <div className="w-[450px] bg-gray-900 border-l border-gray-700 overflow-y-auto flex-shrink-0">
+                <div className="p-6 space-y-6">
+                  {/* Description */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                      Description
+                    </h3>
+                    <p className="text-gray-300 leading-relaxed">
+                      {viewingTheme.description}
+                    </p>
+                  </div>
+
+                  {/* Tags */}
+                  {viewingTheme.tags && viewingTheme.tags.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        Tags
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {viewingTheme.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-sm"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Context Metadata */}
+                  {viewingTheme.contextMetadata && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                        Campaign Context
+                      </h3>
+                      <div className="space-y-3">
+                        {viewingTheme.contextMetadata.sportType && (
+                          <div>
+                            <span className="text-gray-500 text-sm">Sport:</span>
+                            <p className="text-gray-300">{viewingTheme.contextMetadata.sportType}</p>
+                          </div>
+                        )}
+                        {viewingTheme.contextMetadata.homeTeam && viewingTheme.contextMetadata.awayTeam && (
+                          <div>
+                            <span className="text-gray-500 text-sm">Matchup:</span>
+                            <p className="text-gray-300">
+                              {viewingTheme.contextMetadata.homeTeam} vs {viewingTheme.contextMetadata.awayTeam}
+                            </p>
+                          </div>
+                        )}
+                        {viewingTheme.contextMetadata.contextPills && viewingTheme.contextMetadata.contextPills.length > 0 && (
+                          <div>
+                            <span className="text-gray-500 text-sm">Context:</span>
+                            <p className="text-gray-300">
+                              {viewingTheme.contextMetadata.contextPills.join(', ')}
+                            </p>
+                          </div>
+                        )}
+                        {viewingTheme.contextMetadata.campaignGoal && (
+                          <div>
+                            <span className="text-gray-500 text-sm">Goal:</span>
+                            <p className="text-gray-300">{viewingTheme.contextMetadata.campaignGoal}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selection Button */}
+                  {selectedTheme?.id !== viewingTheme.id && (
+                    <div className="pt-4 border-t border-gray-700">
+                      <Button
+                        onClick={() => {
+                          setSelectedTheme(viewingTheme);
+                          setViewDialogOpen(false);
+                        }}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+                        size="lg"
+                      >
+                        <Check className="w-5 h-5 mr-2" />
+                        Select This Theme
+                      </Button>
+                    </div>
+                  )}
+
+                  {selectedTheme?.id === viewingTheme.id && (
+                    <div className="pt-4 border-t border-gray-700">
+                      <div className="flex items-center justify-center gap-2 text-green-500 py-3">
+                        <Check className="w-5 h-5" />
+                        <span className="font-medium">Currently Selected</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
