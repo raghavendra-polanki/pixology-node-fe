@@ -18,12 +18,12 @@ interface WorkflowViewProps {
 }
 
 const stages = [
-  { id: 1, name: 'Context Brief', component: Stage1ContextBrief },
-  { id: 2, name: 'Concept Gallery', component: Stage2ConceptGallery },
-  { id: 3, name: 'Casting Call', component: Stage3CastingCall },
-  { id: 4, name: 'High-Fidelity Capture', component: Stage4HighFidelityCapture },
-  { id: 5, name: 'Kinetic Activation', component: Stage5KineticActivation },
-  { id: 6, name: 'Polish & Download', component: Stage6PolishDownload },
+  { id: 1, name: DEFAULT_WORKFLOW_STAGES[0].title, component: Stage1ContextBrief },
+  { id: 2, name: DEFAULT_WORKFLOW_STAGES[1].title, component: Stage2ConceptGallery },
+  { id: 3, name: DEFAULT_WORKFLOW_STAGES[2].title, component: Stage3CastingCall },
+  { id: 4, name: DEFAULT_WORKFLOW_STAGES[3].title, component: Stage4HighFidelityCapture },
+  { id: 5, name: DEFAULT_WORKFLOW_STAGES[4].title, component: Stage5KineticActivation },
+  { id: 6, name: DEFAULT_WORKFLOW_STAGES[5].title, component: Stage6PolishDownload },
 ];
 
 export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
