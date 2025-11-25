@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Folder, Clock, Activity, Trash2, LogOut, RefreshCw, MoreVertical } from 'lucide-react';
+import { Plus, Folder, Clock, Trash2, LogOut, RefreshCw, MoreVertical, Zap } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import {
@@ -73,7 +73,7 @@ export const ProjectsDashboard = ({
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
+                <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white">

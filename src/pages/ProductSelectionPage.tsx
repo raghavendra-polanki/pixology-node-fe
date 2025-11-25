@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import { Beaker, Activity, ArrowRight, LogOut, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { Beaker, ArrowRight, LogOut, Sparkles, TrendingUp, Users, Zap } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 
 export const ProductSelectionPage = () => {
@@ -140,7 +140,7 @@ export const ProductSelectionPage = () => {
               <CardHeader className="space-y-6">
                 {/* Icon */}
                 <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Activity className="w-8 h-8 text-white" />
+                  <Zap className="w-8 h-8 text-white" />
                 </div>
 
                 {/* Title */}
