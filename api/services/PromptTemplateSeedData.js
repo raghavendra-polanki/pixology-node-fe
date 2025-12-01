@@ -15,6 +15,7 @@ import {
 // Import GameLab prompts
 import {
   STAGE_2_THEME_GENERATION_TEMPLATE,
+  STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
 } from '../products/gamelab/prompts/seedData.js';
 
 // Combine all prompt templates
@@ -28,6 +29,7 @@ export const ALL_PROMPT_TEMPLATES = [
 
   // GameLab templates
   STAGE_2_THEME_GENERATION_TEMPLATE,
+  STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
 ];
 
 export default ALL_PROMPT_TEMPLATES;

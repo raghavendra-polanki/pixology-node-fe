@@ -66,40 +66,14 @@ export const ProjectsDashboard = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] px-6 md:px-8 lg:px-12 py-8">
-      <div className="max-w-[1600px] mx-auto">
-        {/* Header with Logout */}
-        <div className="mb-12 flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">
-                  Game<span className="text-green-400">Lab</span>
-                </h1>
-                <p className="text-xs text-gray-500">by pixology.ai</p>
-              </div>
-            </div>
-            <p className="text-gray-400">
-              Transform static assets into broadcast-ready content
-            </p>
-          </div>
-          {onLogout && (
-            <Button
-              onClick={onLogout}
-              variant="outline"
-              className="gap-2 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800/50"
-              size="sm"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
-          )}
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-white mb-2">Projects</h2>
+        <p className="text-gray-400">Create and manage your campaign projects</p>
+      </div>
 
-        {/* Create New Project Button */}
+      {/* Create New Project Button */}
         <Button
           onClick={handleCreateNew}
           disabled={isLoading}
@@ -235,7 +209,6 @@ export const ProjectsDashboard = ({
             </div>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
     </div>
   );
 };

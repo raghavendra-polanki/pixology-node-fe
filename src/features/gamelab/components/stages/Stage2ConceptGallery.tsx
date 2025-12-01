@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle, X, Maximize2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle, X, Maximize2, ChevronDown, ChevronUp, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -7,7 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import type { GameLabProject, Theme, CreateProjectInput } from '../../types/project.types';
+import type { GameLabProject, Theme, ThemeCategoryId, CreateProjectInput } from '../../types/project.types';
+import { THEME_CATEGORIES } from '../../types/project.types';
 
 interface Stage2Props {
   project: GameLabProject;
@@ -18,6 +19,16 @@ interface Stage2Props {
   updateConceptGallery: (conceptGallery: any, projectId?: string) => Promise<GameLabProject | null>;
 }
 
+interface CategoryState {
+  themes: Theme[];
+  isGenerating: boolean;
+  isCollapsed: boolean;
+  generatedAt?: Date;
+  progress: number;
+  message: string;
+  error: string | null;
+}
+
 export const Stage2ConceptGallery = ({
   project,
   markStageCompleted,
@@ -25,46 +36,143 @@ export const Stage2ConceptGallery = ({
   loadProject,
   updateConceptGallery,
 }: Stage2Props) => {
-  // State for AI generation
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [generationMessage, setGenerationMessage] = useState('');
-  const [generationError, setGenerationError] = useState<string | null>(null);
+  // Category states - one state object per category
+  const [categoryStates, setCategoryStates] = useState<Record<ThemeCategoryId, CategoryState>>({
+    'home-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+    'away-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+    'rivalry': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+    'posed': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+    'broadcast': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+  });
 
-  // Themes state
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [selectedTheme, setSelectedTheme] = useState<Theme | undefined>(undefined);
+  // Selected themes (can be from any category) - now supporting multi-selection
+  const [selectedThemes, setSelectedThemes] = useState<Theme[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Dialog state for viewing theme details
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewingTheme, setViewingTheme] = useState<Theme | null>(null);
 
-  // Load existing themes from project on mount
-  useEffect(() => {
-    if (project?.conceptGallery?.aiGeneratedThemes?.themes) {
-      const existingThemes = project.conceptGallery.aiGeneratedThemes.themes;
-      setThemes(existingThemes);
+  // Track last loaded themes to prevent unnecessary reloads (StoryLab pattern)
+  const lastLoadedThemesRef = useRef<string>('');
+  const [locallyModified, setLocallyModified] = useState(false);
 
-      // Set first theme as selected by default
-      if (existingThemes.length > 0 && !selectedTheme) {
-        setSelectedTheme(existingThemes[0]);
+  // Load existing themes from project - only if not locally modified (StoryLab pattern)
+  useEffect(() => {
+    // Only reload from project if we haven't made local modifications
+    // This prevents tab switching from overwriting unsaved local changes
+    if (!locallyModified && project?.conceptGallery?.aiGeneratedThemes) {
+      const aiThemes = project.conceptGallery.aiGeneratedThemes;
+
+      // Create a hash of the theme data to detect actual changes
+      const themeDataHash = JSON.stringify(
+        aiThemes.categorizedThemes
+          ? Object.entries(aiThemes.categorizedThemes).map(([catId, catData]: [string, any]) => ({
+              category: catId,
+              themeIds: catData.themes?.map((t: Theme) => t.id) || [],
+            }))
+          : []
+      );
+
+      // Only reload if the theme data has actually changed
+      if (themeDataHash !== lastLoadedThemesRef.current) {
+        // Initialize fresh category states
+        const newStates: Record<ThemeCategoryId, CategoryState> = {
+          'home-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+          'away-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+          'rivalry': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+          'posed': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+          'broadcast': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+        };
+
+        // Legacy: Load from flat themes array
+        if (aiThemes.themes && aiThemes.themes.length > 0) {
+          aiThemes.themes.forEach(theme => {
+            if (theme.category && newStates[theme.category]) {
+              newStates[theme.category].themes.push(theme);
+            }
+          });
+        }
+
+        // New: Load from categorized themes (overwrites legacy if exists)
+        if (aiThemes.categorizedThemes) {
+          Object.entries(aiThemes.categorizedThemes).forEach(([catId, catData]: [string, any]) => {
+            if (newStates[catId as ThemeCategoryId]) {
+              newStates[catId as ThemeCategoryId].themes = catData.themes || [];
+            }
+          });
+        }
+
+        // Only update if there are actually themes to load
+        const hasThemes = Object.values(newStates).some(cat => cat.themes.length > 0);
+        if (hasThemes) {
+          setCategoryStates(newStates);
+
+          // Load selected themes if they exist (multi-selection support)
+          if (project.conceptGallery.selectedStyles && Array.isArray(project.conceptGallery.selectedStyles)) {
+            const selectedThemesList: Theme[] = [];
+            project.conceptGallery.selectedStyles.forEach((styleId: string) => {
+              Object.values(newStates).forEach(catState => {
+                const found = catState.themes.find(t => t.id === styleId);
+                if (found) {
+                  selectedThemesList.push(found);
+                }
+              });
+            });
+            setSelectedThemes(selectedThemesList);
+          }
+        }
+
+        lastLoadedThemesRef.current = themeDataHash;
       }
+    } else if (!project?.conceptGallery?.aiGeneratedThemes && !locallyModified) {
+      // Clear themes if project has no themes
+      setCategoryStates({
+        'home-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+        'away-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+        'rivalry': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+        'posed': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+        'broadcast': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
+      });
+      lastLoadedThemesRef.current = '';
     }
-  }, [project?.conceptGallery?.aiGeneratedThemes]);
+    // Note: locallyModified is intentionally NOT in the dependency array
+    // We only want to reload when project data changes, not when the flag changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.conceptGallery?.aiGeneratedThemes]); // Reload themes when conceptGallery data changes (stage navigation)
 
   /**
-   * Handle theme generation via streaming endpoint
+   * Generate themes for a specific category
+   * @param mode - 'replace' to overwrite existing themes, 'append' to add to existing themes
    */
-  const handleGenerateThemes = async () => {
+  const handleGenerateCategory = async (
+    categoryId: ThemeCategoryId,
+    numberOfThemes: number = 5,
+    mode: 'replace' | 'append' = 'replace'
+  ) => {
     if (!project) return;
 
+    const category = THEME_CATEGORIES[categoryId];
+
     try {
-      setIsGenerating(true);
-      setGenerationError(null);
-      setGenerationProgress(0);
-      setGenerationMessage('Initializing...');
-      setThemes([]); // Clear existing themes
+      // Reset tracking flags when starting new generation (StoryLab pattern)
+      setLocallyModified(false);
+      if (mode === 'replace') {
+        // Only reset hash when replacing, not when appending
+        lastLoadedThemesRef.current = '';
+      }
+
+      // Update category state to generating
+      setCategoryStates(prev => ({
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          isGenerating: true,
+          progress: 0,
+          message: 'Initializing...',
+          error: null,
+        }
+      }));
 
       // Get context from Stage 1
       const contextBrief = project.contextBrief;
@@ -80,10 +188,14 @@ export const Stage2ConceptGallery = ({
         awayTeam: contextBrief.awayTeam?.name || 'Away Team',
         contextPills: contextBrief.contextPills || [],
         campaignGoal: contextBrief.campaignGoal || 'Social Hype',
-        numberOfThemes: 6,
+        category: categoryId,
+        categoryName: category.name,
+        categoryModifier: category.promptModifier || '',
+        numberOfThemes,
+        mode, // 'replace' or 'append'
       };
 
-      console.log('[Stage2] Generating themes with payload:', requestBody);
+      console.log(`[Stage2] Generating ${category.name} themes:`, requestBody);
 
       // Call streaming endpoint
       const response = await fetch('/api/gamelab/generation/themes-stream', {
@@ -107,6 +219,7 @@ export const Stage2ConceptGallery = ({
       const decoder = new TextDecoder();
       let buffer = '';
       let currentEventType = '';
+      const newThemes: Theme[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -115,7 +228,6 @@ export const Stage2ConceptGallery = ({
         const chunk = decoder.decode(value, { stream: true });
         buffer += chunk;
 
-        // Split by newlines to process SSE events
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
@@ -129,34 +241,55 @@ export const Stage2ConceptGallery = ({
             try {
               const data = JSON.parse(dataStr);
 
-              // Handle different event types
-              if (currentEventType === 'start') {
-                console.log('[Stage2] Generation started');
-              } else if (currentEventType === 'theme') {
-                // Add theme as it's generated
-                console.log('[Stage2] Theme parsed:', data.theme.title);
-                setThemes(prev => [...prev, data.theme]);
-                setGenerationProgress(data.progress || 0);
+              if (currentEventType === 'theme') {
+                console.log(`[Stage2] Theme parsed for ${category.name}:`, data.theme.title);
+                newThemes.push(data.theme);
+                setCategoryStates(prev => ({
+                  ...prev,
+                  [categoryId]: {
+                    ...prev[categoryId],
+                    themes: [...prev[categoryId].themes, data.theme],
+                    progress: data.progress || 0,
+                  }
+                }));
               } else if (currentEventType === 'image') {
-                // Update theme with image
-                console.log('[Stage2] Image generated for theme:', data.themeNumber);
-                setThemes(prev =>
-                  prev.map(t =>
-                    t.id === data.themeId
-                      ? { ...t, image: { url: data.imageUrl } }
-                      : t
-                  )
-                );
-                setGenerationProgress(data.progress || 0);
+                console.log(`[Stage2] Image generated for ${category.name}`);
+                setCategoryStates(prev => ({
+                  ...prev,
+                  [categoryId]: {
+                    ...prev[categoryId],
+                    themes: prev[categoryId].themes.map(t =>
+                      t.id === data.themeId
+                        ? { ...t, image: { url: data.imageUrl } }
+                        : t
+                    ),
+                    progress: data.progress || 0,
+                  }
+                }));
               } else if (currentEventType === 'progress') {
-                setGenerationMessage(data.message || '');
-                setGenerationProgress(data.progress || 0);
+                setCategoryStates(prev => ({
+                  ...prev,
+                  [categoryId]: {
+                    ...prev[categoryId],
+                    message: data.message || '',
+                    progress: data.progress || 0,
+                  }
+                }));
               } else if (currentEventType === 'complete') {
-                console.log('[Stage2] Generation complete');
-                setGenerationProgress(100);
-                setGenerationMessage('Generation complete!');
+                console.log(`[Stage2] ${category.name} generation complete`);
+                setCategoryStates(prev => ({
+                  ...prev,
+                  [categoryId]: {
+                    ...prev[categoryId],
+                    isGenerating: false,
+                    progress: 100,
+                    message: 'Generation complete!',
+                    generatedAt: new Date(),
+                  }
+                }));
 
-                // Reload project to get fresh data
+                // Reload project to get latest data from Firestore (StoryLab pattern)
+                // The useEffect will detect changes via hash comparison and update state
                 if (loadProject) {
                   await loadProject(project.id);
                 }
@@ -170,49 +303,118 @@ export const Stage2ConceptGallery = ({
         }
       }
 
-      console.log('[Stage2] Theme generation completed successfully');
+      console.log(`[Stage2] ${category.name} generation completed successfully`);
     } catch (error) {
-      console.error('[Stage2] Theme generation error:', error);
-      setGenerationError(error instanceof Error ? error.message : 'Failed to generate themes');
-    } finally {
-      setIsGenerating(false);
+      console.error(`[Stage2] ${category.name} generation error:`, error);
+      setCategoryStates(prev => ({
+        ...prev,
+        [categoryId]: {
+          ...prev[categoryId],
+          isGenerating: false,
+          error: error instanceof Error ? error.message : 'Failed to generate themes',
+        }
+      }));
     }
+  };
+
+  /**
+   * Regenerate all themes in a category
+   */
+  const handleRegenerateCategory = async (categoryId: ThemeCategoryId) => {
+    // Clear existing themes
+    setCategoryStates(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        themes: [],
+      }
+    }));
+
+    // Generate new themes
+    await handleGenerateCategory(categoryId);
+  };
+
+  /**
+   * Generate more themes in a category (add to existing)
+   */
+  const handleGenerateMore = async (categoryId: ThemeCategoryId, additionalCount: number = 3) => {
+    await handleGenerateCategory(categoryId, additionalCount, 'append');
+  };
+
+  /**
+   * Toggle category collapsed state
+   */
+  const toggleCategoryCollapse = (categoryId: ThemeCategoryId) => {
+    setCategoryStates(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        isCollapsed: !prev[categoryId].isCollapsed,
+      }
+    }));
+  };
+
+  /**
+   * Toggle theme selection (multi-select)
+   */
+  const toggleThemeSelection = (theme: Theme) => {
+    setSelectedThemes(prev => {
+      const isSelected = prev.some(t => t.id === theme.id);
+      if (isSelected) {
+        return prev.filter(t => t.id !== theme.id);
+      } else {
+        return [...prev, theme];
+      }
+    });
+  };
+
+  /**
+   * Check if a theme is selected
+   */
+  const isThemeSelected = (themeId: string) => {
+    return selectedThemes.some(t => t.id === themeId);
   };
 
   /**
    * Handle continue to next stage
    */
   const handleContinue = async () => {
-    if (!selectedTheme) return;
+    if (selectedThemes.length === 0) return;
 
     try {
       setIsSaving(true);
 
       const conceptGalleryData = {
-        selectedStyle: {
-          id: selectedTheme.id,
-          name: selectedTheme.title,
-          description: selectedTheme.description,
-          thumbnailUrl: selectedTheme.image?.url,
-          tags: selectedTheme.tags || [],
-        },
-        availableStyles: themes.map(theme => ({
+        // Store multiple selected themes
+        selectedStyles: selectedThemes.map(theme => theme.id),
+        selectedThemes: selectedThemes.map(theme => ({
           id: theme.id,
           name: theme.title,
           description: theme.description,
-          thumbnailUrl: theme.image?.url || '',
+          category: theme.category,
+          thumbnailUrl: theme.image?.url,
           tags: theme.tags || [],
         })),
+        availableStyles: Object.values(categoryStates).flatMap(catState =>
+          catState.themes.map(theme => ({
+            id: theme.id,
+            name: theme.title,
+            description: theme.description,
+            thumbnailUrl: theme.image?.url || '',
+            tags: theme.tags || [],
+          }))
+        ),
         selectedAt: new Date(),
-        aiGeneratedThemes: project.conceptGallery?.aiGeneratedThemes, // Preserve generated themes
+        aiGeneratedThemes: project.conceptGallery?.aiGeneratedThemes,
       };
 
-      // Mark stage as completed with concept gallery data
       await markStageCompleted('concept-gallery', undefined, {
         conceptGallery: conceptGalleryData,
       });
 
-      // Navigate to next stage (Stage 3 - Suggest Players)
+      // Reset flag so fresh data loads when returning to this stage (StoryLab pattern)
+      setLocallyModified(false);
+
       if (navigateToStage) {
         navigateToStage(3);
       }
@@ -224,22 +426,44 @@ export const Stage2ConceptGallery = ({
     }
   };
 
-  const hasGeneratedThemes = themes.length > 0;
-  const canContinue = hasGeneratedThemes && selectedTheme;
+  const hasAnyThemes = Object.values(categoryStates).some(cat => cat.themes.length > 0);
+  const canContinue = hasAnyThemes && selectedThemes.length > 0;
 
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
             <Palette className="w-6 h-6 text-green-500" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Generate Themes</h2>
-            <p className="text-gray-400">AI-powered broadcast-ready themes for your campaign</p>
+            <h2 className="text-2xl font-bold text-white">Theme Gallery</h2>
+            <p className="text-gray-400">Generate broadcast-ready themes organized by category</p>
           </div>
         </div>
+        {selectedThemes.length > 0 && (
+          <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Check className="w-5 h-5 text-green-500" />
+              <span className="text-green-400 font-medium">
+                {selectedThemes.length} theme{selectedThemes.length !== 1 ? 's' : ''} selected
+              </span>
+              <span className="text-gray-400 text-sm">
+                ({selectedThemes.map(t => t.title).join(', ')})
+              </span>
+            </div>
+            <Button
+              onClick={handleContinue}
+              disabled={isSaving}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+              size="sm"
+            >
+              {isSaving ? 'Saving...' : 'Continue to Select Players'}
+              {!isSaving && <ArrowRight className="w-4 h-4 ml-2" />}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Context Summary */}
@@ -254,167 +478,202 @@ export const Stage2ConceptGallery = ({
         </div>
       )}
 
-      {/* Generate Button */}
-      {!hasGeneratedThemes && !isGenerating && (
-        <div className="mb-8">
-          <Button
-            onClick={handleGenerateThemes}
-            disabled={isGenerating || !project.contextBrief}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
-            size="lg"
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Generate Themes with AI
-          </Button>
-          {!project.contextBrief && (
-            <p className="text-sm text-gray-500 mt-2">Complete Stage 1 (Setup Project) first</p>
-          )}
-        </div>
-      )}
+      {/* Category Accordions */}
+      <div className="space-y-4">
+        {Object.entries(THEME_CATEGORIES).map(([catId, category]) => {
+          const categoryId = catId as ThemeCategoryId;
+          const state = categoryStates[categoryId];
+          const hasThemes = state.themes.length > 0;
 
-      {/* Generation Progress */}
-      {isGenerating && (
-        <div className="mb-8 p-6 bg-gray-800/30 border border-gray-700 rounded-xl">
-          <div className="flex items-center gap-3 mb-4">
-            <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
-            <h3 className="text-white font-medium">Generating Themes...</h3>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">{generationMessage}</span>
-              <span className="text-gray-400">{generationProgress}%</span>
-            </div>
-            <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+          return (
+            <div
+              key={categoryId}
+              className="border-2 border-gray-700 rounded-xl overflow-hidden bg-gray-900/50"
+            >
+              {/* Category Header */}
               <div
-                className="h-full bg-green-500 transition-all duration-300"
-                style={{ width: `${generationProgress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Generation Error */}
-      {generationError && (
-        <div className="mb-8 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-red-400 font-medium mb-1">Generation Failed</h3>
-            <p className="text-red-300/80 text-sm">{generationError}</p>
-            <Button
-              onClick={handleGenerateThemes}
-              variant="outline"
-              size="sm"
-              className="mt-3 border-red-500/50 text-red-400 hover:bg-red-500/10"
-            >
-              Try Again
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Themes Grid */}
-      {hasGeneratedThemes && (
-        <>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-white font-medium">{themes.length} themes generated</h3>
-            <Button
-              onClick={handleGenerateThemes}
-              variant="outline"
-              size="sm"
-              disabled={isGenerating}
-              className="border-gray-700 text-gray-400 hover:bg-gray-800"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Regenerate
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            {themes.map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => setSelectedTheme(theme)}
-                className={`group rounded-xl border-2 transition-all text-left overflow-hidden relative ${
-                  selectedTheme?.id === theme.id
-                    ? 'border-green-500 ring-4 ring-green-500/20'
-                    : 'border-gray-700 hover:border-green-500/50'
-                }`}
+                onClick={() => hasThemes && toggleCategoryCollapse(categoryId)}
+                className="w-full p-5 flex items-center justify-between hover:bg-gray-800/50 transition-colors cursor-pointer"
               >
-                {/* Image section */}
-                <div className="aspect-video relative flex items-center justify-center overflow-hidden bg-gray-900">
-                  {theme.image?.url ? (
-                    <img
-                      src={theme.image.url}
-                      alt={theme.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
-                    </div>
-                  )}
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{category.icon}</span>
+                  <div className="text-left">
+                    <h3 className="text-white font-medium text-lg">{category.name}</h3>
+                    <p className="text-gray-400 text-sm">{category.description}</p>
+                  </div>
+                </div>
 
-                  {/* Check mark for selected */}
-                  {selectedTheme?.id === theme.id && (
-                    <div className="absolute top-4 right-4 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
-                      <Check className="w-5 h-5 text-white" />
-                    </div>
+                <div className="flex items-center gap-3">
+                  {hasThemes && (
+                    <span className="text-sm text-gray-500">
+                      {state.themes.length} theme{state.themes.length !== 1 ? 's' : ''}
+                    </span>
                   )}
-
-                  {/* Maximize button - only show if image is loaded */}
-                  {theme.image?.url && (
-                    <button
+                  {!hasThemes && !state.isGenerating && (
+                    <Button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setViewingTheme(theme);
-                        setViewDialogOpen(true);
+                        handleGenerateCategory(categoryId);
                       }}
-                      className="absolute top-4 left-4 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      title="View full size"
+                      className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                      size="sm"
+                      disabled={!project.contextBrief}
                     >
-                      <Maximize2 className="w-4 h-4 text-white" />
-                    </button>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Generate 5 Themes
+                    </Button>
+                  )}
+                  {hasThemes && !state.isGenerating && (
+                    state.isCollapsed ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />
                   )}
                 </div>
+              </div>
 
-                {/* Content section */}
-                <div className="bg-[#151515] p-5 border-t border-gray-800">
-                  <h3 className="text-white mb-2 font-medium">{theme.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3 line-clamp-3">
-                    {theme.description}
-                  </p>
-                  {theme.tags && theme.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {theme.tags.map(tag => (
-                        <span key={tag} className="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded">
-                          {tag}
-                        </span>
-                      ))}
+              {/* Generation Progress */}
+              {state.isGenerating && (
+                <div className="px-5 pb-5">
+                  <div className="p-4 bg-gray-800/30 rounded-lg">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+                      <span className="text-white font-medium">Generating {category.name}...</span>
                     </div>
-                  )}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400">{state.message}</span>
+                        <span className="text-gray-400">{state.progress}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 transition-all duration-300"
+                          style={{ width: `${state.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+              )}
 
-      {/* Continue Button */}
-      {hasGeneratedThemes && (
-        <div className="flex justify-end">
-          <Button
-            onClick={handleContinue}
-            disabled={!canContinue || isSaving}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
-            size="lg"
-          >
-            {isSaving ? 'Saving...' : 'Continue to Players'}
-            {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-          </Button>
-        </div>
-      )}
+              {/* Error */}
+              {state.error && (
+                <div className="px-5 pb-5">
+                  <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-red-400 font-medium mb-1">Generation Failed</h4>
+                      <p className="text-red-300/80 text-sm">{state.error}</p>
+                      <Button
+                        onClick={() => handleGenerateCategory(categoryId)}
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 border-red-500/50 text-red-400 hover:bg-red-500/10"
+                      >
+                        Try Again
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Themes Grid */}
+              {hasThemes && !state.isCollapsed && (
+                <div className="px-5 pb-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                    {state.themes.map((theme) => (
+                      <div
+                        key={theme.id}
+                        onClick={() => toggleThemeSelection(theme)}
+                        className={`group rounded-xl border-2 transition-all text-left overflow-hidden relative cursor-pointer ${
+                          isThemeSelected(theme.id)
+                            ? 'border-green-500 ring-4 ring-green-500/20'
+                            : 'border-gray-700 hover:border-green-500/50'
+                        }`}
+                      >
+                        {/* Image */}
+                        <div className="aspect-video relative flex items-center justify-center overflow-hidden bg-gray-900">
+                          {theme.image?.url ? (
+                            <img
+                              src={theme.image.url}
+                              alt={theme.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
+                            </div>
+                          )}
+
+                          {/* Selected checkmark */}
+                          {isThemeSelected(theme.id) && (
+                            <div className="absolute top-4 right-4 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
+                              <Check className="w-5 h-5 text-white" />
+                            </div>
+                          )}
+
+                          {/* Maximize button */}
+                          {theme.image?.url && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingTheme(theme);
+                                setViewDialogOpen(true);
+                              }}
+                              className="absolute top-4 left-4 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                              title="View full size"
+                            >
+                              <Maximize2 className="w-4 h-4 text-white" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="bg-[#151515] p-5 border-t border-gray-800">
+                          <h3 className="text-white mb-2 font-medium">{theme.title}</h3>
+                          <p className="text-gray-400 text-sm leading-relaxed mb-3 line-clamp-3">
+                            {theme.description}
+                          </p>
+                          {theme.tags && theme.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {theme.tags.map(tag => (
+                                <span key={tag} className="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Category Actions */}
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleGenerateMore(categoryId)}
+                      disabled={state.isGenerating}
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate 3 More
+                    </Button>
+                    <Button
+                      onClick={() => handleRegenerateCategory(categoryId)}
+                      disabled={state.isGenerating}
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Regenerate All ({state.themes.length})
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Theme Details Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
@@ -445,6 +704,14 @@ export const Stage2ConceptGallery = ({
               {/* Right Side - Details Panel */}
               <div className="w-[450px] bg-gray-900 border-l border-gray-700 overflow-y-auto flex-shrink-0">
                 <div className="p-6 space-y-6">
+                  {/* Category Badge */}
+                  {viewingTheme.category && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg">
+                      <span className="text-xl">{THEME_CATEGORIES[viewingTheme.category].icon}</span>
+                      <span className="text-sm text-gray-300">{THEME_CATEGORIES[viewingTheme.category].name}</span>
+                    </div>
+                  )}
+
                   {/* Description */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
@@ -514,11 +781,11 @@ export const Stage2ConceptGallery = ({
                   )}
 
                   {/* Selection Button */}
-                  {selectedTheme?.id !== viewingTheme.id && (
-                    <div className="pt-4 border-t border-gray-700">
+                  <div className="pt-4 border-t border-gray-700">
+                    {!isThemeSelected(viewingTheme.id) ? (
                       <Button
                         onClick={() => {
-                          setSelectedTheme(viewingTheme);
+                          toggleThemeSelection(viewingTheme);
                           setViewDialogOpen(false);
                         }}
                         className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
@@ -527,17 +794,13 @@ export const Stage2ConceptGallery = ({
                         <Check className="w-5 h-5 mr-2" />
                         Select This Theme
                       </Button>
-                    </div>
-                  )}
-
-                  {selectedTheme?.id === viewingTheme.id && (
-                    <div className="pt-4 border-t border-gray-700">
+                    ) : (
                       <div className="flex items-center justify-center gap-2 text-green-500 py-3">
                         <Check className="w-5 h-5" />
                         <span className="font-medium">Currently Selected</span>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

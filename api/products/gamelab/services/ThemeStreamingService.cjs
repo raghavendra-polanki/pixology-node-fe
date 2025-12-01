@@ -43,7 +43,11 @@ class ThemeStreamingService {
         awayTeam,
         contextPills = [],
         campaignGoal,
-        numberOfThemes = 6,
+        category = 'home-team', // Default category
+        categoryName = 'Home Team Focus',
+        categoryModifier = '',
+        numberOfThemes = 5, // Changed default from 6 to 5
+        mode = 'replace', // 'replace' or 'append'
       } = input;
 
       // ==========================================
@@ -90,6 +94,9 @@ class ThemeStreamingService {
         awayTeam: awayTeam || 'Away Team',
         contextPills: contextPillsStr || 'Playoff Intensity',
         campaignGoal: campaignGoal || 'Social Hype',
+        categoryFocus: categoryName,
+        categoryModifier: categoryModifier,
+        numberOfThemes: numberOfThemes.toString(),
       };
 
       const resolvedPrompt = PromptManager.resolvePrompt(textPrompt, variables);
@@ -131,6 +138,7 @@ class ThemeStreamingService {
           const themeWithId = {
             id: `theme_${Date.now()}_${i}`,
             ...theme,
+            category: category, // Add category field
             contextMetadata: {
               sportType,
               homeTeam,
@@ -192,6 +200,8 @@ class ThemeStreamingService {
             awayTeam: awayTeam || 'Away Team',
             contextPills: contextPillsStr || 'Playoff Intensity',
             campaignGoal: campaignGoal || 'Social Hype',
+            categoryFocus: categoryName,
+            categoryModifier: categoryModifier,
             title: theme.title || '',
             description: theme.description || '',
             tags: Array.isArray(theme.tags) ? theme.tags.join(', ') : theme.tags || '',
@@ -264,11 +274,51 @@ class ThemeStreamingService {
         progress: 95,
       });
 
+      // Load existing project to merge themes
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      const projectData = projectDoc.data();
+
+      // Get existing themes (if any)
+      const existingAiThemes = projectData?.conceptGallery?.aiGeneratedThemes || {};
+      const existingThemesArray = existingAiThemes.themes || [];
+      const existingCategorizedThemes = existingAiThemes.categorizedThemes || {};
+
+      // Build new themes array based on mode
+      let filteredThemes;
+      if (mode === 'append') {
+        // Append mode: Keep ALL existing themes (including from this category) and add new ones
+        filteredThemes = [...existingThemesArray, ...themes];
+      } else {
+        // Replace mode: Remove existing themes from this category, then add new ones
+        const themesFromOtherCategories = existingThemesArray.filter(t => t.category !== category);
+        filteredThemes = [...themesFromOtherCategories, ...themes];
+      }
+
+      // Organize by category
+      const categorizedThemes = { ...existingCategorizedThemes };
+
+      // Build the themes array for this category
+      let categoryThemesArray;
+      if (mode === 'append' && categorizedThemes[category]?.themes) {
+        // Append mode: Keep existing themes and add new ones
+        categoryThemesArray = [...categorizedThemes[category].themes, ...themes];
+      } else {
+        // Replace mode: Use only new themes
+        categoryThemesArray = themes;
+      }
+
+      categorizedThemes[category] = {
+        category: category,
+        themes: categoryThemesArray,
+        generatedAt: new Date(),
+      };
+
       const themeData = {
-        themes,
+        themes: filteredThemes, // Flat array with all themes from all categories
+        categorizedThemes: categorizedThemes, // Organized by category
         generatedAt: new Date(),
         model: textAdaptor.modelId,
-        count: themes.length,
+        count: filteredThemes.length,
       };
 
       // Update project with generated themes (use set with merge to create if doesn't exist)
@@ -279,7 +329,7 @@ class ThemeStreamingService {
         updatedAt: new Date(),
       }, { merge: true });
 
-      console.log('[ThemeStreamingService] Themes saved to database');
+      console.log('[ThemeStreamingService] Themes saved to database - Total themes:', filteredThemes.length);
 
       onComplete({
         themes,

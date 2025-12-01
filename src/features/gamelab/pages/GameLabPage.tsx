@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import GameLabProjectService from '@/shared/services/gameLabProjectService';
-import { ProjectsDashboard } from '../components/ProjectsDashboard';
+import { GameLabHome } from '../components/GameLabHome';
 import { WorkflowView } from '../components/WorkflowView';
 import type { GameLabProject } from '../types/project.types';
 
@@ -111,7 +111,7 @@ export const GameLabPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900">
       {currentView === 'projects' ? (
-        <ProjectsDashboard
+        <GameLabHome
           projects={projects}
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}

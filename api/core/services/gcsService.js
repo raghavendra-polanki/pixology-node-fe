@@ -267,3 +267,74 @@ export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
     throw new Error(`Failed to upload video to GCS: ${error.message}`);
   }
 }
+
+/**
+ * Upload team/player asset (logo, headshot, etc.) to GCS
+ * Supports overwriting by using consistent filenames
+ * @param {Buffer} imageBuffer - The image file buffer
+ * @param {string} assetType - Type of asset: 'team-logo', 'player-headshot'
+ * @param {string} entityId - Team ID or Player ID
+ * @param {string} fileExtension - File extension (e.g., 'png', 'jpg')
+ * @param {string} oldImageUrl - Optional: URL of old image to delete
+ * @returns {string} Public URL of the uploaded image
+ */
+export async function uploadTeamPlayerAsset(imageBuffer, assetType, entityId, fileExtension = 'png', oldImageUrl = null) {
+  try {
+    // Validate inputs
+    if (!imageBuffer || !assetType || !entityId) {
+      throw new Error('Missing required parameters: imageBuffer, assetType, entityId');
+    }
+
+    const bucket = storage.bucket(bucketName);
+
+    // Create unique filename to avoid needing delete/overwrite permissions
+    // Format: gamelab/teams/{teamId}/logo-{timestamp}.png
+    const folder = assetType.startsWith('team') ? 'teams' : 'players';
+    const assetName = assetType.split('-')[1]; // Extract 'logo' or 'headshot'
+    const timestamp = Date.now();
+    const filename = `gamelab/${folder}/${entityId}/${assetName}-${timestamp}.${fileExtension}`;
+
+    // Try to delete old image (optional - won't fail if no permission)
+    if (oldImageUrl && oldImageUrl.includes(bucketName)) {
+      try {
+        await deleteImageFromGCS(oldImageUrl);
+        console.log('Deleted old image:', oldImageUrl);
+      } catch (error) {
+        // Log warning but continue - we'll just have orphaned files
+        console.warn('Could not delete old image (will be orphaned):', error.message);
+      }
+    }
+
+    // Create file object
+    const file = bucket.file(filename);
+
+    // Determine content type based on extension
+    const contentTypeMap = {
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    const contentType = contentTypeMap[fileExtension.toLowerCase()] || 'image/png';
+
+    // Upload the image
+    // Note: Bucket uses uniform bucket-level access, so public access is configured at bucket level
+    await file.save(imageBuffer, {
+      metadata: {
+        contentType,
+        cacheControl: 'public, max-age=86400', // Cache for 24 hours
+      },
+    });
+
+    // Generate the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
+
+    console.log(`Successfully uploaded ${assetType} to GCS: ${publicUrl}`);
+
+    return publicUrl;
+  } catch (error) {
+    console.error(`Error uploading ${assetType} to GCS:`, error);
+    throw new Error(`Failed to upload ${assetType} to GCS: ${error.message}`);
+  }
+}
