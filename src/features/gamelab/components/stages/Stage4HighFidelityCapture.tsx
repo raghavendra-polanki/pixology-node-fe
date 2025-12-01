@@ -1,7 +1,15 @@
-import { useState } from 'react';
-import { ArrowRight, Camera, Sparkles, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Maximize2, X, Download, Play } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import type { GameLabProject, GeneratedImage, CreateProjectInput } from '../../types/project.types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+import { THEME_CATEGORIES } from '../../types/project.types';
+import type { GameLabProject, GeneratedImage, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
+import TeamsService from '@/shared/services/teamsService';
 
 interface Stage4Props {
   project: GameLabProject;
@@ -11,68 +19,482 @@ interface Stage4Props {
   markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
 }
 
-const GENERATED_IMAGES: GeneratedImage[] = [
-  {
-    id: '1',
-    url: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&h=600&fit=crop',
-    hasAlphaChannel: true,
-    resolution: '1920x1080',
-    generatedAt: new Date().toISOString()
-  },
-  {
-    id: '2',
-    url: 'https://images.unsplash.com/photo-1546525848-3ce03ca516f6?w=800&h=600&fit=crop',
-    hasAlphaChannel: true,
-    resolution: '1920x1080',
-    generatedAt: new Date().toISOString()
-  },
-  {
-    id: '3',
-    url: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
-    hasAlphaChannel: true,
-    resolution: '1920x1080',
-    generatedAt: new Date().toISOString()
-  },
-  {
-    id: '4',
-    url: 'https://images.unsplash.com/photo-1578924608019-47d540a18107?w=800&h=600&fit=crop',
-    hasAlphaChannel: true,
-    resolution: '1920x1080',
-    generatedAt: new Date().toISOString()
-  },
-];
+interface ThemeWithPlayers {
+  themeId: string;
+  themeName: string;
+  themeDescription?: string;
+  themeCategory: string;
+  thumbnailUrl?: string;
+  playerCount: number;
+  selectedPlayers: Array<{
+    id: string;
+    name: string;
+    number: string;
+    position: string;
+    teamId: string;
+    photoUrl?: string;
+  }>;
+}
 
-export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigateToStage }: Stage4Props) => {
-  const [images] = useState<GeneratedImage[]>(GENERATED_IMAGES); // Pre-populated
-  const [selectedImage, setSelectedImage] = useState<GeneratedImage | undefined>(GENERATED_IMAGES[0]);
+interface GenerationProgress {
+  stage: string;
+  message: string;
+  progress: number;
+  current: number;
+  total: number;
+}
+
+const teamsService = new TeamsService();
+
+// Player headshot with hover preview
+const PlayerHeadshot = ({ player }: { player: { id: string; name: string; number: string; photoUrl?: string } }) => {
+  const [showPreview, setShowPreview] = useState(false);
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
+    >
+      <div
+        className="w-8 h-8 rounded-full border-2 border-[#151515] overflow-hidden bg-gray-700 cursor-pointer transition-transform hover:scale-110 hover:z-10"
+        title={`${player.name} #${player.number}`}
+      >
+        {player.photoUrl ? (
+          <img
+            src={player.photoUrl}
+            alt={player.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+            {player.number}
+          </div>
+        )}
+      </div>
+
+      {/* Hover preview - larger image */}
+      {showPreview && player.photoUrl && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+          <div className="bg-gray-900 rounded-lg p-1 shadow-xl border border-gray-700">
+            <img
+              src={player.photoUrl}
+              alt={player.name}
+              className="w-24 h-24 rounded-lg object-cover"
+            />
+            <div className="text-center mt-1 px-2 pb-1">
+              <p className="text-white text-xs font-medium truncate">{player.name}</p>
+              <p className="text-gray-400 text-xs">#{player.number}</p>
+            </div>
+          </div>
+          {/* Arrow pointer */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+            <div className="w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-700" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigateToStage, loadProject }: Stage4Props) => {
+  const [themeMappings, setThemeMappings] = useState<ThemeWithPlayers[]>([]);
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
+  // Dialog state for viewing full-size images
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewingMapping, setViewingMapping] = useState<ThemeWithPlayers | null>(null);
+  const [viewingImage, setViewingImage] = useState<GeneratedImage | null>(null);
+
+  // Selection state for export (Stage 6) and animation (Stage 5)
+  const [selectedForExport, setSelectedForExport] = useState<Set<string>>(new Set());
+  const [selectedForAnimation, setSelectedForAnimation] = useState<Set<string>>(new Set());
+
+  // Load theme-player mappings from Stage 3 and refresh player photos
+  useEffect(() => {
+    const loadMappingsWithFreshPlayerData = async () => {
+      if (!project?.castingCall?.themePlayerMappings) return;
+
+      // Get currently selected theme IDs from Stage 2 (source of truth)
+      const selectedThemeIds = new Set(
+        (project.conceptGallery?.selectedThemes || []).map((t: any) => t.id)
+      );
+
+      // Filter mappings to only include themes that are still selected in Stage 2
+      // (This handles the case where old mappings persist due to Firestore merge)
+      const allMappings = Object.values(project.castingCall.themePlayerMappings) as ThemeWithPlayers[];
+      const mappings = allMappings.filter(m => selectedThemeIds.has(m.themeId));
+
+      console.log('[Stage4] Filtered mappings:', mappings.length, 'of', allMappings.length,
+        '(selected theme IDs:', Array.from(selectedThemeIds).join(', '), ')');
+
+      // Also load any previously generated images (filtered to current themes)
+      if (project?.highFidelityCapture?.generatedImages) {
+        const filteredImages = project.highFidelityCapture.generatedImages.filter(
+          (img: any) => selectedThemeIds.has(img.themeId)
+        );
+        setGeneratedImages(filteredImages);
+        console.log('[Stage4] Filtered images:', filteredImages.length, 'of',
+          project.highFidelityCapture.generatedImages.length);
+      }
+
+      // Load existing export/animation selections (filtered to current themes)
+      if (project?.highFidelityCapture?.selectedForExport) {
+        const filteredExport = project.highFidelityCapture.selectedForExport.filter(
+          (id: string) => selectedThemeIds.has(id)
+        );
+        setSelectedForExport(new Set(filteredExport));
+      }
+      if (project?.highFidelityCapture?.selectedForAnimation) {
+        const filteredAnimation = project.highFidelityCapture.selectedForAnimation.filter(
+          (id: string) => selectedThemeIds.has(id)
+        );
+        setSelectedForAnimation(new Set(filteredAnimation));
+      }
+
+      // Try to refresh player photos from current team data
+      const homeTeamId = project?.contextBrief?.homeTeam?.teamId;
+      const awayTeamId = project?.contextBrief?.awayTeam?.teamId;
+
+      if (homeTeamId && awayTeamId) {
+        try {
+          setIsLoadingPlayers(true);
+          console.log('[Stage4] Refreshing player photos from teams:', homeTeamId, awayTeamId);
+
+          // Fetch current player data from both teams
+          const [homeTeamData, awayTeamData] = await Promise.all([
+            teamsService.getTeamWithPlayers('hockey', homeTeamId),
+            teamsService.getTeamWithPlayers('hockey', awayTeamId),
+          ]);
+
+          // Build lookup maps by ID and by name (for fallback matching)
+          const allPlayers = [...(homeTeamData.players || []), ...(awayTeamData.players || [])];
+          const playerPhotoMapById: Record<string, string | undefined> = {};
+          const playerPhotoMapByName: Record<string, string | undefined> = {};
+
+          allPlayers.forEach(player => {
+            if (player.images?.headshot) {
+              if (player.playerId) {
+                playerPhotoMapById[player.playerId] = player.images.headshot;
+              }
+              if (player.name) {
+                playerPhotoMapByName[player.name.toLowerCase()] = player.images.headshot;
+              }
+            }
+          });
+
+          console.log('[Stage4] Built photo maps - by ID:', Object.keys(playerPhotoMapById).length, ', by name:', Object.keys(playerPhotoMapByName).length);
+
+          // Update mappings with fresh player photos
+          const enrichedMappings = mappings.map(mapping => ({
+            ...mapping,
+            selectedPlayers: mapping.selectedPlayers.map(player => {
+              // Try to match by ID first, then by name
+              const photoById = playerPhotoMapById[player.id];
+              const photoByName = player.name ? playerPhotoMapByName[player.name.toLowerCase()] : undefined;
+              const newPhotoUrl = photoById || photoByName || player.photoUrl;
+
+              if (photoById) {
+                console.log(`[Stage4] Found photo for ${player.name} by ID: ${player.id}`);
+              } else if (photoByName) {
+                console.log(`[Stage4] Found photo for ${player.name} by name fallback`);
+              } else {
+                console.log(`[Stage4] No updated photo found for ${player.name} (ID: ${player.id}), using existing: ${player.photoUrl?.substring(0, 50)}...`);
+              }
+
+              return {
+                ...player,
+                photoUrl: newPhotoUrl,
+              };
+            }),
+          }));
+
+          console.log('[Stage4] Updated player photos for', allPlayers.length, 'players from database');
+          setThemeMappings(enrichedMappings);
+        } catch (err) {
+          console.error('[Stage4] Failed to refresh player photos:', err);
+          // Fall back to original mappings
+          setThemeMappings(mappings);
+        } finally {
+          setIsLoadingPlayers(false);
+        }
+      } else {
+        console.log('[Stage4] No team IDs found in contextBrief, using mappings as-is. homeTeamId:', homeTeamId, ', awayTeamId:', awayTeamId);
+        // No team IDs, use mappings as-is
+        setThemeMappings(mappings);
+      }
+    };
+
+    loadMappingsWithFreshPlayerData();
+  }, [project?.castingCall?.themePlayerMappings, project?.highFidelityCapture?.generatedImages, project?.contextBrief?.homeTeam?.teamId, project?.contextBrief?.awayTeam?.teamId]);
+
+  /**
+   * Toggle selection for export (Stage 6)
+   */
+  const toggleExportSelection = (themeId: string) => {
+    setSelectedForExport(prev => {
+      const next = new Set(prev);
+      if (next.has(themeId)) {
+        next.delete(themeId);
+      } else {
+        next.add(themeId);
+      }
+      return next;
+    });
+  };
+
+  /**
+   * Toggle selection for animation (Stage 5)
+   */
+  const toggleAnimationSelection = (themeId: string) => {
+    setSelectedForAnimation(prev => {
+      const next = new Set(prev);
+      if (next.has(themeId)) {
+        next.delete(themeId);
+      } else {
+        next.add(themeId);
+      }
+      return next;
+    });
+  };
+
+  /**
+   * Start generating images for all themes
+   */
+  const handleGenerateImages = async () => {
+    if (!project?.id || themeMappings.length === 0) return;
+
+    setIsGenerating(true);
+    setError(null);
+    setGeneratedImages([]);
+    setGenerationProgress({
+      stage: 'init',
+      message: 'Preparing image generation...',
+      progress: 0,
+      current: 0,
+      total: themeMappings.length,
+    });
+
+    try {
+      // Build the request payload
+      const themePlayerMappings: Record<string, any> = {};
+      themeMappings.forEach((mapping) => {
+        themePlayerMappings[mapping.themeId] = {
+          ...mapping,
+          themeDescription: project.conceptGallery?.selectedThemes?.find(
+            (t: any) => t.id === mapping.themeId
+          )?.description || '',
+        };
+      });
+
+      // DEBUG: Log exactly what players are being sent for each theme
+      console.log('[Stage4 DEBUG] ====== PLAYERS BEING SENT TO BACKEND ======');
+      Object.values(themePlayerMappings).forEach((mapping: any) => {
+        console.log(`[Stage4 DEBUG] Theme: "${mapping.themeName}"`);
+        mapping.selectedPlayers?.forEach((p: any, idx: number) => {
+          console.log(`[Stage4 DEBUG]   Player ${idx + 1}: ${p.name} (#${p.number}) - ID: ${p.id}`);
+        });
+      });
+      console.log('[Stage4 DEBUG] ==========================================');
+
+      const contextBrief = {
+        sportType: 'Hockey',
+        homeTeam: project.contextBrief?.homeTeam,
+        awayTeam: project.contextBrief?.awayTeam,
+        contextPills: project.contextBrief?.contextPills || [],
+        campaignGoal: project.contextBrief?.campaignGoal || 'Social Hype',
+      };
+
+      // Use SSE for streaming updates
+      const response = await fetch('/api/gamelab/generation/images-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: project.id,
+          themePlayerMappings,
+          contextBrief,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start image generation');
+      }
+
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7);
+          } else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleSSEEvent(currentEvent, data);
+            } catch (e) {
+              console.error('[Stage4] Failed to parse SSE data:', e);
+            }
+            currentEvent = '';
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Stage4] Generation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate images');
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress(null);
+    }
+  };
+
+  /**
+   * Handle SSE events from the server
+   */
+  const handleSSEEvent = (eventType: string, data: any) => {
+    console.log('[Stage4] SSE Event:', eventType, data);
+
+    switch (eventType) {
+      case 'start':
+        setGenerationProgress({
+          stage: 'init',
+          message: data.message,
+          progress: 5,
+          current: 0,
+          total: data.totalThemes,
+        });
+        break;
+
+      case 'progress':
+        setGenerationProgress({
+          stage: data.stage,
+          message: data.message,
+          progress: data.progress,
+          current: data.current || 0,
+          total: data.total || themeMappings.length,
+        });
+        break;
+
+      case 'image':
+        // Add new generated image
+        setGeneratedImages((prev) => [...prev, data.image]);
+        setGenerationProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                current: data.themeIndex,
+                message: `Generated ${data.themeIndex}/${data.totalThemes}`,
+              }
+            : null
+        );
+        break;
+
+      case 'error':
+        if (data.fatal) {
+          setError(data.message);
+        } else {
+          console.warn('[Stage4] Non-fatal error:', data);
+        }
+        break;
+
+      case 'complete':
+        setGenerationProgress(null);
+        console.log('[Stage4] Generation complete:', data);
+        // Reload project to get latest data from Firestore (backend already saved)
+        if (loadProject && project?.id) {
+          console.log('[Stage4] Reloading project to fetch saved images from database');
+          loadProject(project.id);
+        }
+        break;
+    }
+  };
+
+  /**
+   * Save and continue to next stage
+   */
   const handleContinue = async () => {
-    if (!selectedImage) return;
+    if (generatedImages.length === 0) return;
 
     try {
       setIsSaving(true);
 
+      console.log('[Stage4] Saving', generatedImages.length, 'generated images');
+
+      // Optimize storage by only saving essential fields (not full player objects)
+      const optimizedImages = generatedImages.map(img => ({
+        id: img.id,
+        themeId: img.themeId,
+        themeName: img.themeName,
+        themeCategory: img.themeCategory,
+        thumbnailUrl: img.thumbnailUrl,
+        url: img.url,
+        // Only store player IDs and names, not full player objects
+        players: img.players?.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          number: p.number,
+        })) || [],
+        hasAlphaChannel: img.hasAlphaChannel,
+        resolution: img.resolution,
+        generatedAt: img.generatedAt,
+        error: img.error,
+      }));
+
+      console.log('[Stage4] Optimized images payload size:', JSON.stringify(optimizedImages).length, 'bytes');
+      console.log('[Stage4] Selected for export:', selectedForExport.size, 'images');
+      console.log('[Stage4] Selected for animation:', selectedForAnimation.size, 'images');
+
       const highFidelityCaptureData = {
-        generatedImages: images,
+        generatedImages: optimizedImages,
+        selectedForExport: Array.from(selectedForExport),
+        selectedForAnimation: Array.from(selectedForAnimation),
         generatedAt: new Date(),
       };
 
-      // Mark stage as completed with high-fidelity capture data
       await markStageCompleted('high-fidelity-capture', undefined, {
         highFidelityCapture: highFidelityCaptureData,
       });
-      // Navigate to next stage (Stage 5 - Kinetic Activation)
+
+      console.log('[Stage4] Save completed successfully');
+
       if (navigateToStage) {
         navigateToStage(5);
       }
-    } catch (error) {
-      console.error('[Stage4] Failed to save high-fidelity capture:', error);
+    } catch (err) {
+      console.error('[Stage4] Failed to save:', err);
       alert('Failed to save. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
+
+  // Check if we have themes to work with
+  const hasThemes = themeMappings.length > 0;
+  const hasGeneratedImages = generatedImages.length > 0;
 
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
@@ -83,95 +505,366 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
             <Camera className="w-6 h-6 text-green-500" />
           </div>
           <div>
-            <h2 className="text-white">Create Images</h2>
-            <p className="text-gray-400">Generate and select your image</p>
+            <h2 className="text-2xl font-bold text-white">Create Images</h2>
+            <p className="text-gray-400">Generate broadcast-ready images with your selected players</p>
           </div>
         </div>
       </div>
 
-      {/* Generate Button */}
-      <div className="mb-8">
-        <Button
-          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
-          size="lg"
-        >
-          <Sparkles className="w-5 h-5 mr-2" />
-          Generate Images
-        </Button>
-      </div>
-
-      {/* Generated Images Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        {images.map(image => (
-          <button
-            key={image.id}
-            onClick={() => setSelectedImage(image)}
-            className={`rounded-xl border-2 overflow-hidden transition-all text-left bg-[#151515] ${
-              selectedImage?.id === image.id
-                ? 'border-green-500 ring-2 ring-green-500'
-                : 'border-gray-800 hover:border-gray-700'
-            }`}
+      {/* No themes warning */}
+      {!hasThemes && (
+        <div className="p-6 bg-yellow-900/20 border border-yellow-500/30 rounded-xl text-center mb-6">
+          <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+          <p className="text-yellow-400 mb-2">No themes with players selected.</p>
+          <p className="text-gray-400 text-sm mb-4">
+            Please complete Stage 3 to select players for your themes.
+          </p>
+          <Button
+            onClick={() => navigateToStage(3)}
+            variant="outline"
+            className="border-yellow-500/50 text-yellow-400"
           >
-            {/* Image with checkerboard background for alpha transparency */}
-            <div className="aspect-video relative overflow-hidden">
-              {/* Checkerboard pattern */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: 'linear-gradient(45deg, #1e293b 25%, transparent 25%), linear-gradient(-45deg, #1e293b 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e293b 75%), linear-gradient(-45deg, transparent 75%, #1e293b 75%)',
-                  backgroundSize: '20px 20px',
-                  backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-                }}
-              />
+            Go to Stage 3
+          </Button>
+        </div>
+      )}
 
-              {/* Generated image */}
-              {image.url ? (
-                <img
-                  src={image.url}
-                  alt={`Generated ${image.id}`}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-red-500/20 flex items-center justify-center">
-                  <div className="text-center text-white">
-                    <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm opacity-50">Generated Image {image.id}</p>
+      {/* Themes Preview */}
+      {hasThemes && (
+        <>
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Themes & Players ({themeMappings.length} themes)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {themeMappings.map((mapping) => {
+                const category = THEME_CATEGORIES[mapping.themeCategory as ThemeCategoryId];
+                const generatedImage = generatedImages.find((img) => img.themeId === mapping.themeId);
+
+                return (
+                  <div
+                    key={mapping.themeId}
+                    className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden group"
+                  >
+                    {/* Theme Image or Generated Image */}
+                    <div className="aspect-video relative bg-gray-900">
+                      {generatedImage?.url ? (
+                        <img
+                          src={generatedImage.url}
+                          alt={mapping.themeName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : mapping.thumbnailUrl ? (
+                        <img
+                          src={mapping.thumbnailUrl}
+                          alt={mapping.themeName}
+                          className="w-full h-full object-cover opacity-50"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Camera className="w-12 h-12 text-gray-700" />
+                        </div>
+                      )}
+
+                      {/* View Full Size Button */}
+                      {(generatedImage?.url || mapping.thumbnailUrl) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingMapping(mapping);
+                            setViewingImage(generatedImage || null);
+                            setViewDialogOpen(true);
+                          }}
+                          className="absolute top-2 left-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          title="View full size"
+                        >
+                          <Maximize2 className="w-4 h-4 text-white" />
+                        </button>
+                      )}
+
+                      {/* Generated badge */}
+                      {generatedImage?.url && (
+                        <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Generated
+                        </div>
+                      )}
+
+                      {/* Category badge */}
+                      <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                        {category?.icon} {category?.name}
+                      </div>
+                    </div>
+
+                    {/* Theme Info */}
+                    <div className="p-4">
+                      <h4 className="text-white font-medium mb-2">{mapping.themeName}</h4>
+
+                      {/* Selected Players */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <Users className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        <div className="flex -space-x-1">
+                          {mapping.selectedPlayers.map((player) => (
+                            <PlayerHeadshot key={player.id} player={player} />
+                          ))}
+                        </div>
+                        <span className="text-sm text-gray-400 truncate">
+                          {mapping.selectedPlayers.map((p) => p.name).join(' & ')}
+                        </span>
+                      </div>
+
+                      {/* Export/Animation Selection Buttons (only show when image is generated) */}
+                      {generatedImage?.url && (
+                        <div className="flex gap-2 pt-2 border-t border-gray-800">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExportSelection(mapping.themeId);
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                              selectedForExport.has(mapping.themeId)
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                            }`}
+                            title="Select for Export (Stage 6)"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Export
+                            {selectedForExport.has(mapping.themeId) && <Check className="w-3 h-3" />}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleAnimationSelection(mapping.themeId);
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                              selectedForAnimation.has(mapping.themeId)
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                            }`}
+                            title="Select for Animation (Stage 5)"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            Animate
+                            {selectedForAnimation.has(mapping.themeId) && <Check className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {selectedImage?.id === image.id && (
-                <div className="absolute top-3 right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
-                  <Check className="w-5 h-5 text-white" />
-                </div>
-              )}
+                );
+              })}
             </div>
-            <div className="p-3 border-t border-gray-800">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">{image.resolution}</span>
-                {image.hasAlphaChannel && (
-                  <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
-                    Alpha Channel
-                  </span>
-                )}
+          </div>
+
+          {/* Generate Button */}
+          <div className="mb-8">
+            <Button
+              onClick={handleGenerateImages}
+              disabled={isGenerating || themeMappings.length === 0}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+              size="lg"
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Generate Images ({themeMappings.length})
+                </>
+              )}
+            </Button>
+
+            {/* Progress indicator */}
+            {generationProgress && (
+              <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400">{generationProgress.message}</span>
+                  <span className="text-sm text-green-400">{generationProgress.progress}%</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${generationProgress.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Error display */}
+            {error && (
+              <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+                <p className="text-red-400">{error}</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Selection Summary & Continue Button */}
+      {hasGeneratedImages && (
+        <div className="mt-6 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${selectedForExport.size > 0 ? 'bg-green-500' : 'bg-gray-600'}`} />
+                <span className="text-sm text-gray-300">
+                  <span className="font-medium text-green-400">{selectedForExport.size}</span> for Export
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-500' : 'bg-gray-600'}`} />
+                <span className="text-sm text-gray-300">
+                  <span className="font-medium text-amber-400">{selectedForAnimation.size}</span> for Animation
+                </span>
               </div>
             </div>
-          </button>
-        ))}
-      </div>
+            <Button
+              onClick={handleContinue}
+              disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+              size="lg"
+            >
+              {isSaving ? 'Saving...' : 'Save & Continue'}
+              {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+            </Button>
+          </div>
+          {selectedForExport.size === 0 && selectedForAnimation.size === 0 && (
+            <p className="text-sm text-yellow-400 mt-3">
+              Select at least one image for Export or Animation to continue
+            </p>
+          )}
+        </div>
+      )}
 
-      {/* Continue Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleContinue}
-          disabled={!selectedImage || isSaving}
-          className="bg-gradient-to-r from-green-500 to-green-500 hover:from-green-600 hover:to-green-500 text-white rounded-xl"
-          size="lg"
-        >
-          {isSaving ? 'Saving...' : 'Continue to Animate'}
-          {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-        </Button>
-      </div>
+      {/* Full Size Image Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="!max-w-[90vw] !w-[90vw] !h-[85vh] p-0 bg-gray-900 border-gray-700 sm:!max-w-[90vw]">
+          <DialogHeader className="px-6 py-4 border-b border-gray-700">
+            <DialogTitle className="text-2xl font-bold text-white">
+              {viewingMapping?.themeName}
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewingMapping && (
+            <div className="flex h-[calc(85vh-80px)] overflow-hidden">
+              {/* Left Side - Full Size Image */}
+              <div className="flex-1 flex items-center justify-center bg-black p-8">
+                {viewingImage?.url ? (
+                  <img
+                    src={viewingImage.url}
+                    alt={viewingMapping.themeName}
+                    className="max-w-full max-h-full object-contain rounded-lg"
+                  />
+                ) : viewingMapping.thumbnailUrl ? (
+                  <img
+                    src={viewingMapping.thumbnailUrl}
+                    alt={viewingMapping.themeName}
+                    className="max-w-full max-h-full object-contain rounded-lg opacity-70"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center text-gray-500">
+                    <Camera className="w-24 h-24" />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Side - Details Panel */}
+              <div className="w-80 bg-gray-900 border-l border-gray-700 p-6 overflow-y-auto">
+                {/* Status Badge */}
+                <div className="mb-6">
+                  {viewingImage?.url ? (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
+                      <Check className="w-4 h-4" />
+                      Generated
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      Pending Generation
+                    </span>
+                  )}
+                </div>
+
+                {/* Theme Info */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-400 mb-2">Theme Category</h3>
+                  <p className="text-white">
+                    {THEME_CATEGORIES[viewingMapping.themeCategory as ThemeCategoryId]?.icon}{' '}
+                    {THEME_CATEGORIES[viewingMapping.themeCategory as ThemeCategoryId]?.name}
+                  </p>
+                </div>
+
+                {/* Theme Description */}
+                {viewingMapping.themeDescription && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-400 mb-2">Description</h3>
+                    <p className="text-gray-300 text-sm">{viewingMapping.themeDescription}</p>
+                  </div>
+                )}
+
+                {/* Selected Players */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-400 mb-3">
+                    Selected Players ({viewingMapping.selectedPlayers.length})
+                  </h3>
+                  <div className="space-y-4">
+                    {viewingMapping.selectedPlayers.map((player) => (
+                      <div
+                        key={player.id}
+                        className="flex items-center gap-4 p-4 bg-gray-800 rounded-xl"
+                      >
+                        <div className="w-24 h-24 rounded-xl overflow-hidden bg-gray-700 flex-shrink-0">
+                          {player.photoUrl ? (
+                            <img
+                              src={player.photoUrl}
+                              alt={player.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl">
+                              #{player.number}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-lg">{player.name}</p>
+                          <p className="text-gray-400">
+                            #{player.number} · {player.position}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Generation Info */}
+                {viewingImage?.generatedAt && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-400 mb-2">Generated</h3>
+                    <p className="text-gray-300 text-sm">
+                      {new Date(viewingImage.generatedAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                {/* Close Button */}
+                <Button
+                  onClick={() => setViewDialogOpen(false)}
+                  variant="outline"
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-800"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
