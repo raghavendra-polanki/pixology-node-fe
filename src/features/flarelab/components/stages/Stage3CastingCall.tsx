@@ -1,23 +1,40 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Flame, Users as UsersIcon, Check, ChevronDown, ChevronUp, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowRight, Users as UsersIcon, Check, Sparkles, RefreshCw, Edit2, X, ZoomIn } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import TeamsService, { Team, Player as TeamPlayer } from '@/shared/services/teamsService';
-import type { GameLabProject, Player, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
+import TeamsService, { Player as TeamPlayer } from '@/shared/services/teamsService';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
+import type { FlareLabProject, Player, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
 import { THEME_CATEGORIES } from '../../types/project.types';
+import { PlayerSelectionModal } from './PlayerSelectionModal';
 
 interface Stage3Props {
-  project: GameLabProject;
+  project: FlareLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
-  loadProject: (projectId: string) => Promise<GameLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlareLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
 }
 
 const teamsService = new TeamsService();
 
-/**
- * Transform team players to the format expected by Stage 3 UI
- */
+interface SelectedTheme {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  thumbnailUrl?: string;
+}
+
+interface ThemePlayerState {
+  themeId: string;
+  themeName: string;
+  themeDescription: string;
+  themeCategory: string;
+  thumbnailUrl?: string;
+  playerCount: number;
+  selectedPlayers: Player[];
+}
+
 const transformPlayersForUI = (
   teamPlayers: TeamPlayer[],
   teamId: 'home' | 'away',
@@ -30,31 +47,12 @@ const transformPlayersForUI = (
     position: player.position,
     teamId,
     teamName,
-    performanceScore: 80 + Math.floor(Math.random() * 15), // TODO: Get real stats
-    socialSentiment: 70 + Math.floor(Math.random() * 20), // TODO: Get real stats
-    isHighlighted: index < 3, // Top 3 by roster order are highlighted
+    performanceScore: 80 + Math.floor(Math.random() * 15),
+    socialSentiment: 70 + Math.floor(Math.random() * 20),
+    isHighlighted: index < 3,
     photoUrl: player.images?.headshot || undefined,
   }));
 };
-
-interface SelectedTheme {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  thumbnailUrl?: string;
-  tags?: string[];
-}
-
-interface ThemePlayerState {
-  themeId: string;
-  themeName: string;
-  themeCategory: string;
-  thumbnailUrl?: string;
-  playerCount: number; // 1 or 2 players required
-  selectedPlayers: Player[];
-  isCollapsed: boolean;
-}
 
 export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage }: Stage3Props) => {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -65,29 +63,30 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
   const [recommendations, setRecommendations] = useState<Record<string, any>>({});
   const [hasLoadedRecommendations, setHasLoadedRecommendations] = useState(false);
 
-  // Fetch real players from selected teams
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+
+  // Fetch players
   useEffect(() => {
     const loadPlayers = async () => {
       const homeTeamId = project?.contextBrief?.homeTeam?.teamId;
       const awayTeamId = project?.contextBrief?.awayTeam?.teamId;
 
       if (!homeTeamId || !awayTeamId) {
-        console.warn('[Stage3] Missing team IDs in context brief');
         setIsLoadingPlayers(false);
         return;
       }
 
       try {
         setIsLoadingPlayers(true);
-        console.log('[Stage3] Loading players for teams:', homeTeamId, awayTeamId);
-
-        // Fetch both teams with their players
         const [homeTeamData, awayTeamData] = await Promise.all([
           teamsService.getTeamWithPlayers('hockey', homeTeamId),
           teamsService.getTeamWithPlayers('hockey', awayTeamId),
         ]);
 
-        // Transform players to UI format
         const homePlayers = transformPlayersForUI(
           homeTeamData.players || [],
           'home',
@@ -99,9 +98,7 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
           `${awayTeamData.city} ${awayTeamData.name}`
         );
 
-        const allPlayers = [...homePlayers, ...awayPlayers];
-        console.log('[Stage3] Loaded', allPlayers.length, 'players');
-        setPlayers(allPlayers);
+        setPlayers([...homePlayers, ...awayPlayers]);
       } catch (error) {
         console.error('[Stage3] Failed to load players:', error);
       } finally {
@@ -112,61 +109,57 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
     loadPlayers();
   }, [project?.contextBrief?.homeTeam?.teamId, project?.contextBrief?.awayTeam?.teamId]);
 
-  // Load selected themes from Stage 2 and restore previous selections
+  // Load themes and recommendations
   useEffect(() => {
     if (project?.conceptGallery?.selectedThemes && players.length > 0) {
       const selectedThemes: SelectedTheme[] = project.conceptGallery.selectedThemes;
-
-      // Get existing player selections from project (if returning to this stage)
       const existingMappings = project?.castingCall?.themePlayerMappings || {};
 
-      // Initialize state for each selected theme
       const initialStates: Record<string, ThemePlayerState> = {};
       selectedThemes.forEach((theme) => {
-        // Determine player count based on category, theme name, or explicit playerCount
-        const playerCount = getPlayerCountForTheme(
-          theme.category as ThemeCategoryId,
-          theme.name,
-          (theme as any).playerCount // Use theme's explicit playerCount if available
-        );
-
-        // Restore previous selections if they exist
+        const playerCount = getPlayerCountForTheme(theme.category as ThemeCategoryId, theme.name);
         const previousSelection = existingMappings[theme.id];
-        const selectedPlayers = previousSelection?.selectedPlayers || [];
 
         initialStates[theme.id] = {
           themeId: theme.id,
           themeName: theme.name,
+          themeDescription: theme.description || '',
           themeCategory: theme.category,
           thumbnailUrl: theme.thumbnailUrl,
           playerCount,
-          selectedPlayers,
-          isCollapsed: false,
+          selectedPlayers: previousSelection?.selectedPlayers || [],
         };
       });
 
       setThemePlayerStates(initialStates);
 
-      // Load existing AI recommendations or fetch new ones
       if (project?.castingCall?.aiRecommendations) {
-        // Load saved recommendations from project
-        console.log('[Stage3] Loading saved AI recommendations from project');
-        setRecommendations(project.castingCall.aiRecommendations);
+        const savedRecs = project.castingCall.aiRecommendations;
+        setRecommendations(savedRecs);
         setHasLoadedRecommendations(true);
+
+        // Update player counts from saved AI recommendations
+        setThemePlayerStates(prev => {
+          const updated = { ...prev };
+          Object.values(savedRecs).forEach((rec: any) => {
+            if (rec.imageAnalysis?.playerCount && updated[rec.themeId]) {
+              console.log(`[Stage3] Loading saved AI playerCount: ${rec.imageAnalysis.playerCount} for ${rec.themeName}`);
+              updated[rec.themeId] = {
+                ...updated[rec.themeId],
+                playerCount: rec.imageAnalysis.playerCount,
+              };
+            }
+          });
+          return updated;
+        });
       } else if (!hasLoadedRecommendations && players.length > 0) {
-        // Fetch new recommendations only if they don't exist in project and we have players
-        console.log('[Stage3] No saved recommendations found, fetching new ones');
         fetchPlayerRecommendations(selectedThemes);
       }
     }
   }, [project?.conceptGallery?.selectedThemes, project?.castingCall?.aiRecommendations, players]);
 
-  /**
-   * Fetch AI-powered player recommendations for all themes
-   */
   const fetchPlayerRecommendations = async (selectedThemes: SelectedTheme[]) => {
-    if (!selectedThemes || selectedThemes.length === 0) return;
-    if (!project?.id) return;
+    if (!selectedThemes || selectedThemes.length === 0 || !project?.id) return;
 
     setIsLoadingRecommendations(true);
 
@@ -176,23 +169,20 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
         title: theme.name,
         description: theme.description,
         category: theme.category,
+        imageUrl: theme.thumbnailUrl,
       }));
 
       const contextBrief = {
-        sportType: project?.contextBrief?.homeTeam ? 'Hockey' : 'Hockey', // Default to Hockey
-        homeTeam: project?.contextBrief?.homeTeam?.name || 'Home Team',
-        awayTeam: project?.contextBrief?.awayTeam?.name || 'Away Team',
+        sportType: project?.contextBrief?.sportType || 'Hockey',
+        homeTeam: project?.contextBrief?.homeTeam || { name: 'Home Team' },
+        awayTeam: project?.contextBrief?.awayTeam || { name: 'Away Team' },
         contextPills: project?.contextBrief?.contextPills || [],
         campaignGoal: project?.contextBrief?.campaignGoal || 'Social Hype',
       };
 
-      console.log('[Stage3] Fetching player recommendations for', themes.length, 'themes');
-
-      const response = await fetch('/api/gamelab/generation/players-suggest', {
+      const response = await fetch('/api/flarelab/generation/players-suggest', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project.id,
           themes,
@@ -201,564 +191,481 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch recommendations');
-      }
+      if (!response.ok) throw new Error('Failed to fetch recommendations');
 
       const data = await response.json();
-      console.log('[Stage3] Recommendations received:', data);
-
-      // Store recommendations by theme ID
       const recommendationsByTheme: Record<string, any> = {};
+
+      // Collect all recommendations
       data.recommendations.forEach((rec: any) => {
         recommendationsByTheme[rec.themeId] = rec;
-        console.log('[Stage3] Theme:', rec.themeId, 'Recommended players:', rec.recommendedPlayers);
+      });
+
+      // Update player counts from AI analysis in a single state update
+      setThemePlayerStates(prev => {
+        const updated = { ...prev };
+        data.recommendations.forEach((rec: any) => {
+          if (rec.imageAnalysis?.playerCount && updated[rec.themeId]) {
+            const aiPlayerCount = rec.imageAnalysis.playerCount;
+            console.log(`[Stage3] AI detected ${aiPlayerCount} players for theme: ${rec.themeName}`);
+
+            // Update player count from AI analysis
+            updated[rec.themeId] = {
+              ...updated[rec.themeId],
+              playerCount: aiPlayerCount,
+              // Trim selection if it exceeds new count
+              selectedPlayers: updated[rec.themeId].selectedPlayers.slice(0, aiPlayerCount),
+            };
+          }
+        });
+        return updated;
       });
 
       setRecommendations(recommendationsByTheme);
       setHasLoadedRecommendations(true);
-      console.log('[Stage3] Recommendations state updated:', recommendationsByTheme);
-
-      // Save recommendations to project
       await saveRecommendationsToProject(recommendationsByTheme);
     } catch (error) {
-      console.error('[Stage3] Failed to fetch player recommendations:', error);
-      console.log('[Stage3] Using fallback - showing all players without AI recommendations');
-
-      // TEMPORARY: Add mock recommendations for testing UI
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Stage3] Adding mock recommendations for UI testing');
-        const mockRecommendations: Record<string, any> = {};
-        selectedThemes.forEach((theme, index) => {
-          // Mock recommend the first 1-2 players based on category and theme name
-          const playerCount = getPlayerCountForTheme(
-            theme.category as ThemeCategoryId,
-            theme.name,
-            (theme as any).playerCount
-          );
-          const themePlayers = getPlayersForTheme(theme.category);
-          const recommendedPlayerIds = themePlayers.slice(0, playerCount);
-
-          mockRecommendations[theme.id] = {
-            themeId: theme.id,
-            themeName: theme.name,
-            playerCount,
-            recommendedPlayers: recommendedPlayerIds.map(p => ({
-              playerId: p.id,
-              name: p.name,
-              reason: `Top ${p.position} for ${theme.category} themes with high performance score.`
-            })),
-            reasoning: `Selected based on ${theme.category} category and performance metrics.`,
-          };
-        });
-        setRecommendations(mockRecommendations);
-        setHasLoadedRecommendations(true);
-        console.log('[Stage3] Mock recommendations set:', mockRecommendations);
-
-        // Save mock recommendations to project
-        await saveRecommendationsToProject(mockRecommendations);
-      }
+      console.error('[Stage3] Failed to fetch recommendations:', error);
     } finally {
       setIsLoadingRecommendations(false);
     }
   };
 
-  /**
-   * Save AI recommendations to the project
-   */
   const saveRecommendationsToProject = async (recs: Record<string, any>) => {
     try {
       await markStageCompleted('casting-call', undefined, {
-        castingCall: {
-          aiRecommendations: recs,
-          recommendationsGeneratedAt: new Date(),
-        },
+        castingCall: { aiRecommendations: recs, recommendationsGeneratedAt: new Date() },
       });
-      console.log('[Stage3] AI recommendations saved to project');
     } catch (error) {
       console.error('[Stage3] Failed to save recommendations:', error);
     }
   };
 
-  /**
-   * Regenerate AI recommendations (manually triggered by user)
-   */
   const regenerateRecommendations = async () => {
     if (!project?.conceptGallery?.selectedThemes) return;
-
     setHasLoadedRecommendations(false);
-    const selectedThemes: SelectedTheme[] = project.conceptGallery.selectedThemes;
-    await fetchPlayerRecommendations(selectedThemes);
+    await fetchPlayerRecommendations(project.conceptGallery.selectedThemes);
   };
 
-  /**
-   * Determine how many players are needed based on theme category and title
-   */
-  const getPlayerCountForTheme = (category: ThemeCategoryId, themeName?: string, themePlayerCount?: number): number => {
-    // If theme has explicit playerCount, use it
-    if (themePlayerCount && themePlayerCount > 0) {
-      return themePlayerCount;
-    }
-
-    // Rivalry and posed categories typically need 2 players
-    if (category === 'rivalry' || category === 'posed') {
-      return 2;
-    }
-
-    // Check theme name for keywords suggesting 2 players
+  const getPlayerCountForTheme = (category: ThemeCategoryId, themeName?: string): number => {
+    if (category === 'rivalry' || category === 'posed') return 2;
     if (themeName) {
       const lowerName = themeName.toLowerCase();
-      const twoPlayerKeywords = [
-        'clash', 'vs', 'versus', 'face-off', 'faceoff', 'face off',
-        'showdown', 'duel', 'battle', 'rivalry', 'matchup', 'match-up',
-        'confrontation', 'standoff', 'duo', 'pair', 'two', '2'
-      ];
-      if (twoPlayerKeywords.some(keyword => lowerName.includes(keyword))) {
-        return 2;
-      }
+      const twoPlayerKeywords = ['clash', 'vs', 'versus', 'face-off', 'showdown', 'duel', 'battle', 'rivalry', 'matchup'];
+      if (twoPlayerKeywords.some(keyword => lowerName.includes(keyword))) return 2;
     }
-
-    // Other categories (home-team, away-team, broadcast) typically need 1 player
     return 1;
   };
 
-  // Keep old function for backward compatibility
-  const getPlayerCountForCategory = (category: ThemeCategoryId): number => {
-    return getPlayerCountForTheme(category);
-  };
-
-  /**
-   * Toggle player selection for a specific theme
-   */
-  const togglePlayerForTheme = (themeId: string, player: Player) => {
-    setThemePlayerStates(prev => {
-      const themeState = prev[themeId];
-      if (!themeState) return prev;
-
-      const isSelected = themeState.selectedPlayers.some(p => p.id === player.id);
-      let newSelectedPlayers: Player[];
-
-      if (isSelected) {
-        // Deselect player
-        newSelectedPlayers = themeState.selectedPlayers.filter(p => p.id !== player.id);
-      } else {
-        // Select player (respect max count)
-        if (themeState.selectedPlayers.length >= themeState.playerCount) {
-          // Replace the last selected player with the new one
-          newSelectedPlayers = [...themeState.selectedPlayers.slice(0, -1), player];
-        } else {
-          newSelectedPlayers = [...themeState.selectedPlayers, player];
-        }
-      }
-
-      return {
-        ...prev,
-        [themeId]: {
-          ...themeState,
-          selectedPlayers: newSelectedPlayers,
-        },
-      };
-    });
-  };
-
-  /**
-   * Check if a player is selected for a specific theme
-   */
-  const isPlayerSelectedForTheme = (themeId: string, playerId: string): boolean => {
-    return themePlayerStates[themeId]?.selectedPlayers.some(p => p.id === playerId) || false;
-  };
-
-  /**
-   * Check if a player is AI-recommended for a specific theme
-   */
-  const isPlayerRecommended = (themeId: string, playerId: string): boolean => {
-    const themeRec = recommendations[themeId];
-    if (!themeRec || !themeRec.recommendedPlayers) return false;
-    return themeRec.recommendedPlayers.some((rec: any) => rec.playerId === playerId);
-  };
-
-  /**
-   * Get recommendation reason for a player in a theme
-   */
-  const getRecommendationReason = (themeId: string, playerId: string): string | null => {
-    const themeRec = recommendations[themeId];
-    if (!themeRec || !themeRec.recommendedPlayers) return null;
-    const playerRec = themeRec.recommendedPlayers.find((rec: any) => rec.playerId === playerId);
-    return playerRec?.reason || null;
-  };
-
-  /**
-   * Get filtered and sorted players for a specific theme
-   * Filters by team based on category, then sorts recommended players to the top
-   */
   const getPlayersForTheme = (themeCategory: string): Player[] => {
-    let filteredPlayers = [...players];
-
-    // Filter by team based on theme category
-    if (themeCategory === 'home-team') {
-      filteredPlayers = players.filter(p => p.teamId === 'home');
-    } else if (themeCategory === 'away-team') {
-      filteredPlayers = players.filter(p => p.teamId === 'away');
-    }
-    // For rivalry, posed, and broadcast - show all players
-
-    return filteredPlayers;
+    if (themeCategory === 'home-team') return players.filter(p => p.teamId === 'home');
+    if (themeCategory === 'away-team') return players.filter(p => p.teamId === 'away');
+    return players;
   };
 
-  /**
-   * Sort players to show recommended ones first
-   */
-  const sortPlayersByRecommendation = (playersToSort: Player[], themeId: string): Player[] => {
-    return [...playersToSort].sort((a, b) => {
-      const aIsRecommended = isPlayerRecommended(themeId, a.id);
-      const bIsRecommended = isPlayerRecommended(themeId, b.id);
-
-      if (aIsRecommended && !bIsRecommended) return -1;
-      if (!aIsRecommended && bIsRecommended) return 1;
-      return 0;
-    });
+  const getRecommendedPlayerIds = (themeId: string): string[] => {
+    const rec = recommendations[themeId];
+    if (!rec?.recommendedPlayers) return [];
+    return rec.recommendedPlayers.map((p: any) => p.playerId);
   };
 
-  /**
-   * Toggle collapsed state for a theme section
-   */
-  const toggleThemeCollapse = (themeId: string) => {
-    setThemePlayerStates(prev => ({
-      ...prev,
-      [themeId]: {
-        ...prev[themeId],
-        isCollapsed: !prev[themeId].isCollapsed,
-      },
+  const getRecommendedPlayers = (themeId: string): { id: string; name: string; reason?: string }[] => {
+    const rec = recommendations[themeId];
+    if (!rec?.recommendedPlayers) return [];
+    return rec.recommendedPlayers.map((p: any) => ({
+      id: p.playerId,
+      name: p.name,
+      reason: p.reason,
     }));
   };
 
-  /**
-   * Check if all themes have the required number of players selected
-   */
+  const getRecommendationReason = (themeId: string, playerId: string): string | null => {
+    const rec = recommendations[themeId];
+    if (!rec?.recommendedPlayers) return null;
+    const playerRec = rec.recommendedPlayers.find((p: any) => p.playerId === playerId);
+    return playerRec?.reason || null;
+  };
+
+  const acceptAIPicks = (themeId: string) => {
+    const rec = recommendations[themeId];
+    if (!rec?.recommendedPlayers) return;
+
+    const themeState = themePlayerStates[themeId];
+    const recommendedIds = rec.recommendedPlayers.map((p: any) => p.playerId);
+    const selectedPlayers = players.filter(p => recommendedIds.includes(p.id)).slice(0, themeState.playerCount);
+
+    setThemePlayerStates(prev => ({
+      ...prev,
+      [themeId]: { ...prev[themeId], selectedPlayers },
+    }));
+  };
+
+  const openPlayerModal = (themeId: string) => {
+    setActiveThemeId(themeId);
+    setModalOpen(true);
+  };
+
+  const handleModalConfirm = (selectedPlayers: Player[]) => {
+    if (!activeThemeId) return;
+
+    setThemePlayerStates(prev => ({
+      ...prev,
+      [activeThemeId]: { ...prev[activeThemeId], selectedPlayers },
+    }));
+    setModalOpen(false);
+    setActiveThemeId(null);
+  };
+
   const allThemesComplete = (): boolean => {
     return Object.values(themePlayerStates).every(
-      themeState => themeState.selectedPlayers.length === themeState.playerCount
+      state => state.selectedPlayers.length === state.playerCount
     );
   };
 
-  /**
-   * Save and continue to next stage
-   */
   const handleContinue = async () => {
     if (!allThemesComplete()) return;
 
     try {
       setIsSaving(true);
 
-      // Build theme-player mappings
       const themePlayerMappings: Record<string, any> = {};
-      Object.values(themePlayerStates).forEach(themeState => {
-        themePlayerMappings[themeState.themeId] = {
-          themeId: themeState.themeId,
-          themeName: themeState.themeName,
-          themeCategory: themeState.themeCategory,
-          thumbnailUrl: themeState.thumbnailUrl,
-          playerCount: themeState.playerCount,
-          selectedPlayers: themeState.selectedPlayers,
+      Object.values(themePlayerStates).forEach(state => {
+        themePlayerMappings[state.themeId] = {
+          themeId: state.themeId,
+          themeName: state.themeName,
+          themeCategory: state.themeCategory,
+          thumbnailUrl: state.thumbnailUrl,
+          playerCount: state.playerCount,
+          selectedPlayers: state.selectedPlayers,
         };
       });
 
-      // Flatten all selected players for backward compatibility
-      const allSelectedPlayers = Object.values(themePlayerStates)
-        .flatMap(state => state.selectedPlayers);
-
-      const castingCallData = {
-        themePlayerMappings,
-        selectedPlayers: allSelectedPlayers, // Legacy
-        availablePlayers: players,
-        selectedAt: new Date(),
-      };
-
-      // Mark stage as completed
       await markStageCompleted('casting-call', undefined, {
-        castingCall: castingCallData,
+        castingCall: {
+          themePlayerMappings,
+          selectedPlayers: Object.values(themePlayerStates).flatMap(s => s.selectedPlayers),
+          availablePlayers: players,
+          selectedAt: new Date(),
+        },
       });
 
-      // Navigate to Stage 4
-      if (navigateToStage) {
-        navigateToStage(4);
-      }
+      navigateToStage(4);
     } catch (error) {
-      console.error('[Stage3] Failed to save casting call:', error);
+      console.error('[Stage3] Failed to save:', error);
       alert('Failed to save. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const selectedThemes = project?.conceptGallery?.selectedThemes || [];
-  const hasNoThemes = selectedThemes.length === 0;
+  // Check if selection matches AI recommendation
+  const selectionMatchesAI = (themeId: string): boolean => {
+    const themeState = themePlayerStates[themeId];
+    const recommendedIds = getRecommendedPlayerIds(themeId);
+    if (!themeState || recommendedIds.length === 0) return false;
 
-  return (
-    <div className="max-w-6xl mx-auto p-8 lg:p-12">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-              <UsersIcon className="w-6 h-6 text-green-500" />
+    const selectedIds = themeState.selectedPlayers.map(p => p.id);
+    return selectedIds.length === recommendedIds.length &&
+           selectedIds.every(id => recommendedIds.includes(id));
+  };
+
+  const selectedThemes = project?.conceptGallery?.selectedThemes || [];
+  const activeTheme = activeThemeId ? themePlayerStates[activeThemeId] : null;
+
+  // Player chip component with hover preview
+  const PlayerChip = ({
+    player,
+    size = 'md',
+    variant = 'default',
+    showAiBadge = false
+  }: {
+    player: Player;
+    size?: 'sm' | 'md';
+    variant?: 'default' | 'ai-suggested';
+    showAiBadge?: boolean;
+  }) => {
+    const [showPopover, setShowPopover] = useState(false);
+
+    const bgColor = variant === 'ai-suggested' ? 'bg-amber-900/40 border border-amber-500/30' : 'bg-gray-800';
+    const textColor = variant === 'ai-suggested' ? 'text-amber-200' : 'text-white';
+
+    return (
+      <div
+        className="relative"
+        onMouseEnter={() => setShowPopover(true)}
+        onMouseLeave={() => setShowPopover(false)}
+      >
+        {/* Chip */}
+        <div className={`flex items-center gap-1.5 rounded-full cursor-pointer transition-all hover:ring-1 hover:ring-orange-500/50 ${bgColor} ${size === 'sm' ? 'px-2 py-1' : 'px-3 py-1.5'}`}>
+          {player.photoUrl ? (
+            <img
+              src={player.photoUrl}
+              alt={player.name}
+              className={`rounded-full object-cover ${size === 'sm' ? 'w-5 h-5' : 'w-7 h-7'}`}
+            />
+          ) : (
+            <div className={`bg-orange-500 rounded-full flex items-center justify-center ${size === 'sm' ? 'w-5 h-5' : 'w-7 h-7'}`}>
+              <span className={`font-bold text-white ${size === 'sm' ? 'text-[10px]' : 'text-xs'}`}>{player.number}</span>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Select Players</h2>
-              <p className="text-gray-400">Choose players for each selected theme</p>
-            </div>
-          </div>
-          {hasLoadedRecommendations && !isLoadingRecommendations && (
-            <Button
-              onClick={regenerateRecommendations}
-              variant="outline"
-              className="border-green-500/50 text-green-400 hover:bg-green-500/10"
-              disabled={isLoadingRecommendations}
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Regenerate AI Suggestions
-            </Button>
+          )}
+          <span className={`font-medium ${textColor} ${size === 'sm' ? 'text-xs' : 'text-sm'}`}>{player.name}</span>
+          {showAiBadge && (
+            <Sparkles className="w-3 h-3 text-amber-400 ml-0.5" />
           )}
         </div>
 
-        {hasNoThemes && (
-          <div className="mt-4 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-            <p className="text-yellow-400">
-              No themes selected. Please go back to Stage 2 and select at least one theme.
-            </p>
-            <Button
-              onClick={() => navigateToStage(2)}
-              variant="outline"
-              className="mt-3 border-yellow-500/50 text-yellow-400"
-            >
-              Go to Stage 2
-            </Button>
+        {/* Hover Popover */}
+        {showPopover && (
+          <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 shadow-xl min-w-[160px]">
+              {/* Player Photo */}
+              <div className="flex justify-center mb-2">
+                {player.photoUrl ? (
+                  <img
+                    src={player.photoUrl}
+                    alt={player.name}
+                    className="w-20 h-20 rounded-xl object-cover border-2 border-gray-700"
+                  />
+                ) : (
+                  <div className="w-20 h-20 bg-orange-500 rounded-xl flex items-center justify-center">
+                    <span className="text-3xl font-bold text-white">{player.number}</span>
+                  </div>
+                )}
+              </div>
+              {/* Player Info */}
+              <div className="text-center">
+                <p className="text-white font-semibold text-sm">{player.name}</p>
+                <p className="text-gray-400 text-xs">#{player.number} • {player.position}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{player.teamName}</p>
+              </div>
+              {/* Arrow pointer */}
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-4 h-4 bg-gray-900 border-r border-b border-gray-700 transform rotate-45" />
+            </div>
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* Loading Players */}
-      {isLoadingPlayers && (
+  // Show prompt editor if editing
+  if (showPromptEditor) {
+    return (
+      <PromptTemplateEditor
+        stageType="stage_3_players"
+        projectId={project.id}
+        onBack={() => setShowPromptEditor(false)}
+        accentColor="#f97316"
+        apiBasePath="/api/flarelab/prompts"
+        stageData={{
+          sportType: project.contextBrief?.sportType || 'Hockey',
+          homeTeam: project.contextBrief?.homeTeam?.name || '',
+          awayTeam: project.contextBrief?.awayTeam?.name || '',
+          contextPills: project.contextBrief?.contextPills?.join(', ') || '',
+          campaignGoal: project.contextBrief?.campaignGoal || '',
+          themeName: selectedThemes[0]?.name || '',
+          themeDescription: selectedThemes[0]?.description || '',
+          themeCategory: selectedThemes[0]?.category || '',
+          availablePlayers: '(Player list from team rosters)',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 lg:p-10">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+              <UsersIcon className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Select Players</h2>
+              <p className="text-gray-400">Choose players for each theme based on AI recommendations</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowPromptEditor(true)}
+              variant="outline"
+              size="sm"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Prompts
+            </Button>
+            {hasLoadedRecommendations && !isLoadingRecommendations && (
+              <Button
+                onClick={regenerateRecommendations}
+                variant="outline"
+                size="sm"
+                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+              >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Regenerate AI
+            </Button>
+          )}
+        </div>
+      </div>
+      </div>
+
+      {/* Loading State */}
+      {(isLoadingPlayers || isLoadingRecommendations) && (
         <div className="flex flex-col items-center justify-center py-16">
-          <RefreshCw className="w-10 h-10 text-green-500 animate-spin mb-4" />
-          <p className="text-gray-400">Loading players from selected teams...</p>
-        </div>
-      )}
-
-      {/* No Players Warning */}
-      {!isLoadingPlayers && players.length === 0 && !hasNoThemes && (
-        <div className="p-6 bg-yellow-900/20 border border-yellow-500/30 rounded-lg text-center">
-          <UsersIcon className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-          <p className="text-yellow-400 mb-2">No players found for the selected teams.</p>
-          <p className="text-gray-400 text-sm mb-4">
-            Please add players to your teams in Team Management first.
+          <RefreshCw className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+          <p className="text-gray-400">
+            {isLoadingPlayers ? 'Loading players...' : 'AI is analyzing themes and recommending players...'}
           </p>
-          <Button
-            onClick={() => navigateToStage(1)}
-            variant="outline"
-            className="border-yellow-500/50 text-yellow-400"
-          >
-            Go Back to Setup
-          </Button>
         </div>
       )}
 
-      {/* Theme Sections */}
-      {!hasNoThemes && !isLoadingPlayers && players.length > 0 && (
-        <div className="space-y-6">
+      {/* Theme Cards - 2 Column Grid */}
+      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {selectedThemes.map((theme: SelectedTheme) => {
             const themeState = themePlayerStates[theme.id];
             if (!themeState) return null;
 
             const category = THEME_CATEGORIES[theme.category as ThemeCategoryId];
+            const hasSelection = themeState.selectedPlayers.length > 0;
             const isComplete = themeState.selectedPlayers.length === themeState.playerCount;
-            const selectionText = `${themeState.selectedPlayers.length}/${themeState.playerCount} player${themeState.playerCount > 1 ? 's' : ''} selected`;
+            const aiRecommendedPlayers = getRecommendedPlayers(theme.id);
+            const hasRecommendations = aiRecommendedPlayers.length > 0;
+            const matchesAI = selectionMatchesAI(theme.id);
 
             return (
               <div
                 key={theme.id}
-                className="border-2 border-gray-700 rounded-xl overflow-hidden bg-gray-900/50"
+                className={`border rounded-2xl overflow-hidden transition-all ${
+                  isComplete ? 'border-orange-500/50' : 'border-gray-800'
+                }`}
               >
-                {/* Theme Header */}
+                {/* Top: Theme Image - Larger, better aspect ratio */}
                 <div
-                  onClick={() => toggleThemeCollapse(theme.id)}
-                  className="w-full p-5 flex items-center justify-between hover:bg-gray-800/50 transition-colors cursor-pointer"
+                  className="relative w-full h-48 cursor-pointer group bg-gray-900"
+                  onClick={() => theme.thumbnailUrl && setImagePreviewUrl(theme.thumbnailUrl)}
                 >
-                  <div className="flex items-center gap-4">
-                    {/* Theme Thumbnail */}
-                    {theme.thumbnailUrl && (
-                      <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
-                        <img
-                          src={theme.thumbnailUrl}
-                          alt={theme.name}
-                          className="w-full h-full object-cover"
-                        />
+                  {theme.thumbnailUrl ? (
+                    <>
+                      <img
+                        src={theme.thumbnailUrl}
+                        alt={theme.name}
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Gradient overlay for text readability */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      {/* Hover zoom icon */}
+                      <div className="absolute top-3 right-3 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ZoomIn className="w-4 h-4 text-white" />
                       </div>
-                    )}
-
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xl">{category?.icon}</span>
-                        <h3 className="text-white font-medium text-lg">{theme.name}</h3>
-                      </div>
-                      <p className="text-gray-400 text-sm mb-2">{theme.description}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded">
-                          {category?.name}
-                        </span>
-                        <span className={`text-sm font-medium ${isComplete ? 'text-green-400' : 'text-gray-500'}`}>
-                          {isComplete && <Check className="w-4 h-4 inline mr-1" />}
-                          {selectionText}
-                        </span>
-                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                      <span className="text-6xl">{category?.icon}</span>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-center gap-3">
-                    {themeState.isCollapsed ? (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
-                    ) : (
-                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                  {/* Theme title overlay on image */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xl">{category?.icon}</span>
+                      <h3 className="text-lg font-semibold text-white">{theme.name}</h3>
+                      <span className="text-xs px-2 py-0.5 bg-black/50 text-gray-300 rounded-full">
+                        {themeState.playerCount} player{themeState.playerCount > 1 ? 's' : ''}
+                      </span>
+                      {isComplete && (
+                        <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    {themeState.themeDescription && (
+                      <p className="text-sm text-gray-300 line-clamp-1">{themeState.themeDescription}</p>
                     )}
                   </div>
                 </div>
 
-                {/* Player Grid */}
-                {!themeState.isCollapsed && (
-                  <div className="px-5 pb-5">
-                    {isLoadingRecommendations ? (
-                      <div className="p-8 text-center">
-                        <div className="animate-spin w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full mx-auto mb-3"></div>
-                        <p className="text-gray-400">AI is analyzing players for this theme...</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="mb-3 p-3 bg-green-900/20 border border-green-500/30 rounded-lg">
-                          <p className="text-green-400 text-sm">
-                            Select <strong>{themeState.playerCount}</strong> player{themeState.playerCount > 1 ? 's' : ''} for this theme
-                            {recommendations[theme.id] && (
-                              <span className="ml-2 inline-flex items-center gap-1 text-xs text-amber-400">
-                                <Sparkles className="w-3 h-3" />
-                                AI picks shown first
-                              </span>
-                            )}
-                          </p>
-                          {/* Debug info */}
-                          {recommendations[theme.id] && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Debug: {recommendations[theme.id].recommendedPlayers?.length || 0} recommended,
-                              IDs: {recommendations[theme.id].recommendedPlayers?.map((p: any) => p.playerId).join(', ')}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {sortPlayersByRecommendation(
-                            getPlayersForTheme(theme.category),
-                            theme.id
-                          ).map((player) => {
-                            const isSelected = isPlayerSelectedForTheme(theme.id, player.id);
-                            const isRecommended = isPlayerRecommended(theme.id, player.id);
-                            const recommendationReason = getRecommendationReason(theme.id, player.id);
+                {/* Bottom: Selection Area */}
+                <div className={`p-4 ${isComplete ? 'bg-orange-500/5' : 'bg-gray-900/50'}`}>
+                  {/* AI Recommendation - Compact inline with chips */}
+                  {hasRecommendations && (
+                    <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-gray-800">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span className="text-xs text-amber-400 flex-shrink-0">AI:</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {aiRecommendedPlayers.slice(0, themeState.playerCount).map((rec) => {
+                            const player = players.find(p => p.id === rec.id);
+                            if (!player) return null;
                             return (
-                          <div
-                            key={player.id}
-                            onClick={() => togglePlayerForTheme(theme.id, player)}
-                            className={`group relative rounded-xl border-2 transition-all text-left overflow-hidden bg-[#151515] cursor-pointer ${
-                              isSelected
-                                ? 'border-green-500 ring-2 ring-green-500'
-                                : isRecommended
-                                ? 'border-amber-500/50 hover:border-amber-500'
-                                : 'border-gray-800 hover:border-gray-700'
-                            }`}
-                          >
-                            {/* Selected background */}
-                            {isSelected && (
-                              <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-lime-400/10" />
-                            )}
-
-                            {/* AI Recommended background */}
-                            {!isSelected && isRecommended && (
-                              <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-amber-400/5" />
-                            )}
-
-                            {/* Check mark */}
-                            {isSelected && (
-                              <div className="absolute top-3 right-3 z-10 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                                <Check className="w-5 h-5 text-white" />
-                              </div>
-                            )}
-
-                            {/* AI Recommendation badge */}
-                            {!isSelected && isRecommended && (
-                              <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 bg-amber-500/90 rounded-full shadow-lg">
-                                <Sparkles className="w-3 h-3 text-white" />
-                                <span className="text-xs font-medium text-white">AI Pick</span>
-                              </div>
-                            )}
-
-                            <div className="relative p-5">
-                              <div className="flex items-start gap-4">
-                                {player.photoUrl ? (
-                                  <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-800">
-                                    <img
-                                      src={player.photoUrl}
-                                      alt={player.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <span className="text-xl font-bold text-white">#{player.number}</span>
-                                  </div>
-                                )}
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="text-white">
-                                      {player.name}
-                                      {/* Debug indicator */}
-                                      <span className="text-xs text-gray-600 ml-2">ID:{player.id}</span>
-                                    </h3>
-                                    {player.isHighlighted && <Flame className="w-4 h-4 text-green-500" />}
-                                    {isRecommended && <span className="text-xs bg-amber-500 px-1 rounded">REC</span>}
-                                  </div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-xs px-2 py-0.5 bg-green-500/20 text-lime-400 rounded">
-                                      #{player.number}
-                                    </span>
-                                    <span className="text-gray-400">{player.position}</span>
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {player.performanceScore && `${player.performanceScore}G, ${player.socialSentiment}A last 5 games`}
-                                  </div>
-
-                                  {/* AI Recommendation reason */}
-                                  {isRecommended && recommendationReason && (
-                                    <div className="mt-2 text-xs text-amber-300 bg-amber-900/20 px-2 py-1 rounded">
-                                      <Sparkles className="w-3 h-3 inline mr-1" />
-                                      {recommendationReason}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                              <PlayerChip
+                                key={rec.id}
+                                player={player}
+                                size="sm"
+                                variant="ai-suggested"
+                              />
+                            );
+                          })}
+                        </div>
+                        {matchesAI && hasSelection && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded flex-shrink-0">
+                            ✓ Active
+                          </span>
+                        )}
+                      </div>
+                      {!hasSelection && (
+                        <Button
+                          onClick={() => acceptAIPicks(theme.id)}
+                          size="sm"
+                          className="bg-amber-500 hover:bg-amber-600 text-white h-7 text-xs"
+                        >
+                          Accept
+                        </Button>
+                      )}
                     </div>
-                      </>
-                    )}
+                  )}
+
+                  {/* Current Selection */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Your pick:</span>
+                      {hasSelection ? (
+                        <div className="flex items-center gap-1.5">
+                          {themeState.selectedPlayers.map((player) => (
+                            <PlayerChip key={player.id} player={player} size="sm" />
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500 italic">None selected</span>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => openPlayerModal(theme.id)}
+                      variant="outline"
+                      size="sm"
+                      className={hasSelection
+                        ? "border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 h-8"
+                        : "border-orange-500/50 text-orange-400 hover:bg-orange-500/10 h-8"
+                      }
+                    >
+                      <Edit2 className="w-3 h-3 mr-1" />
+                      {hasSelection ? 'Change' : 'Select'}
+                    </Button>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
 
-          {/* Continue Button */}
-          <div className="flex items-center justify-between mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-lg">
+      {/* Continue Button - Outside grid */}
+      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && (
+        <div className="flex items-center justify-between mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-xl">
             <div className="text-sm text-gray-400">
               {allThemesComplete() ? (
-                <span className="text-green-400 font-medium">
+                <span className="text-orange-400 font-medium">
                   <Check className="w-4 h-4 inline mr-1" />
                   All themes have players selected
                 </span>
@@ -769,13 +676,52 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
             <Button
               onClick={handleContinue}
               disabled={!allThemesComplete() || isSaving}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
               size="lg"
             >
               {isSaving ? 'Saving...' : 'Continue to Create Images'}
               {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
             </Button>
-          </div>
+        </div>
+      )}
+
+      {/* Player Selection Modal */}
+      {activeTheme && (
+        <PlayerSelectionModal
+          isOpen={modalOpen}
+          onClose={() => {
+            setModalOpen(false);
+            setActiveThemeId(null);
+          }}
+          onConfirm={handleModalConfirm}
+          themeName={activeTheme.themeName}
+          themeCategory={activeTheme.themeCategory}
+          playerCount={activeTheme.playerCount}
+          availablePlayers={getPlayersForTheme(activeTheme.themeCategory)}
+          currentSelection={activeTheme.selectedPlayers}
+          recommendedPlayerIds={getRecommendedPlayerIds(activeTheme.themeId)}
+          getRecommendationReason={(playerId) => getRecommendationReason(activeTheme.themeId, playerId)}
+        />
+      )}
+
+      {/* Image Preview Modal */}
+      {imagePreviewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setImagePreviewUrl(null)}
+        >
+          <button
+            onClick={() => setImagePreviewUrl(null)}
+            className="absolute top-6 right-6 w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+          <img
+            src={imagePreviewUrl}
+            alt="Theme preview"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

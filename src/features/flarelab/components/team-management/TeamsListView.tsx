@@ -76,7 +76,7 @@ export const TeamsListView = ({ sport, onSelectTeam }: TeamsListViewProps) => {
     return (
       <div className="flex justify-center py-16">
         <div className="animate-spin">
-          <RefreshCw className="w-8 h-8 text-green-500" />
+          <RefreshCw className="w-8 h-8 text-orange-500" />
         </div>
       </div>
     );
@@ -95,7 +95,7 @@ export const TeamsListView = ({ sport, onSelectTeam }: TeamsListViewProps) => {
             setTeamToEdit(null);
             setIsFormModalOpen(true);
           }}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Team
@@ -122,7 +122,7 @@ export const TeamsListView = ({ sport, onSelectTeam }: TeamsListViewProps) => {
             setTeamToEdit(null);
             setIsFormModalOpen(true);
           }}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Team
@@ -135,7 +135,7 @@ export const TeamsListView = ({ sport, onSelectTeam }: TeamsListViewProps) => {
           <Card
             key={team.teamId}
             onClick={() => onSelectTeam(team.teamId)}
-            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-green-500/50 transition-all cursor-pointer group relative"
+            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-orange-500/50 transition-all cursor-pointer group relative"
           >
             <div className="p-4">
               {/* Large Team Logo - Primary Focus */}
@@ -161,7 +161,7 @@ export const TeamsListView = ({ sport, onSelectTeam }: TeamsListViewProps) => {
 
               {/* Team Name - Clean Typography */}
               <div className="text-center mb-2">
-                <h3 className="text-base font-bold text-white group-hover:text-green-400 transition-colors leading-tight">
+                <h3 className="text-base font-bold text-white group-hover:text-orange-400 transition-colors leading-tight">
                   {team.name}
                 </h3>
               </div>

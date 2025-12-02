@@ -153,9 +153,20 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
           if (imageUrl) {
             const imageBase64 = await this._fetchImageAsBase64(imageUrl);
             if (imageBase64) {
+              // Detect MIME type from URL file extension
+              const getMimeType = (url) => {
+                const urlPath = url.split('?')[0].toLowerCase(); // Remove query params
+                if (urlPath.endsWith('.png')) return 'image/png';
+                if (urlPath.endsWith('.gif')) return 'image/gif';
+                if (urlPath.endsWith('.webp')) return 'image/webp';
+                if (urlPath.endsWith('.svg')) return 'image/svg+xml';
+                if (urlPath.endsWith('.bmp')) return 'image/bmp';
+                return 'image/jpeg'; // Default for .jpg, .jpeg, or unknown
+              };
+
               contentParts.push({
                 inlineData: {
-                  mimeType: 'image/jpeg',
+                  mimeType: getMimeType(imageUrl),
                   data: imageBase64,
                 },
               });
@@ -165,7 +176,7 @@ export default class GeminiAdaptor extends BaseAIAdaptor {
       }
 
       const result = await this.client.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3-pro-image-preview',
         contents: contentParts,
         config: {
           imageConfig: {

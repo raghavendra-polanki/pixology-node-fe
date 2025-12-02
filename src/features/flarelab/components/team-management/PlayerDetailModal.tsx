@@ -22,7 +22,7 @@ export const PlayerDetailModal = ({ player, team, open, onClose }: PlayerDetailM
     if (position.startsWith('G')) return 'text-red-400 border-red-400 bg-red-400/10';
     if (position.startsWith('D')) return 'text-blue-400 border-blue-400 bg-blue-400/10';
     if (position.startsWith('C')) return 'text-purple-400 border-purple-400 bg-purple-400/10';
-    if (position.startsWith('L') || position.startsWith('R')) return 'text-green-400 border-green-400 bg-green-400/10';
+    if (position.startsWith('L') || position.startsWith('R')) return 'text-orange-400 border-orange-400 bg-orange-400/10';
     return 'text-yellow-400 border-yellow-400 bg-yellow-400/10';
   };
 

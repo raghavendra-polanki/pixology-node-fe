@@ -85,7 +85,7 @@ class TeamsService {
    * Get all available sports
    */
   async getSports(): Promise<Sport[]> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/teams/sports`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/teams/sports`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -104,7 +104,7 @@ class TeamsService {
    * Get all teams for a specific sport
    */
   async getTeams(sport: string): Promise<Team[]> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/teams/${sport}`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/teams/${sport}`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -123,7 +123,7 @@ class TeamsService {
    * Get a specific team with all players
    */
   async getTeam(sport: string, teamId: string): Promise<Team> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/teams/${sport}/${teamId}`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/teams/${sport}/${teamId}`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -142,7 +142,7 @@ class TeamsService {
    * Get all players for a specific team
    */
   async getPlayers(sport: string, teamId: string): Promise<Player[]> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/teams/${sport}/${teamId}/players`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/teams/${sport}/${teamId}/players`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -169,7 +169,7 @@ class TeamsService {
    * Update a team's data
    */
   async updateTeam(sport: string, teamId: string, teamData: Partial<Team>): Promise<Team> {
-    const url = `${this.apiBaseUrl}/api/gamelab/teams/${sport}/${teamId}`;
+    const url = `${this.apiBaseUrl}/api/flarelab/teams/${sport}/${teamId}`;
     console.log('Updating team at URL:', url);
     const response = await fetch(url, {
       method: 'PUT',

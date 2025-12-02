@@ -40,7 +40,7 @@ export const SportsListView = ({ onSelectSport }: SportsListViewProps) => {
     return (
       <div className="flex justify-center py-16">
         <div className="animate-spin">
-          <RefreshCw className="w-8 h-8 text-green-500" />
+          <RefreshCw className="w-8 h-8 text-orange-500" />
         </div>
       </div>
     );
@@ -65,7 +65,7 @@ export const SportsListView = ({ onSelectSport }: SportsListViewProps) => {
         <p className="text-gray-400">Select a sport to manage its teams and players</p>
         <Button
           onClick={() => {/* TODO: Implement add sport */}}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
           size="sm"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -79,17 +79,17 @@ export const SportsListView = ({ onSelectSport }: SportsListViewProps) => {
           <Card
             key={sport.id}
             onClick={() => onSelectSport(sport.id)}
-            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-green-500/50 transition-all cursor-pointer group"
+            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-orange-500/50 transition-all cursor-pointer group"
           >
             <div className="p-6">
               {/* Sport Icon & Header */}
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center group-hover:bg-green-500/10 transition-colors">
+                  <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center group-hover:bg-orange-500/10 transition-colors">
                     {getSportIcon(sport.icon)}
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white group-hover:text-green-400 transition-colors mb-1">
+                    <h3 className="text-xl font-bold text-white group-hover:text-orange-400 transition-colors mb-1">
                       {sport.name}
                     </h3>
                     <div className="text-sm text-gray-500">
@@ -122,7 +122,7 @@ export const SportsListView = ({ onSelectSport }: SportsListViewProps) => {
               <div className="mt-4 pt-4 border-t border-gray-800">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Click to view teams</span>
-                  <TrendingUp className="w-4 h-4 text-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <TrendingUp className="w-4 h-4 text-orange-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>
             </div>

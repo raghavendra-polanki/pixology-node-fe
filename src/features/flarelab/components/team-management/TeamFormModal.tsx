@@ -54,7 +54,7 @@ export const TeamFormModal = ({ team, open, onClose, onSave }: TeamFormModalProp
         }
 
         const token = sessionStorage.getItem('authToken');
-        const response = await fetch('/api/gamelab/teams/upload-asset', {
+        const response = await fetch('/api/flarelab/teams/upload-asset', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -158,7 +158,7 @@ export const TeamFormModal = ({ team, open, onClose, onSave }: TeamFormModalProp
                 <select
                   value={formData.conference || ''}
                   onChange={(e) => updateField('conference', e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">Select Conference</option>
                   <option value="Western">Western</option>
@@ -170,7 +170,7 @@ export const TeamFormModal = ({ team, open, onClose, onSave }: TeamFormModalProp
                 <select
                   value={formData.division || ''}
                   onChange={(e) => updateField('division', e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">Select Division</option>
                   <option value="Pacific">Pacific</option>
@@ -273,7 +273,7 @@ export const TeamFormModal = ({ team, open, onClose, onSave }: TeamFormModalProp
             <Button
               type="submit"
               disabled={isSaving}
-              className="bg-green-500 hover:bg-green-600 text-white"
+              className="bg-orange-500 hover:bg-orange-600 text-white"
             >
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? 'Saving...' : isEdit ? 'Update Team' : 'Add Team'}

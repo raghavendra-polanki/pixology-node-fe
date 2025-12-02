@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Download, FileVideo, Image as ImageIcon, CheckCircle2, Package, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import type { GameLabProject, GeneratedImage, CreateProjectInput } from '../../types/project.types';
+import type { FlareLabProject, GeneratedImage, CreateProjectInput } from '../../types/project.types';
 
 interface Stage6Props {
-  project: GameLabProject;
+  project: FlareLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
-  loadProject: (projectId: string) => Promise<GameLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlareLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
 }
 
 interface ExportItem {
@@ -81,10 +81,10 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
       // Generate filename
       const extension = item.type === 'video' ? 'mp4' : 'png';
       const safeName = item.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const filename = `gamelab_${safeName}_${item.type}.${extension}`;
+      const filename = `flarelab_${safeName}_${item.type}.${extension}`;
 
       // Use backend proxy to avoid CORS issues
-      const proxyUrl = `/api/gamelab/download/proxy?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(filename)}`;
+      const proxyUrl = `/api/flarelab/download/proxy?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(filename)}`;
 
       // Fetch through proxy
       const response = await fetch(proxyUrl);
@@ -182,8 +182,8 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-            <Download className="w-6 h-6 text-green-500" />
+          <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+            <Download className="w-6 h-6 text-orange-500" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">Export & Download</h2>
@@ -193,11 +193,11 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
 
         {/* Summary */}
         {hasItems && (
-          <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+          <div className="mt-4 p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl">
             <div className="flex items-center gap-4">
-              <Package className="w-5 h-5 text-green-400" />
+              <Package className="w-5 h-5 text-orange-400" />
               <div className="flex-1">
-                <p className="text-green-300 text-sm">
+                <p className="text-orange-300 text-sm">
                   <strong>{exportItems.length} items</strong> ready for export
                   ({imageItems.length} images, {videoItems.length} videos)
                 </p>
@@ -205,7 +205,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
               <Button
                 onClick={downloadAll}
                 disabled={downloadingAll || downloadingId !== null}
-                className="bg-green-500 hover:bg-green-600 text-white"
+                className="bg-orange-500 hover:bg-orange-600 text-white"
               >
                 {downloadingAll ? (
                   <>
@@ -239,7 +239,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
       {imageItems.length > 0 && (
         <div className="mb-8">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-green-400" />
+            <ImageIcon className="w-5 h-5 text-orange-400" />
             Images ({imageItems.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -255,7 +255,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
                     className="w-full h-full object-cover"
                   />
                   {downloadedItems.has(item.id) && (
-                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                    <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
                       Downloaded
                     </div>
@@ -271,7 +271,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
                     disabled={downloadingId === item.id || downloadingAll}
                     size="sm"
                     variant="outline"
-                    className="w-full border-green-500/50 text-green-400 hover:bg-green-500/10"
+                    className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
                   >
                     {downloadingId === item.id ? (
                       <>
@@ -316,7 +316,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
                     playsInline
                   />
                   {downloadedItems.has(item.id) && (
-                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 z-10">
+                    <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 z-10">
                       <CheckCircle2 className="w-3 h-3" />
                       Downloaded
                     </div>
@@ -360,7 +360,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
             <div className="flex items-center gap-3">
               {allDownloaded ? (
                 <>
-                  <CheckCircle2 className="w-6 h-6 text-green-400" />
+                  <CheckCircle2 className="w-6 h-6 text-orange-400" />
                   <div>
                     <p className="text-white font-medium">All items downloaded!</p>
                     <p className="text-sm text-gray-400">You can now finish the project</p>
@@ -379,7 +379,7 @@ export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Prop
             <Button
               onClick={handleFinishProject}
               disabled={isSaving}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
               size="lg"
             >
               {isSaving ? (

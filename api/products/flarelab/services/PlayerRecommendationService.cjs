@@ -1,11 +1,13 @@
 /**
  * PlayerRecommendationService - AI-powered player recommendations for themes
  *
- * Analyzes themes and suggests the most suitable players based on:
- * - Theme category (home-team, away-team, rivalry, posed, broadcast)
- * - Theme description and visual concept
- * - Player attributes (position, performance, team affiliation)
- * - Campaign context from Stage 1
+ * OPTIMIZED: Single AI call that both analyzes theme images AND recommends players
+ *
+ * The AI will:
+ * 1. Analyze the theme image to detect player count and team requirements
+ * 2. Recommend the best fitting players based on the analysis
+ *
+ * All in ONE API call for efficiency.
  */
 
 const PromptManager = require('../../../core/services/PromptManager.cjs');
@@ -13,36 +15,37 @@ const PromptManager = require('../../../core/services/PromptManager.cjs');
 class PlayerRecommendationService {
   /**
    * Get AI-recommended players for a specific theme
+   * Uses a SINGLE AI call that analyzes the image AND recommends players
    *
    * @param {string} projectId - Project ID
    * @param {Object} input - Input parameters
    * @param {Object} db - Firestore database instance
    * @param {Object} AIAdaptorResolver - AI adaptor resolver
-   * @returns {Promise<Object>} Recommended players with reasoning
+   * @returns {Promise<Object>} Image analysis + recommended players
    */
   static async recommendPlayersForTheme(projectId, input, db, AIAdaptorResolver) {
     const {
-      theme, // Theme object with id, title, description, category
+      theme, // Theme object with id, title, description, category, imageUrl
       availablePlayers = [], // All available players
       contextBrief = {}, // Campaign context from Stage 1
-      playerCount = 1, // How many players needed (1 or 2)
     } = input;
 
     try {
-      console.log('[PlayerRecommendationService] Recommending players for theme:', theme.title);
+      console.log('[PlayerRecommendationService] Processing theme:', theme.title);
+      console.log('[PlayerRecommendationService] Image URL:', theme.imageUrl || 'No image');
 
-      // Get prompt template for player recommendations
+      // Get the combined prompt template
       const promptTemplate = await PromptManager.getPromptByCapability(
         'stage_3_players',
-        'textGeneration',
+        'imageAnalysisAndRecommendation',
         projectId,
         db
       );
 
-      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+      const adaptor = await AIAdaptorResolver.resolveAdaptor(
         projectId,
         'stage_3_players',
-        'textGeneration',
+        'imageAnalysisAndRecommendation',
         db,
         promptTemplate.modelConfig
       );
@@ -53,8 +56,10 @@ class PlayerRecommendationService {
         name: p.name,
         number: p.number,
         position: p.position,
-        team: p.teamId === 'home' ? contextBrief.homeTeam : contextBrief.awayTeam,
-        teamId: p.teamId,
+        team: p.teamId === 'home' ? 'home' : 'away',
+        teamName: p.teamId === 'home'
+          ? (contextBrief.homeTeam?.name || contextBrief.homeTeam || 'Home Team')
+          : (contextBrief.awayTeam?.name || contextBrief.awayTeam || 'Away Team'),
         performanceScore: p.performanceScore || 0,
         socialSentiment: p.socialSentiment || 0,
         isHighlighted: p.isHighlighted || false,
@@ -62,17 +67,16 @@ class PlayerRecommendationService {
 
       // Build variables for prompt
       const variables = {
-        themeName: theme.title || theme.name || '',
-        themeDescription: theme.description || '',
-        themeCategory: theme.category || '',
-        playerCount: playerCount.toString(),
         sportType: contextBrief.sportType || 'Hockey',
-        homeTeam: contextBrief.homeTeam || 'Home Team',
-        awayTeam: contextBrief.awayTeam || 'Away Team',
+        homeTeam: contextBrief.homeTeam?.name || contextBrief.homeTeam || 'Home Team',
+        awayTeam: contextBrief.awayTeam?.name || contextBrief.awayTeam || 'Away Team',
         contextPills: Array.isArray(contextBrief.contextPills)
           ? contextBrief.contextPills.join(', ')
           : contextBrief.contextPills || '',
-        campaignGoal: contextBrief.campaignGoal || '',
+        campaignGoal: contextBrief.campaignGoal || 'Social Hype',
+        themeName: theme.title || theme.name || '',
+        themeDescription: theme.description || '',
+        themeCategory: theme.category || '',
         availablePlayers: JSON.stringify(playerSummary, null, 2),
       };
 
@@ -81,58 +85,66 @@ class PlayerRecommendationService {
         ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
         : resolvedPrompt.userPrompt;
 
-      console.log('[PlayerRecommendationService] Generating recommendations with AI...');
+      console.log('[PlayerRecommendationService] Sending combined request (image analysis + recommendation)...');
 
-      // Generate recommendations
-      const generationResult = await textAdaptor.adaptor.generateText(fullPrompt, {
-        temperature: 0.7,
-        maxTokens: 2000,
+      // SINGLE AI CALL - analyze image AND recommend players
+      const result = await adaptor.adaptor.generateText(fullPrompt, {
+        temperature: 0.5,
+        maxTokens: 2500,
+        referenceImageUrl: theme.imageUrl || undefined,
+        responseFormat: 'json',
       });
 
       console.log('[PlayerRecommendationService] AI response received, parsing...');
 
       // Parse JSON response
-      let recommendations;
+      let response;
       try {
-        // Extract JSON from response (may have markdown formatting)
-        const jsonMatch = generationResult.text.match(/\{[\s\S]*\}/);
+        const jsonMatch = result.text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          recommendations = JSON.parse(jsonMatch[0]);
+          response = JSON.parse(jsonMatch[0]);
         } else {
-          recommendations = JSON.parse(generationResult.text);
+          response = JSON.parse(result.text);
         }
       } catch (parseError) {
         console.error('[PlayerRecommendationService] Failed to parse JSON:', parseError);
-        throw new Error('Failed to parse player recommendations from AI');
+        console.error('[PlayerRecommendationService] Raw response:', result.text?.substring(0, 500));
+        throw new Error('Failed to parse AI response');
       }
 
       // Validate response structure
-      if (!recommendations.recommendedPlayers || !Array.isArray(recommendations.recommendedPlayers)) {
+      if (!response.recommendedPlayers || !Array.isArray(response.recommendedPlayers)) {
+        console.error('[PlayerRecommendationService] Invalid response structure:', response);
         throw new Error('Invalid recommendation response structure');
       }
 
-      console.log('[PlayerRecommendationService] Recommendations:', {
+      const playerCount = response.imageAnalysis?.playerCount || response.recommendedPlayers.length;
+
+      console.log('[PlayerRecommendationService] Result:', {
         themeId: theme.id,
-        recommended: recommendations.recommendedPlayers.length,
-        reasoning: recommendations.reasoning?.substring(0, 100),
+        playerCount,
+        recommendedCount: response.recommendedPlayers.length,
+        teamRequirements: response.imageAnalysis?.teamRequirements,
       });
 
       return {
         themeId: theme.id,
         themeName: theme.title || theme.name,
         playerCount,
-        recommendedPlayers: recommendations.recommendedPlayers,
-        reasoning: recommendations.reasoning,
+        imageAnalysis: response.imageAnalysis || null,
+        recommendedPlayers: response.recommendedPlayers,
+        reasoning: response.overallReasoning || response.reasoning,
         generatedAt: new Date(),
       };
     } catch (error) {
-      console.error('[PlayerRecommendationService] Error generating recommendations:', error);
+      console.error('[PlayerRecommendationService] Error:', error);
       throw error;
     }
   }
 
   /**
    * Get recommendations for multiple themes at once
+   * Each theme gets a SINGLE AI call (image analysis + recommendation combined)
    *
    * @param {string} projectId - Project ID
    * @param {Object} input - Input parameters
@@ -142,19 +154,18 @@ class PlayerRecommendationService {
    */
   static async recommendPlayersForMultipleThemes(projectId, input, db, AIAdaptorResolver) {
     const {
-      themes = [], // Array of theme objects
+      themes = [], // Array of theme objects with imageUrl
       availablePlayers = [],
       contextBrief = {},
     } = input;
 
-    console.log('[PlayerRecommendationService] Generating recommendations for', themes.length, 'themes');
+    console.log('[PlayerRecommendationService] Processing', themes.length, 'themes (single call per theme)');
 
     const recommendations = [];
 
     for (const theme of themes) {
       try {
-        // Determine player count based on category
-        const playerCount = this._getPlayerCountForCategory(theme.category);
+        console.log(`[PlayerRecommendationService] Processing theme: ${theme.title}`);
 
         const recommendation = await this.recommendPlayersForTheme(
           projectId,
@@ -162,7 +173,6 @@ class PlayerRecommendationService {
             theme,
             availablePlayers,
             contextBrief,
-            playerCount,
           },
           db,
           AIAdaptorResolver
@@ -171,13 +181,16 @@ class PlayerRecommendationService {
         recommendations.push(recommendation);
       } catch (error) {
         console.error(`[PlayerRecommendationService] Failed for theme ${theme.id}:`, error);
+
         // Add fallback recommendation
+        const fallbackPlayerCount = this._getPlayerCountForCategory(theme.category);
         recommendations.push({
           themeId: theme.id,
           themeName: theme.title || theme.name,
-          playerCount: this._getPlayerCountForCategory(theme.category),
-          recommendedPlayers: [], // Empty if failed
-          reasoning: 'Failed to generate recommendations',
+          playerCount: fallbackPlayerCount,
+          imageAnalysis: null,
+          recommendedPlayers: [],
+          reasoning: 'Failed to generate recommendations: ' + error.message,
           error: error.message,
           generatedAt: new Date(),
         });
@@ -188,7 +201,7 @@ class PlayerRecommendationService {
   }
 
   /**
-   * Determine player count based on theme category
+   * Fallback: Determine player count based on theme category
    */
   static _getPlayerCountForCategory(category) {
     if (category === 'rivalry' || category === 'posed') {

@@ -113,7 +113,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
     if (position.startsWith('G')) return 'text-red-400 border-red-400 bg-red-400/10';
     if (position.startsWith('D')) return 'text-blue-400 border-blue-400 bg-blue-400/10';
     if (position.startsWith('C')) return 'text-purple-400 border-purple-400 bg-purple-400/10';
-    if (position.startsWith('L') || position.startsWith('R')) return 'text-green-400 border-green-400 bg-green-400/10';
+    if (position.startsWith('L') || position.startsWith('R')) return 'text-orange-400 border-orange-400 bg-orange-400/10';
     return 'text-yellow-400 border-yellow-400 bg-yellow-400/10';
   };
 
@@ -137,7 +137,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
     return (
       <div className="flex justify-center py-16">
         <div className="animate-spin">
-          <RefreshCw className="w-8 h-8 text-green-500" />
+          <RefreshCw className="w-8 h-8 text-orange-500" />
         </div>
       </div>
     );
@@ -165,7 +165,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
         </p>
         <Button
           onClick={() => {/* TODO: Open add player modal */}}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Player
@@ -202,7 +202,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
           <select
             value={filterPosition}
             onChange={(e) => setFilterPosition(e.target.value as FilterPosition)}
-            className="px-4 py-2 bg-gray-800/50 border border-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-4 py-2 bg-gray-800/50 border border-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="all">All Positions</option>
             <option value="C">Centers</option>
@@ -216,7 +216,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="px-4 py-2 bg-gray-800/50 border border-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-4 py-2 bg-gray-800/50 border border-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="jerseyNumber">Jersey #</option>
             <option value="name">Name</option>
@@ -237,7 +237,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
             setPlayerToEdit(newPlayer);
             setShowEditPage(true);
           }}
-          className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Player
@@ -253,12 +253,12 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
               setSelectedPlayer(player);
               setIsDetailModalOpen(true);
             }}
-            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-green-500/50 transition-all cursor-pointer group relative"
+            className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-orange-500/50 transition-all cursor-pointer group relative"
           >
             <div className="p-3">
               {/* Large Player Headshot - Primary Focus */}
               <div className="relative mb-3">
-                <div className="aspect-square rounded-lg overflow-hidden bg-gray-800/50 group-hover:ring-2 group-hover:ring-green-500/30 transition-all">
+                <div className="aspect-square rounded-lg overflow-hidden bg-gray-800/50 group-hover:ring-2 group-hover:ring-orange-500/30 transition-all">
                   {player.images?.headshot ? (
                     <img
                       src={player.images.headshot}
@@ -337,7 +337,7 @@ export const PlayersListView = ({ sport, teamId }: PlayersListViewProps) => {
 
               {/* Player Name - Clean Typography */}
               <div className="text-center mb-2">
-                <h3 className="text-sm font-bold text-white group-hover:text-green-400 transition-colors leading-tight line-clamp-2">
+                <h3 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors leading-tight line-clamp-2">
                   {player.name}
                 </h3>
               </div>

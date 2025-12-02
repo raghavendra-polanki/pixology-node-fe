@@ -98,6 +98,7 @@ async function uploadToGCS(imageBuffer, gcsPath, contentType = 'image/png') {
 
 /**
  * Download and upload image to GCS, return GCS URL
+ * Returns { success: boolean, url: string, source: 'gcs' | 'original' }
  */
 async function processImage(sourceUrl, gcsPath, contentType = 'image/png') {
   try {
@@ -105,18 +106,18 @@ async function processImage(sourceUrl, gcsPath, contentType = 'image/png') {
     const imageBuffer = await downloadImage(sourceUrl);
 
     if (!imageBuffer) {
-      console.log(`      ⚠️  Skipping upload due to download failure`);
-      return sourceUrl; // Return original URL as fallback
+      console.log(`      ⚠️  Download failed - will NOT use fallback URL`);
+      return { success: false, url: null, source: 'failed', originalUrl: sourceUrl };
     }
 
     console.log(`      Uploading to: ${gcsPath}`);
     const gcsUrl = await uploadToGCS(imageBuffer, gcsPath, contentType);
-    console.log(`      ✅ Uploaded successfully`);
+    console.log(`      ✅ Uploaded successfully to GCS`);
 
-    return gcsUrl;
+    return { success: true, url: gcsUrl, source: 'gcs' };
   } catch (error) {
     console.error(`      ❌ Error processing image:`, error.message);
-    return sourceUrl; // Return original URL as fallback
+    return { success: false, url: null, source: 'failed', originalUrl: sourceUrl, error: error.message };
   }
 }
 
@@ -975,61 +976,128 @@ const NHL_TEAMS = {
 
 /**
  * Process all images for a team and return updated team data with GCS URLs
+ * Tracks success/failure for each image
  */
 async function processTeamImages(teamData) {
   console.log(`\n📸 Processing images for ${teamData.name}...`);
 
   const teamId = teamData.teamId;
   const updatedTeamData = { ...teamData };
+  const imageStats = { success: 0, failed: 0, failedImages: [] };
 
   // Process team logos
   console.log(`   📌 Processing team logos...`);
   if (teamData.logo?.primary) {
     const gcsPath = `sports/hockey/${teamId}/assets/logo-primary.png`;
-    updatedTeamData.logo.primary = await processImage(teamData.logo.primary, gcsPath, 'image/png');
+    const result = await processImage(teamData.logo.primary, gcsPath, 'image/png');
+    if (result.success) {
+      updatedTeamData.logo.primary = result.url;
+      imageStats.success++;
+    } else {
+      imageStats.failed++;
+      imageStats.failedImages.push({ type: 'logo-primary', url: result.originalUrl });
+      // Keep original URL as fallback for logos (less critical)
+      updatedTeamData.logo.primary = teamData.logo.primary;
+    }
   }
   if (teamData.logo?.alternate) {
     const gcsPath = `sports/hockey/${teamId}/assets/logo-alternate.png`;
-    updatedTeamData.logo.alternate = await processImage(teamData.logo.alternate, gcsPath, 'image/png');
+    const result = await processImage(teamData.logo.alternate, gcsPath, 'image/png');
+    if (result.success) {
+      updatedTeamData.logo.alternate = result.url;
+      imageStats.success++;
+    } else {
+      imageStats.failed++;
+      imageStats.failedImages.push({ type: 'logo-alternate', url: result.originalUrl });
+      updatedTeamData.logo.alternate = teamData.logo.alternate;
+    }
   }
 
   // Process jersey images
   console.log(`   👕 Processing jersey images...`);
   if (teamData.jersey?.home) {
     const gcsPath = `sports/hockey/${teamId}/assets/jersey-home.jpg`;
-    updatedTeamData.jersey.home = await processImage(teamData.jersey.home, gcsPath, 'image/jpeg');
+    const result = await processImage(teamData.jersey.home, gcsPath, 'image/jpeg');
+    if (result.success) {
+      updatedTeamData.jersey.home = result.url;
+      imageStats.success++;
+    } else {
+      imageStats.failed++;
+      imageStats.failedImages.push({ type: 'jersey-home', url: result.originalUrl });
+      updatedTeamData.jersey.home = teamData.jersey.home;
+    }
   }
   if (teamData.jersey?.away) {
     const gcsPath = `sports/hockey/${teamId}/assets/jersey-away.jpg`;
-    updatedTeamData.jersey.away = await processImage(teamData.jersey.away, gcsPath, 'image/jpeg');
+    const result = await processImage(teamData.jersey.away, gcsPath, 'image/jpeg');
+    if (result.success) {
+      updatedTeamData.jersey.away = result.url;
+      imageStats.success++;
+    } else {
+      imageStats.failed++;
+      imageStats.failedImages.push({ type: 'jersey-away', url: result.originalUrl });
+      updatedTeamData.jersey.away = teamData.jersey.away;
+    }
   }
 
-  // Process player images
+  // Process player images - CRITICAL: These MUST be GCS URLs
   console.log(`   👥 Processing ${teamData.players.length} player images...`);
   updatedTeamData.players = await Promise.all(
     teamData.players.map(async (player) => {
       console.log(`      Player: ${player.name}`);
       const playerId = player.playerId;
-      const updatedPlayer = { ...player };
+      const updatedPlayer = { ...player, images: { ...player.images } };
 
-      // Process headshot
+      // Process headshot - MUST succeed for player images
       if (player.images?.headshot) {
-        const gcsPath = `sports/hockey/${teamId}/players/${playerId}/headshot.jpg`;
-        updatedPlayer.images.headshot = await processImage(player.images.headshot, gcsPath, 'image/jpeg');
+        const gcsPath = `sports/hockey/${teamId}/players/${playerId}/headshot.png`;
+        const result = await processImage(player.images.headshot, gcsPath, 'image/png');
+        if (result.success) {
+          updatedPlayer.images.headshot = result.url;
+          imageStats.success++;
+        } else {
+          imageStats.failed++;
+          imageStats.failedImages.push({ type: 'player-headshot', player: player.name, url: result.originalUrl });
+          // Still save the GCS path we EXPECTED - so we know what's missing
+          // But mark it as failed by keeping a special marker
+          updatedPlayer.images.headshot = result.url; // null - will be filtered
+          updatedPlayer.images._headshotFailed = true;
+          updatedPlayer.images._headshotOriginal = result.originalUrl;
+        }
       }
 
       // Process action shot
-      if (player.images?.action) {
-        const gcsPath = `sports/hockey/${teamId}/players/${playerId}/action.jpg`;
-        updatedPlayer.images.action = await processImage(player.images.action, gcsPath, 'image/jpeg');
+      if (player.images?.action && player.images.action !== player.images?.headshot) {
+        const gcsPath = `sports/hockey/${teamId}/players/${playerId}/action.png`;
+        const result = await processImage(player.images.action, gcsPath, 'image/png');
+        if (result.success) {
+          updatedPlayer.images.action = result.url;
+          imageStats.success++;
+        } else {
+          imageStats.failed++;
+          imageStats.failedImages.push({ type: 'player-action', player: player.name, url: result.originalUrl });
+          updatedPlayer.images.action = null;
+        }
+      } else if (player.images?.action === player.images?.headshot) {
+        // Action is same as headshot, use the same GCS URL
+        updatedPlayer.images.action = updatedPlayer.images.headshot;
       }
 
       return updatedPlayer;
     })
   );
 
-  console.log(`   ✅ All images processed for ${teamData.name}`);
-  return updatedTeamData;
+  console.log(`   ✅ Images processed for ${teamData.name}`);
+  console.log(`   📊 Stats: ${imageStats.success} success, ${imageStats.failed} failed`);
+
+  if (imageStats.failedImages.length > 0) {
+    console.log(`   ⚠️  Failed images:`);
+    imageStats.failedImages.forEach(f => {
+      console.log(`      - ${f.type}${f.player ? ` (${f.player})` : ''}: ${f.url}`);
+    });
+  }
+
+  return { updatedTeamData, imageStats };
 }
 
 // ============================================
@@ -1044,6 +1112,9 @@ async function seedHockeyTeams() {
 
     const sportsTeamsRef = gamelabDb.collection('sports_teams');
     const hockeyRef = sportsTeamsRef.doc('hockey');
+
+    // Track overall stats
+    const overallStats = { totalSuccess: 0, totalFailed: 0, failedTeams: [] };
 
     // Seed each team
     for (const [, teamData] of Object.entries(NHL_TEAMS)) {
@@ -1089,7 +1160,18 @@ async function seedHockeyTeams() {
       }
 
       // Process all images and get updated team data with GCS URLs
-      const processedTeamData = await processTeamImages(teamData);
+      const { updatedTeamData: processedTeamData, imageStats } = await processTeamImages(teamData);
+
+      // Track stats
+      overallStats.totalSuccess += imageStats.success;
+      overallStats.totalFailed += imageStats.failed;
+      if (imageStats.failed > 0) {
+        overallStats.failedTeams.push({
+          team: teamData.name,
+          failed: imageStats.failed,
+          failedImages: imageStats.failedImages,
+        });
+      }
 
       // Create team document with GCS URLs
       console.log(`   💾 Saving to database...`);
@@ -1120,7 +1202,25 @@ async function seedHockeyTeams() {
     });
 
     console.log('\n✨ Hockey teams data seeded successfully!\n');
-    console.log('📁 Collection structure:');
+
+    // Show overall image stats
+    console.log('📊 IMAGE UPLOAD SUMMARY:');
+    console.log(`   ✅ Successfully uploaded: ${overallStats.totalSuccess}`);
+    console.log(`   ❌ Failed uploads: ${overallStats.totalFailed}`);
+
+    if (overallStats.failedTeams.length > 0) {
+      console.log('\n⚠️  TEAMS WITH FAILED IMAGES:');
+      overallStats.failedTeams.forEach(team => {
+        console.log(`\n   ${team.team}: ${team.failed} failed`);
+        team.failedImages.forEach(img => {
+          console.log(`      - ${img.type}${img.player ? ` (${img.player})` : ''}`);
+          console.log(`        Source: ${img.url}`);
+        });
+      });
+      console.log('\n   💡 Tip: Re-run the script to retry failed uploads');
+    }
+
+    console.log('\n📁 Collection structure:');
     console.log('   sports_teams/');
     console.log('   └── hockey/');
     console.log('       ├── [metadata]');

@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
 import { ArrowLeft, Upload, Star, AlertCircle, Save, Trash2, Plus, Camera } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/features/gamelab/components/ui/input';
-import { Label } from '@/features/gamelab/components/ui/label';
+import { Input } from '@/features/flarelab/components/ui/input';
+import { Label } from '@/features/flarelab/components/ui/label';
 import { Player } from '@/shared/services/teamsService';
 
 // Image type categories organized by group - easily extensible
@@ -167,7 +167,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
     formData.append('imageType', image.type); // Include image type for categorization
 
     const token = sessionStorage.getItem('authToken');
-    const response = await fetch('/api/gamelab/teams/upload-asset', {
+    const response = await fetch('/api/flarelab/teams/upload-asset', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -305,7 +305,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
           <Button
             onClick={handleSave}
             disabled={isSaving || !name.trim() || !jerseyNumber.trim() || !position}
-            className="bg-green-500 hover:bg-green-600 text-white"
+            className="bg-orange-500 hover:bg-orange-600 text-white"
           >
             <Save className="w-4 h-4 mr-2" />
             {isSaving ? 'Saving...' : isNewPlayer ? 'Add Player' : 'Save Changes'}
@@ -408,7 +408,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
                                     </div>
                                   )}
                                   {!image.isExisting && (
-                                    <div className="absolute top-1 right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">
+                                    <div className="absolute top-1 right-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">
                                       New
                                     </div>
                                   )}
@@ -417,7 +417,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
                               {/* Add more button */}
                               <button
                                 onClick={() => triggerFileInput(imageType)}
-                                className="w-full py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-green-500 hover:text-green-400 transition-colors flex items-center justify-center gap-1.5 text-xs"
+                                className="w-full py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:border-orange-500 hover:text-orange-400 transition-colors flex items-center justify-center gap-1.5 text-xs"
                                 disabled={isSaving}
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -428,13 +428,13 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
                             /* Empty upload zone */
                             <button
                               onClick={() => triggerFileInput(imageType)}
-                              className="w-full aspect-square border-2 border-dashed border-gray-600 rounded-lg hover:border-green-500 hover:bg-green-500/5 transition-colors flex flex-col items-center justify-center gap-2 group"
+                              className="w-full aspect-square border-2 border-dashed border-gray-600 rounded-lg hover:border-orange-500 hover:bg-orange-500/5 transition-colors flex flex-col items-center justify-center gap-2 group"
                               disabled={isSaving}
                             >
-                              <div className="w-10 h-10 rounded-full bg-gray-700/50 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                                <Camera className="w-5 h-5 text-gray-500 group-hover:text-green-400" />
+                              <div className="w-10 h-10 rounded-full bg-gray-700/50 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                                <Camera className="w-5 h-5 text-gray-500 group-hover:text-orange-400" />
                               </div>
-                              <span className="text-xs text-gray-500 group-hover:text-green-400">
+                              <span className="text-xs text-gray-500 group-hover:text-orange-400">
                                 Click to upload
                               </span>
                             </button>
@@ -495,7 +495,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
                   id="position"
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   disabled={isSaving}
                 >
                   <option value="">Select Position</option>
@@ -515,7 +515,7 @@ export const EditPlayerPage = ({ player, teamId, sport, onSave, onCancel }: Edit
                   id="shootsCatches"
                   value={shootsCatches}
                   onChange={(e) => setShootsCatches(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   disabled={isSaving}
                 >
                   <option value="">Select</option>

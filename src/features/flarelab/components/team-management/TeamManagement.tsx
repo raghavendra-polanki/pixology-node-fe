@@ -76,7 +76,7 @@ export const TeamManagement = () => {
             {crumb.onClick ? (
               <button
                 onClick={crumb.onClick}
-                className="text-green-400 hover:text-green-300 font-medium transition-colors"
+                className="text-orange-400 hover:text-orange-300 font-medium transition-colors"
               >
                 {crumb.label}
               </button>

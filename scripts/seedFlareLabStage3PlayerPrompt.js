@@ -1,12 +1,16 @@
 /**
- * Script to seed GameLab Stage 3 Player Recommendation prompt template
+ * Script to seed FlareLab Stage 3 Player Recommendation prompt template
  *
- * Run: node scripts/seedGameLabStage3PlayerPrompt.js
+ * This includes:
+ * - Image Analysis prompt (analyzes theme images to determine player count and team requirements)
+ * - Text Generation prompt (recommends players based on analysis)
+ *
+ * Run: node scripts/seedFlareLabStage3PlayerPrompt.js
  */
 
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
-import { STAGE_3_PLAYER_SUGGESTION_TEMPLATE } from '../api/products/gamelab/prompts/seedData.js';
+import { STAGE_3_PLAYER_SUGGESTION_TEMPLATE } from '../api/products/flarelab/prompts/seedData.js';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -24,22 +28,23 @@ if (!admin.apps.length) {
   });
 }
 
-// Use GameLab database - MUST be pixology-gamelab
+// Use GameLab database (keeping existing database ID)
 const GAMELAB_DB_ID = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
-console.log('📦 Using GameLab database:', GAMELAB_DB_ID);
+console.log('📦 Using database:', GAMELAB_DB_ID);
 
-// Get the GameLab-specific Firestore instance
-const gamelabDb = admin.firestore();
-gamelabDb.settings({ databaseId: GAMELAB_DB_ID });
+// Get the Firestore instance
+const db = admin.firestore();
+db.settings({ databaseId: GAMELAB_DB_ID });
 
 async function seedStage3PlayerPrompt() {
   try {
-    console.log('\n🌱 Seeding GameLab Stage 3 Player Recommendation Prompt Template...\n');
+    console.log('\n🌱 Seeding FlareLab Stage 3 Player Recommendation Prompt Templates...\n');
+    console.log('   This includes: Image Analysis + Text Generation prompts\n');
 
     const template = STAGE_3_PLAYER_SUGGESTION_TEMPLATE;
 
-    // Reference to the prompt templates collection in GameLab database
-    const promptTemplatesRef = gamelabDb.collection('prompt_templates');
+    // Reference to the prompt templates collection
+    const promptTemplatesRef = db.collection('prompt_templates');
 
     // Check if already exists
     const existingDoc = await promptTemplatesRef.doc(template.id).get();
@@ -71,7 +76,8 @@ async function seedStage3PlayerPrompt() {
       console.log(`     Model: ${prompt.modelConfig.adaptorId}/${prompt.modelConfig.modelId}`);
     });
 
-    console.log('\n✨ Stage 3 Player Recommendation prompt template seeded successfully!\n');
+    console.log('\n✨ FlareLab Stage 3 Player Recommendation prompt templates seeded successfully!');
+    console.log('   The AI can now analyze theme images to determine player requirements.\n');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding prompt template:', error);
