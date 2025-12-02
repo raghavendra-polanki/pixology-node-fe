@@ -28,13 +28,13 @@ if (!admin.apps.length) {
   });
 }
 
-// Use GameLab database (keeping existing database ID)
-const GAMELAB_DB_ID = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
-console.log('📦 Using database:', GAMELAB_DB_ID);
+// Use FlareLab database
+const FLARELAB_DB_ID = process.env.FLARELAB_DATABASE_ID || 'pixology-flarelab';
+console.log('📦 Using database:', FLARELAB_DB_ID);
 
 // Get the Firestore instance
 const db = admin.firestore();
-db.settings({ databaseId: GAMELAB_DB_ID });
+db.settings({ databaseId: FLARELAB_DB_ID });
 
 async function seedStage3PlayerPrompt() {
   try {

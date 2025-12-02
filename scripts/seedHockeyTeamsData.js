@@ -32,12 +32,12 @@ if (!admin.apps.length) {
   });
 }
 
-// Use GameLab database
-const GAMELAB_DB_ID = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
-console.log('📦 Using GameLab database:', GAMELAB_DB_ID);
+// Use FlareLab database
+const FLARELAB_DB_ID = process.env.FLARELAB_DATABASE_ID || 'pixology-flarelab';
+console.log('📦 Using FlareLab database:', FLARELAB_DB_ID);
 
-const gamelabDb = admin.firestore();
-gamelabDb.settings({ databaseId: GAMELAB_DB_ID });
+const flarelabDb = admin.firestore();
+flarelabDb.settings({ databaseId: FLARELAB_DB_ID });
 
 // ============================================
 // GCS SETUP
@@ -1110,7 +1110,7 @@ async function seedHockeyTeams() {
     console.log('📦 GCS Bucket:', bucketName);
     console.log('📁 Folder Structure: sports/hockey/{team-id}/...\n');
 
-    const sportsTeamsRef = gamelabDb.collection('sports_teams');
+    const sportsTeamsRef = flarelabDb.collection('sports_teams');
     const hockeyRef = sportsTeamsRef.doc('hockey');
 
     // Track overall stats

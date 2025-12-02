@@ -10,7 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import admin from 'firebase-admin';
-import { STAGE_5_ANIMATION_TEMPLATE } from '../api/products/gamelab/prompts/seedData.js';
+import { STAGE_5_ANIMATION_TEMPLATE } from '../api/products/flarelab/prompts/seedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,13 +41,13 @@ try {
 }
 
 const db = admin.firestore();
-const gamelabDatabaseId = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
-db.settings({ databaseId: gamelabDatabaseId });
+const flarelabDatabaseId = process.env.FLARELAB_DATABASE_ID || 'pixology-flarelab';
+db.settings({ databaseId: flarelabDatabaseId });
 
 async function seedStage5AnimationPrompt() {
   try {
-    console.log('\n🎬 Seeding GameLab Stage 5 Animation Prompts...\n');
-    console.log(`Database: ${gamelabDatabaseId}`);
+    console.log('\n🎬 Seeding FlareLab Stage 5 Animation Prompts...\n');
+    console.log(`Database: ${flarelabDatabaseId}`);
     console.log(`Template ID: ${STAGE_5_ANIMATION_TEMPLATE.id}`);
     console.log(`Stage Type: ${STAGE_5_ANIMATION_TEMPLATE.stageType}`);
     console.log(`Prompts count: ${STAGE_5_ANIMATION_TEMPLATE.prompts.length}`);

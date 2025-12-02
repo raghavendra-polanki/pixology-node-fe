@@ -42,13 +42,13 @@ try {
 }
 
 const db = admin.firestore();
-const gamelabDatabaseId = process.env.GAMELAB_DATABASE_ID || 'pixology-gamelab';
-db.settings({ databaseId: gamelabDatabaseId });
+const flarelabDatabaseId = process.env.FLARELAB_DATABASE_ID || 'pixology-flarelab';
+db.settings({ databaseId: flarelabDatabaseId });
 
-async function seedGameLabPrompts() {
+async function seedFlareLabPrompts() {
   try {
-    console.log('🎮 Starting GameLab prompt template seeding...\n');
-    console.log(`Database: ${gamelabDatabaseId}`);
+    console.log('🔥 Starting FlareLab prompt template seeding...\n');
+    console.log(`Database: ${flarelabDatabaseId}`);
     console.log('This will create/update GameLab prompt templates');
     console.log(`Total templates to process: ${GAMELAB_PROMPT_TEMPLATES.length}\n`);
 
@@ -160,4 +160,4 @@ async function seedGameLabPrompts() {
 }
 
 // Run the seeding
-seedGameLabPrompts();
+seedFlareLabPrompts();
