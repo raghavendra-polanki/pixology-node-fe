@@ -20,7 +20,7 @@ if (result.error) {
 
 // Debug: Check if database vars are loaded
 console.log(`DEBUG: STORYLAB_DATABASE_ID = ${process.env.STORYLAB_DATABASE_ID}`);
-console.log(`DEBUG: GAMELAB_DATABASE_ID = ${process.env.GAMELAB_DATABASE_ID}`);
+console.log(`DEBUG: FLARELAB_DATABASE_ID = ${process.env.FLARELAB_DATABASE_ID}`);
 
 // Validate critical environment variables
 if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
@@ -29,15 +29,15 @@ if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.GOOGLE_SERVICE_A
   process.exit(1);
 }
 
-if (!process.env.STORYLAB_DATABASE_ID || !process.env.GAMELAB_DATABASE_ID) {
+if (!process.env.STORYLAB_DATABASE_ID || !process.env.FLARELAB_DATABASE_ID) {
   console.error('❌ Database environment variables are required:');
   console.error('   - STORYLAB_DATABASE_ID');
-  console.error('   - GAMELAB_DATABASE_ID');
+  console.error('   - FLARELAB_DATABASE_ID');
   process.exit(1);
 }
 
 console.log(`✓ StoryLab Database: ${process.env.STORYLAB_DATABASE_ID}`);
-console.log(`✓ FlareLab Database: ${process.env.GAMELAB_DATABASE_ID}`);
+console.log(`✓ FlareLab Database: ${process.env.FLARELAB_DATABASE_ID}`);
 
 // --- Now safe to import other modules ---
 import express from 'express';
