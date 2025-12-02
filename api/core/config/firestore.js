@@ -68,7 +68,7 @@ class FirestoreManager {
   getDatabaseConfig() {
     return {
       storylab: process.env.STORYLAB_DATABASE_ID,
-      gamelab: process.env.GAMELAB_DATABASE_ID,
+      flarelab: process.env.FLARELAB_DATABASE_ID,
     };
   }
 
@@ -98,14 +98,14 @@ class FirestoreManager {
 
     console.log('✓ Database configuration validated');
     console.log('  - StoryLab database:', databaseConfig.storylab);
-    console.log('  - FlareLab database:', databaseConfig.gamelab);
+    console.log('  - FlareLab database:', databaseConfig.flarelab);
 
     this.validated = true;
   }
 
   /**
    * Get or create a Firestore database connection for a specific product
-   * @param {string} productId - Product identifier ('storylab' or 'gamelab')
+   * @param {string} productId - Product identifier ('storylab' or 'flarelab')
    * @returns {FirebaseFirestore.Firestore} Firestore database instance
    */
   getDatabase(productId) {
@@ -113,8 +113,8 @@ class FirestoreManager {
     this.validateConfiguration();
 
     // Validate product ID
-    if (!['storylab', 'gamelab'].includes(productId)) {
-      throw new Error(`Invalid product ID: ${productId}. Must be 'storylab' or 'gamelab'`);
+    if (!['storylab', 'flarelab'].includes(productId)) {
+      throw new Error(`Invalid product ID: ${productId}. Must be 'storylab' or 'flarelab'`);
     }
 
     // Return cached connection if exists

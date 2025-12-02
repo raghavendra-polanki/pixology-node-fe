@@ -28,10 +28,7 @@ export function productContext(req, res, next) {
     }
 
     // Product ID is the second part: /api/{productId}
-    let productId = baseUrlParts[1];
-
-    // Map 'flarelab' to 'gamelab' for database lookup (env var still uses GAMELAB_DATABASE_ID)
-    const dbProductId = productId === 'flarelab' ? 'gamelab' : productId;
+    const productId = baseUrlParts[1];
 
     // Validate product ID
     if (!['storylab', 'flarelab'].includes(productId)) {
@@ -46,7 +43,7 @@ export function productContext(req, res, next) {
 
     // Get product-specific database
     try {
-      const db = firestoreManager.getDatabase(dbProductId);
+      const db = firestoreManager.getDatabase(productId);
 
       // Attach to request object
       req.productId = productId;
@@ -54,7 +51,7 @@ export function productContext(req, res, next) {
 
       // Log for debugging (only in development)
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[ProductContext] ${req.method} ${req.path} -> product: ${productId}, database: ${firestoreManager.getDatabaseId(dbProductId)}`);
+        console.log(`[ProductContext] ${req.method} ${req.path} -> product: ${productId}, database: ${firestoreManager.getDatabaseId(productId)}`);
       }
 
       next();
