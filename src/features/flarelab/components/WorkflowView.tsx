@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check, Zap, AlertTriangle } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { useGameLabProject } from '../hooks/useGameLabProject';
+import { useFlareLabProject } from '../hooks/useFlareLabProject';
 import { DEFAULT_WORKFLOW_STAGES, STAGE_NAMES } from '../types/project.types';
 
 // Import stages
@@ -42,7 +42,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
     updateHighFidelityCapture,
     updateKineticActivation,
     updatePolishDownload,
-  } = useGameLabProject({ autoLoad: true, projectId });
+  } = useFlareLabProject({ autoLoad: true, projectId });
 
   // Local UI state - tracks which stage component to display
   const [currentStage, setCurrentStage] = useState(1);
@@ -141,7 +141,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
       <div className="flex min-h-screen bg-[#0a0a0a] items-center justify-center">
         <div className="text-center">
           <div className="animate-spin mb-4 inline-block">
-            <div className="h-12 w-12 border-4 border-green-500 border-t-transparent rounded-full"></div>
+            <div className="h-12 w-12 border-4 border-orange-500 border-t-transparent rounded-full"></div>
           </div>
           <p className="text-gray-400">Loading project...</p>
         </div>
@@ -159,13 +159,13 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
         {/* Logo */}
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold">
-                <span className="text-white">Game</span>
-                <span className="text-green-500">Lab</span>
+                <span className="text-white">Flare</span>
+                <span className="text-orange-500">Lab</span>
               </h1>
               <p className="text-xs text-gray-500">by pixology.ai</p>
             </div>
@@ -184,7 +184,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           {/* Sport Type Badge */}
           {project && (
             <div className="mb-3">
-              <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+              <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
                 {project.sportType || 'Hockey'}
               </span>
             </div>
@@ -210,9 +210,9 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                 disabled={!isAccessible}
                 className={`
                   w-full text-left px-4 py-3 rounded-lg transition-all
-                  ${isActive ? 'bg-green-500' : 'hover:bg-gray-800/50'}
+                  ${isActive ? 'bg-orange-500' : 'hover:bg-gray-800/50'}
                   ${isCompleted && !isActive && !isStale ? 'bg-gray-800/30' : ''}
-                  ${isStale ? 'bg-orange-900/20 border border-orange-500/30' : ''}
+                  ${isStale ? 'bg-amber-900/20 border border-amber-500/30' : ''}
                   ${!isAccessible ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
               >
@@ -220,9 +220,9 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                   <div
                     className={`
                       w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm
-                      ${isActive ? 'bg-white text-green-500' : ''}
-                      ${isCompleted && !isActive && !isStale ? 'bg-green-500/20 text-green-400' : ''}
-                      ${isStale ? 'bg-orange-500/20 text-orange-500' : ''}
+                      ${isActive ? 'bg-white text-orange-500' : ''}
+                      ${isCompleted && !isActive && !isStale ? 'bg-orange-500/20 text-orange-300' : ''}
+                      ${isStale ? 'bg-amber-500/20 text-amber-500' : ''}
                       ${!isActive && !isCompleted && !isStale ? 'bg-gray-700 text-gray-300' : ''}
                     `}
                   >
@@ -239,10 +239,10 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
                       {stage.name}
                     </div>
                     {isCompleted && !isActive && !isStale && (
-                      <div className="text-xs text-green-500 mt-0.5">Completed</div>
+                      <div className="text-xs text-orange-400/70 mt-0.5">Completed</div>
                     )}
                     {isStale && (
-                      <div className="text-xs text-orange-500 mt-0.5">Needs Regeneration</div>
+                      <div className="text-xs text-amber-500 mt-0.5">Needs Regeneration</div>
                     )}
                   </div>
                 </div>

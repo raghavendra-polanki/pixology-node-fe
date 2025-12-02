@@ -37,7 +37,7 @@ if (!process.env.STORYLAB_DATABASE_ID || !process.env.GAMELAB_DATABASE_ID) {
 }
 
 console.log(`✓ StoryLab Database: ${process.env.STORYLAB_DATABASE_ID}`);
-console.log(`✓ GameLab Database: ${process.env.GAMELAB_DATABASE_ID}`);
+console.log(`✓ FlareLab Database: ${process.env.GAMELAB_DATABASE_ID}`);
 
 // --- Now safe to import other modules ---
 import express from 'express';
@@ -54,7 +54,7 @@ import { productContext, legacyStoryLabContext } from './api/core/middleware/pro
 
 // Product-specific route modules
 import storylabRoutes from './api/products/storylab/routes/index.js';
-import gamelabRoutes from './api/products/gamelab/routes/index.js';
+import flarelabRoutes from './api/products/flarelab/routes/index.js';
 
 // Individual StoryLab routers for legacy routes (direct mounting)
 import projectsRouter from './api/products/storylab/routes/projects.js';
@@ -186,8 +186,8 @@ app.use('/api/adaptors', adaptorsRouter);
 // StoryLab routes (with product context middleware)
 app.use('/api/storylab', productContext, storylabRoutes);
 
-// GameLab routes (with product context middleware)
-app.use('/api/gamelab', productContext, gamelabRoutes);
+// FlareLab routes (with product context middleware)
+app.use('/api/flarelab', productContext, flarelabRoutes);
 
 // ===== Legacy Routes (Backward Compatibility) =====
 // Map legacy routes to StoryLab for existing clients

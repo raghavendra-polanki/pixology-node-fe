@@ -11,12 +11,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
-import type { GameLabProject } from '../types/project.types';
+import type { FlareLabProject } from '../types/project.types';
 
 interface ProjectsDashboardProps {
-  projects: GameLabProject[];
+  projects: FlareLabProject[];
   onCreateProject: () => void;
-  onSelectProject: (project: GameLabProject) => void;
+  onSelectProject: (project: FlareLabProject) => void;
   onDeleteProject?: (projectId: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
@@ -77,7 +77,7 @@ export const ProjectsDashboard = ({
         <Button
           onClick={handleCreateNew}
           disabled={isLoading}
-          className="mb-8 bg-green-500 hover:bg-green-600 text-white rounded-xl"
+          className="mb-8 bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
           size="lg"
         >
           <Plus className="w-5 h-5 mr-2" />
@@ -88,7 +88,7 @@ export const ProjectsDashboard = ({
         {isLoading && projects.length === 0 ? (
           <div className="flex justify-center py-16">
             <div className="animate-spin">
-              <div className="h-12 w-12 border-4 border-green-500 border-t-transparent rounded-full"></div>
+              <div className="h-12 w-12 border-4 border-orange-500 border-t-transparent rounded-full"></div>
             </div>
           </div>
         ) : projects.length === 0 ? (
@@ -96,11 +96,11 @@ export const ProjectsDashboard = ({
             <Folder className="w-16 h-16 text-gray-700 mx-auto mb-4" />
             <h3 className="text-gray-400 mb-2">No projects yet</h3>
             <p className="text-gray-500 mb-6">
-              Create your first GameLab project to get started
+              Create your first FlareLab project to get started
             </p>
             <Button
               onClick={handleCreateNew}
-              className="bg-green-500 hover:bg-green-600 text-white rounded-xl"
+              className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
             >
               <Plus className="w-5 h-5 mr-2" />
               Create Project
@@ -119,7 +119,7 @@ export const ProjectsDashboard = ({
                   {/* Project Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <h3 className="text-white mb-2 group-hover:text-green-400 transition-colors">
+                      <h3 className="text-white mb-2 group-hover:text-orange-400 transition-colors">
                         {project.name}
                       </h3>
                       <p className="text-gray-500">
@@ -157,9 +157,9 @@ export const ProjectsDashboard = ({
                   <div className="mb-4">
                     <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-xs capitalize border ${
                       project.status === 'complete'
-                        ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                        ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
                         : project.status === 'generating'
-                        ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                        ? 'bg-orange-500/10 text-orange-500 border-orange-500/20'
                         : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
                     }`}>
                       <Clock className="w-4 h-4" />
@@ -175,7 +175,7 @@ export const ProjectsDashboard = ({
                     </div>
                     <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-green-500 rounded-full transition-all"
+                        className="h-full bg-orange-500 rounded-full transition-all"
                         style={{ width: `${Math.round(((project.currentStageIndex || 0) + 1) / 6 * 100)}%` }}
                       />
                     </div>

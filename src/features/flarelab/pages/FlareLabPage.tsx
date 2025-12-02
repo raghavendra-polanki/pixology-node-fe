@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
-import GameLabProjectService from '@/shared/services/gameLabProjectService';
-import { GameLabHome } from '../components/GameLabHome';
+import FlareLabProjectService from '@/shared/services/flareLabProjectService';
+import { FlareLabHome } from '../components/FlareLabHome';
 import { WorkflowView } from '../components/WorkflowView';
-import type { GameLabProject } from '../types/project.types';
+import type { FlareLabProject } from '../types/project.types';
 
-const gameLabProjectService = new GameLabProjectService();
+const flareLabProjectService = new FlareLabProjectService();
 
-export const GameLabPage = () => {
+export const FlareLabPage = () => {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
-  const [projects, setProjects] = useState<GameLabProject[]>([]);
+  const [projects, setProjects] = useState<FlareLabProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'projects' | 'workflow'>('projects');
-  const [selectedProject, setSelectedProject] = useState<GameLabProject | null>(null);
+  const [selectedProject, setSelectedProject] = useState<FlareLabProject | null>(null);
 
   // Fetch projects after authentication is verified
   useEffect(() => {
@@ -32,7 +32,7 @@ export const GameLabPage = () => {
       setIsLoading(true);
       setError(null);
 
-      const response = await gameLabProjectService.getProjects();
+      const response = await flareLabProjectService.getProjects();
       setProjects(response.projects);
     } catch (err) {
       console.error('Error fetching projects:', err);
@@ -47,7 +47,7 @@ export const GameLabPage = () => {
     // Create a temporary local project without saving to database yet
     // It will be saved when the user completes Stage 1 and clicks "Continue"
     const tempId = `temp-${Date.now()}`;
-    const newProject: GameLabProject = {
+    const newProject: FlareLabProject = {
       id: tempId,
       name: 'New Campaign',
       title: 'New Campaign',
@@ -66,7 +66,7 @@ export const GameLabPage = () => {
     setCurrentView('workflow');
   };
 
-  const handleSelectProject = (project: GameLabProject) => {
+  const handleSelectProject = (project: FlareLabProject) => {
     setSelectedProject(project);
     setCurrentView('workflow');
   };
@@ -74,7 +74,7 @@ export const GameLabPage = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       setError(null);
-      await gameLabProjectService.deleteProject(projectId);
+      await flareLabProjectService.deleteProject(projectId);
 
       // Remove project from local state
       setProjects(projects.filter((p) => p.id !== projectId));
@@ -100,7 +100,7 @@ export const GameLabPage = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin mb-4 inline-block">
-            <div className="h-12 w-12 border-4 border-green-500 border-t-transparent rounded-full"></div>
+            <div className="h-12 w-12 border-4 border-orange-500 border-t-transparent rounded-full"></div>
           </div>
           <p className="text-gray-400">Loading...</p>
         </div>
@@ -111,7 +111,7 @@ export const GameLabPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-orange-950/20 to-slate-900">
       {currentView === 'projects' ? (
-        <GameLabHome
+        <FlareLabHome
           projects={projects}
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}

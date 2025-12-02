@@ -1,7 +1,7 @@
 # Pixology Project Context
 
 ## Overview
-Pixology is a creative content generation platform with two main products: **StoryLab** and **GameLab**. Both use a multi-stage workflow approach to guide users through content creation.
+Pixology is a creative content generation platform with two main products: **StoryLab** and **FlareLab**. Both use a multi-stage workflow approach to guide users through content creation.
 
 ## Products
 
@@ -22,8 +22,8 @@ Marketing video generation workflow for creating promotional content.
 - `src/features/storylab/components/stages/` - Stage components
 - `api/products/storylab/` - Backend routes and services
 
-### GameLab
-Sports-focused content creation for generating team/player promotional materials.
+### FlareLab
+Sports-focused content creation for generating team/player promotional materials for broadcast.
 
 **6-Stage Workflow:**
 1. **Context Brief** (Setup Project) - Select home/away teams, context pills (Playoff Intensity, Rivalry, etc.), campaign goal
@@ -34,23 +34,23 @@ Sports-focused content creation for generating team/player promotional materials
 6. **Polish & Download** (Export) - Final export in ProRes 4444 or H.264
 
 **Key Files:**
-- `src/features/gamelab/pages/GameLabPage.tsx` - Main page with routing
-- `src/features/gamelab/components/WorkflowView.tsx` - Workflow navigation
-- `src/features/gamelab/components/stages/` - Stage components
-- `src/features/gamelab/types/project.types.ts` - All type definitions
-- `api/products/gamelab/` - Backend routes and services
+- `src/features/flarelab/pages/FlareLabPage.tsx` - Main page with routing
+- `src/features/flarelab/components/WorkflowView.tsx` - Workflow navigation
+- `src/features/flarelab/components/stages/` - Stage components
+- `src/features/flarelab/types/project.types.ts` - All type definitions
+- `api/products/flarelab/` - Backend routes and services
 
-### Team Management (GameLab Feature)
-Manage sports teams and player rosters used in GameLab projects.
+### Team Management (FlareLab Feature)
+Manage sports teams and player rosters used in FlareLab projects.
 
 **Navigation:** Sports → Teams → Players
 
 **Key Components:**
-- `src/features/gamelab/components/team-management/TeamManagement.tsx` - Main container with navigation
-- `src/features/gamelab/components/team-management/SportsListView.tsx` - List of sports
-- `src/features/gamelab/components/team-management/TeamsListView.tsx` - Teams for a sport
-- `src/features/gamelab/components/team-management/PlayersListView.tsx` - Players grid view
-- `src/features/gamelab/components/team-management/EditPlayerPage.tsx` - Player edit page (extensible images)
+- `src/features/flarelab/components/team-management/TeamManagement.tsx` - Main container with navigation
+- `src/features/flarelab/components/team-management/SportsListView.tsx` - List of sports
+- `src/features/flarelab/components/team-management/TeamsListView.tsx` - Teams for a sport
+- `src/features/flarelab/components/team-management/PlayersListView.tsx` - Players grid view
+- `src/features/flarelab/components/team-management/EditPlayerPage.tsx` - Player edit page (extensible images)
 
 **Player Image System (Extensible):**
 Currently supports headshots, designed to support multiple image types:
@@ -66,7 +66,7 @@ Currently supports headshots, designed to support multiple image types:
 - **Frontend:** React 18 + TypeScript + Vite
 - **Styling:** Tailwind CSS + shadcn/ui components
 - **Backend:** Node.js Express API
-- **Database:** Firebase Firestore (separate DBs: pixology-storylab, pixology-gamelab)
+- **Database:** Firebase Firestore (separate DBs: pixology-storylab, pixology-flarelab)
 - **Storage:** Google Cloud Storage (GCS) for assets
 - **AI:** Gemini for text generation, Imagen for image generation
 
@@ -75,7 +75,7 @@ Currently supports headshots, designed to support multiple image types:
 src/
   features/
     storylab/     # StoryLab product
-    gamelab/      # GameLab product
+    flarelab/     # FlareLab product
     landing/      # Landing page
     login/        # Authentication
   shared/
@@ -86,7 +86,7 @@ src/
 api/
   products/
     storylab/     # StoryLab backend
-    gamelab/      # GameLab backend
+    flarelab/     # FlareLab backend
   core/           # Shared backend services
   services/       # Common services (AI, storage)
 ```
@@ -94,5 +94,7 @@ api/
 ## Common Patterns
 - Stage components receive project data and callbacks for updates
 - Services use class-based pattern with auth token from sessionStorage
-- Dark theme UI (#0a0a0a background, green-500 accent)
+- Dark theme UI (#0a0a0a background)
+- StoryLab accent: blue-500
+- FlareLab accent: orange-500
 - Two-column layouts common for edit screens (content left, form right)

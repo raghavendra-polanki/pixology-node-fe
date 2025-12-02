@@ -1,10 +1,10 @@
 /**
- * GameLab Project Service
- * Complete CRUD operations for GameLab projects
+ * FlareLab Project Service
+ * Complete CRUD operations for FlareLab projects
  */
 
 import {
-  GameLabProject,
+  FlareLabProject,
   CreateProjectInput,
   UpdateProjectInput,
   UpdateStageInput,
@@ -17,9 +17,9 @@ import {
   PolishDownloadData,
   StageExecution,
   DEFAULT_WORKFLOW_STAGES,
-} from '@/features/gamelab/types/project.types';
+} from '@/features/flarelab/types/project.types';
 
-class GameLabProjectService {
+class FlareLabProjectService {
   private apiBaseUrl: string;
 
   constructor(apiBaseUrl?: string) {
@@ -47,7 +47,7 @@ class GameLabProjectService {
   /**
    * Create a new project
    */
-  async createProject(input: CreateProjectInput): Promise<GameLabProject> {
+  async createProject(input: CreateProjectInput): Promise<FlareLabProject> {
     // Initialize stage executions for new projects
     const stageExecutions: Record<string, any> = {};
     DEFAULT_WORKFLOW_STAGES.forEach((stage) => {
@@ -68,7 +68,7 @@ class GameLabProjectService {
     };
     delete (apiPayload as any).name; // Remove name field, use title instead
 
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -98,7 +98,7 @@ class GameLabProjectService {
     if (filters?.page) params.append('page', String(filters.page));
     if (filters?.limit) params.append('limit', String(filters.limit));
 
-    const url = `${this.apiBaseUrl}/api/gamelab/projects${params.toString() ? '?' + params.toString() : ''}`;
+    const url = `${this.apiBaseUrl}/api/flarelab/projects${params.toString() ? '?' + params.toString() : ''}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -123,8 +123,8 @@ class GameLabProjectService {
   /**
    * Get a specific project by ID
    */
-  async getProject(projectId: string): Promise<GameLabProject> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}`, {
+  async getProject(projectId: string): Promise<FlareLabProject> {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -146,7 +146,7 @@ class GameLabProjectService {
   /**
    * Update project (partial update)
    */
-  async updateProject(projectId: string, updates: UpdateProjectInput): Promise<GameLabProject> {
+  async updateProject(projectId: string, updates: UpdateProjectInput): Promise<FlareLabProject> {
     // Map UpdateProjectInput to API format (name -> title)
     const apiPayload = { ...updates };
     if ('name' in apiPayload) {
@@ -154,7 +154,7 @@ class GameLabProjectService {
       delete (apiPayload as any).name;
     }
 
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}`, {
       method: 'PUT',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -173,7 +173,7 @@ class GameLabProjectService {
   /**
    * Update context brief
    */
-  async updateContextBrief(projectId: string, contextBrief: Partial<ContextBriefData>): Promise<GameLabProject> {
+  async updateContextBrief(projectId: string, contextBrief: Partial<ContextBriefData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       contextBrief,
     });
@@ -182,7 +182,7 @@ class GameLabProjectService {
   /**
    * Update concept gallery
    */
-  async updateConceptGallery(projectId: string, conceptGallery: Partial<ConceptGalleryData>): Promise<GameLabProject> {
+  async updateConceptGallery(projectId: string, conceptGallery: Partial<ConceptGalleryData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       conceptGallery,
     });
@@ -191,7 +191,7 @@ class GameLabProjectService {
   /**
    * Update casting call
    */
-  async updateCastingCall(projectId: string, castingCall: Partial<CastingCallData>): Promise<GameLabProject> {
+  async updateCastingCall(projectId: string, castingCall: Partial<CastingCallData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       castingCall,
     });
@@ -200,7 +200,7 @@ class GameLabProjectService {
   /**
    * Update high fidelity capture
    */
-  async updateHighFidelityCapture(projectId: string, highFidelityCapture: Partial<HighFidelityCaptureData>): Promise<GameLabProject> {
+  async updateHighFidelityCapture(projectId: string, highFidelityCapture: Partial<HighFidelityCaptureData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       highFidelityCapture,
     });
@@ -209,7 +209,7 @@ class GameLabProjectService {
   /**
    * Update kinetic activation
    */
-  async updateKineticActivation(projectId: string, kineticActivation: Partial<KineticActivationData>): Promise<GameLabProject> {
+  async updateKineticActivation(projectId: string, kineticActivation: Partial<KineticActivationData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       kineticActivation,
     });
@@ -218,7 +218,7 @@ class GameLabProjectService {
   /**
    * Update polish & download
    */
-  async updatePolishDownload(projectId: string, polishDownload: Partial<PolishDownloadData>): Promise<GameLabProject> {
+  async updatePolishDownload(projectId: string, polishDownload: Partial<PolishDownloadData>): Promise<FlareLabProject> {
     return this.updateProject(projectId, {
       polishDownload,
     });
@@ -227,21 +227,21 @@ class GameLabProjectService {
   /**
    * Update project metadata
    */
-  async updateMetadata(projectId: string, metadata: Partial<GameLabProject['metadata']>): Promise<GameLabProject> {
+  async updateMetadata(projectId: string, metadata: Partial<FlareLabProject['metadata']>): Promise<FlareLabProject> {
     return this.updateProject(projectId, { metadata });
   }
 
   /**
    * Update project status
    */
-  async updateStatus(projectId: string, status: GameLabProject['status']): Promise<GameLabProject> {
+  async updateStatus(projectId: string, status: FlareLabProject['status']): Promise<FlareLabProject> {
     return this.updateProject(projectId, { status });
   }
 
   /**
    * Update current stage index
    */
-  async updateCurrentStage(projectId: string, stageIndex: number): Promise<GameLabProject> {
+  async updateCurrentStage(projectId: string, stageIndex: number): Promise<FlareLabProject> {
     return this.updateProject(projectId, { currentStageIndex: stageIndex });
   }
 
@@ -252,8 +252,8 @@ class GameLabProjectService {
   /**
    * Update stage execution status
    */
-  async updateStageExecution(projectId: string, stageUpdate: UpdateStageInput): Promise<GameLabProject> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}/stages/${stageUpdate.stageName}`, {
+  async updateStageExecution(projectId: string, stageUpdate: UpdateStageInput): Promise<FlareLabProject> {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}/stages/${stageUpdate.stageName}`, {
       method: 'PUT',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -272,7 +272,7 @@ class GameLabProjectService {
   /**
    * Mark stage as in progress
    */
-  async markStageInProgress(projectId: string, stageName: string): Promise<GameLabProject> {
+  async markStageInProgress(projectId: string, stageName: string): Promise<FlareLabProject> {
     return this.updateStageExecution(projectId, {
       stageName,
       status: 'in_progress',
@@ -282,7 +282,7 @@ class GameLabProjectService {
   /**
    * Mark stage as completed
    */
-  async markStageCompleted(projectId: string, stageName: string, data?: Record<string, any>): Promise<GameLabProject> {
+  async markStageCompleted(projectId: string, stageName: string, data?: Record<string, any>): Promise<FlareLabProject> {
     return this.updateStageExecution(projectId, {
       stageName,
       status: 'completed',
@@ -293,7 +293,7 @@ class GameLabProjectService {
   /**
    * Mark stage as failed
    */
-  async markStageFailed(projectId: string, stageName: string, error: any): Promise<GameLabProject> {
+  async markStageFailed(projectId: string, stageName: string, error: any): Promise<FlareLabProject> {
     return this.updateStageExecution(projectId, {
       stageName,
       status: 'failed',
@@ -309,7 +309,7 @@ class GameLabProjectService {
    * Delete a project
    */
   async deleteProject(projectId: string): Promise<void> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}`, {
       method: 'DELETE',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -328,8 +328,8 @@ class GameLabProjectService {
   /**
    * Clone/duplicate a project
    */
-  async cloneProject(projectId: string, newName: string): Promise<GameLabProject> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}/clone`, {
+  async cloneProject(projectId: string, newName: string): Promise<FlareLabProject> {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}/clone`, {
       method: 'POST',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -349,7 +349,7 @@ class GameLabProjectService {
    * Export project data
    */
   async exportProject(projectId: string, format: 'json' | 'pdf' = 'json'): Promise<Blob> {
-    const response = await fetch(`${this.apiBaseUrl}/api/gamelab/projects/${projectId}/export?format=${format}`, {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}/export?format=${format}`, {
       method: 'GET',
       headers: this.getAuthHeader(),
       credentials: 'include',
@@ -371,7 +371,7 @@ class GameLabProjectService {
    * Parse project response from API
    * Converts date strings to Date objects
    */
-  private parseProjectResponse(data: any): GameLabProject {
+  private parseProjectResponse(data: any): FlareLabProject {
     return {
       ...data,
       // Map API's title field to our internal name field
@@ -385,7 +385,7 @@ class GameLabProjectService {
   /**
    * Calculate completion percentage
    */
-  calculateCompletionPercentage(project: GameLabProject): number {
+  calculateCompletionPercentage(project: FlareLabProject): number {
     const totalStages = DEFAULT_WORKFLOW_STAGES.length;
     const completedStages = Object.values(project.stageExecutions || {}).filter(
       (execution) => execution.status === 'completed',
@@ -420,7 +420,7 @@ class GameLabProjectService {
   /**
    * Check if stage can be accessed
    */
-  canAccessStage(project: GameLabProject, stageIndex: number): boolean {
+  canAccessStage(project: FlareLabProject, stageIndex: number): boolean {
     const stage = DEFAULT_WORKFLOW_STAGES[stageIndex];
     if (!stage) return false;
     if (!stage.requiresPreviousCompletion) return true;
@@ -440,4 +440,4 @@ class GameLabProjectService {
   }
 }
 
-export default GameLabProjectService;
+export default FlareLabProjectService;

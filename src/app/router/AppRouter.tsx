@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LandingPage } from "@/features/landing";
 import { LoginPage } from "@/features/login";
 import { StorylabPage } from "@/features/storylab";
-import { GameLabPage } from "@/features/gamelab";
+import { FlareLabPage } from "@/features/flarelab";
 import { ProductSelectionPage } from "@/pages/ProductSelectionPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProtectedRoute } from "@/shared/components/ProtectedRoute";
@@ -34,12 +34,12 @@ export const AppRouter = () => {
           }
         />
 
-        {/* GameLab Dashboard and nested routes - Protected */}
+        {/* FlareLab Dashboard and nested routes - Protected */}
         <Route
-          path="/gamelab/*"
+          path="/flarelab/*"
           element={
             <ProtectedRoute>
-              <GameLabPage />
+              <FlareLabPage />
             </ProtectedRoute>
           }
         />

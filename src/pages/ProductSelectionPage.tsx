@@ -12,8 +12,8 @@ export const ProductSelectionPage = () => {
     navigate('/storylab');
   };
 
-  const handleNavigateToGameLab = () => {
-    navigate('/gamelab');
+  const handleNavigateToFlareLab = () => {
+    navigate('/flarelab');
   };
 
   const handleLogout = async () => {
@@ -136,19 +136,19 @@ export const ProductSelectionPage = () => {
               </CardContent>
             </Card>
 
-            {/* GameLab Card */}
+            {/* FlareLab Card */}
             <Card className="bg-[#151515] border-gray-800 hover:border-gray-700 transition-all group">
               <CardHeader className="space-y-4">
                 {/* Icon */}
-                <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
                   <Zap className="w-6 h-6 text-white" />
                 </div>
 
                 {/* Title */}
                 <div className="space-y-2">
                   <CardTitle className="text-2xl font-bold">
-                    <span className="text-white">Game</span>
-                    <span className="text-green-400">Lab</span>
+                    <span className="text-white">Flare</span>
+                    <span className="text-orange-400">Lab</span>
                   </CardTitle>
                   <CardDescription className="text-gray-400 text-sm">
                     Transform static sports media assets into cinematic broadcast-ready content. Generate rights-cleared, context-aware B-roll from standard headshots with deep technical integrations.
@@ -158,19 +158,19 @@ export const ProductSelectionPage = () => {
                 {/* Features */}
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1 h-1 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
                     <span className="text-gray-300">Context-Aware B-Roll Generation</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1 h-1 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
                     <span className="text-gray-300">Alpha Channel Support (ProRes 4444)</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1 h-1 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
                     <span className="text-gray-300">Rights-Cleared Clean Data Model</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="w-1 h-1 rounded-full bg-green-500 mt-2 flex-shrink-0"></span>
+                    <span className="w-1 h-1 rounded-full bg-orange-500 mt-2 flex-shrink-0"></span>
                     <span className="text-gray-300">Broadcast pipeline integration</span>
                   </li>
                 </ul>
@@ -178,11 +178,11 @@ export const ProductSelectionPage = () => {
 
               <CardContent>
                 <Button
-                  onClick={handleNavigateToGameLab}
-                  className="w-full bg-green-500 hover:bg-green-600 text-white rounded-lg"
+                  onClick={handleNavigateToFlareLab}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
                   size="lg"
                 >
-                  Open GameLab
+                  Open FlareLab
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </CardContent>

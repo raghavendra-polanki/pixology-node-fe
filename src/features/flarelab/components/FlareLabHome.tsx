@@ -3,13 +3,13 @@ import { Folder, Users, LogOut, Zap } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { TeamManagement } from './team-management/TeamManagement';
-import type { GameLabProject } from '../types/project.types';
+import type { FlareLabProject } from '../types/project.types';
 
-interface GameLabHomeProps {
+interface FlareLabHomeProps {
   // Project Management props
-  projects: GameLabProject[];
+  projects: FlareLabProject[];
   onCreateProject: () => void;
-  onSelectProject: (project: GameLabProject) => void;
+  onSelectProject: (project: FlareLabProject) => void;
   onDeleteProject?: (projectId: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
@@ -19,7 +19,7 @@ interface GameLabHomeProps {
 
 type NavSection = 'projects' | 'teams';
 
-export const GameLabHome = ({
+export const FlareLabHome = ({
   projects,
   onCreateProject,
   onSelectProject,
@@ -28,7 +28,7 @@ export const GameLabHome = ({
   isLoading,
   error,
   onRetry,
-}: GameLabHomeProps) => {
+}: FlareLabHomeProps) => {
   const [activeSection, setActiveSection] = useState<NavSection>('projects');
 
   const navItems = [
@@ -53,12 +53,12 @@ export const GameLabHome = ({
         {/* Header */}
         <div className="px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">
-                Game<span className="text-green-400">Lab</span>
+                Flare<span className="text-orange-400">Lab</span>
               </h1>
               <p className="text-[10px] text-gray-500">by pixology.ai</p>
             </div>
@@ -85,12 +85,12 @@ export const GameLabHome = ({
                 onClick={() => setActiveSection(item.id)}
                 className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-150 group flex items-center gap-3 ${
                   isActive
-                    ? 'bg-green-500/15 text-green-400'
+                    ? 'bg-orange-500/15 text-orange-400'
                     : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200'
                 }`}
               >
-                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-green-400' : ''}`} />
-                <span className={`text-sm font-medium ${isActive ? 'text-green-400' : ''}`}>
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-orange-400' : ''}`} />
+                <span className={`text-sm font-medium ${isActive ? 'text-orange-400' : ''}`}>
                   {item.label}
                 </span>
               </button>

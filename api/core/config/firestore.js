@@ -98,7 +98,7 @@ class FirestoreManager {
 
     console.log('✓ Database configuration validated');
     console.log('  - StoryLab database:', databaseConfig.storylab);
-    console.log('  - GameLab database:', databaseConfig.gamelab);
+    console.log('  - FlareLab database:', databaseConfig.gamelab);
 
     this.validated = true;
   }
