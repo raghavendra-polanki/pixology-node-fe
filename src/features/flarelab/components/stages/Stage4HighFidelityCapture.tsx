@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Maximize2, X, Download, Play } from 'lucide-react';
+import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Maximize2, X, Edit2, Wand2, Square, CheckSquare, Film, Package } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
+import { AIImageEditor } from '@/shared/components/AIImageEditor';
 import {
   Dialog,
   DialogContent,
@@ -8,15 +10,15 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { THEME_CATEGORIES } from '../../types/project.types';
-import type { GameLabProject, GeneratedImage, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
+import type { FlareLabProject, GeneratedImage, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
 import TeamsService from '@/shared/services/teamsService';
 
 interface Stage4Props {
-  project: GameLabProject;
+  project: FlareLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
-  loadProject: (projectId: string) => Promise<GameLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlareLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
 }
 
 interface ThemeWithPlayers {
@@ -106,6 +108,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
 
   // Dialog state for viewing full-size images
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -115,6 +118,12 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   // Selection state for export (Stage 6) and animation (Stage 5)
   const [selectedForExport, setSelectedForExport] = useState<Set<string>>(new Set());
   const [selectedForAnimation, setSelectedForAnimation] = useState<Set<string>>(new Set());
+
+  // AI Image Editor state
+  const [aiEditingImage, setAiEditingImage] = useState<{
+    image: GeneratedImage;
+    mapping: ThemeWithPlayers;
+  } | null>(null);
 
   // Load theme-player mappings from Stage 3 and refresh player photos
   useEffect(() => {
@@ -312,7 +321,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
       };
 
       // Use SSE for streaming updates
-      const response = await fetch('/api/gamelab/generation/images-stream', {
+      const response = await fetch('/api/flarelab/generation/images-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -496,20 +505,155 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   const hasThemes = themeMappings.length > 0;
   const hasGeneratedImages = generatedImages.length > 0;
 
+  /**
+   * Handle saving AI edited generated image
+   */
+  const handleAiEditSave = async (newImageUrl: string) => {
+    if (!aiEditingImage) return;
+
+    try {
+      // Update local state
+      setGeneratedImages(prev =>
+        prev.map(img =>
+          img.id === aiEditingImage.image.id
+            ? { ...img, url: newImageUrl }
+            : img
+        )
+      );
+
+      // Save to database via API
+      await fetch('/api/flarelab/image-edit/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          imageUrl: newImageUrl,
+          targetType: 'generated-image',
+          targetId: aiEditingImage.image.id,
+          stageType: 'stage_4_images',
+        }),
+      });
+
+      // Reload project to get fresh data
+      if (loadProject) {
+        await loadProject(project.id);
+      }
+
+      console.log('[Stage4] AI edited generated image saved successfully');
+    } catch (error) {
+      console.error('[Stage4] Failed to save AI edited image:', error);
+      throw error;
+    }
+  };
+
+  // Show prompt editor if enabled
+  if (showPromptEditor) {
+    return (
+      <PromptTemplateEditor
+        stageType="stage_4_images"
+        projectId={project?.id}
+        onBack={() => setShowPromptEditor(false)}
+        accentColor="#f97316"
+        apiBasePath="/api/flarelab/prompts"
+        themeSelector={{
+          themes: themeMappings.map(tm => ({
+            id: tm.themeId,
+            name: tm.themeName,
+            description: tm.themeDescription,
+            category: tm.themeCategory,
+            thumbnailUrl: tm.thumbnailUrl,
+            players: tm.selectedPlayers.map(p => ({
+              id: p.id,
+              name: p.name,
+              number: p.number,
+              position: p.position,
+              photoUrl: p.photoUrl,
+            })),
+          })),
+          contextData: {
+            sportType: project?.contextBrief?.sportType || 'Hockey',
+            homeTeam: project?.contextBrief?.homeTeam?.name || '',
+            awayTeam: project?.contextBrief?.awayTeam?.name || '',
+            contextPills: project?.contextBrief?.contextPills?.join(', ') || '',
+            campaignGoal: project?.contextBrief?.campaignGoal || '',
+          },
+        }}
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-            <Camera className="w-6 h-6 text-green-500" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+              <Camera className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Create Images</h2>
+              <p className="text-gray-400">Generate broadcast-ready images with your selected players</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Create Images</h2>
-            <p className="text-gray-400">Generate broadcast-ready images with your selected players</p>
-          </div>
+          <Button
+            onClick={() => setShowPromptEditor(true)}
+            variant="outline"
+            size="sm"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <Edit2 className="w-4 h-4 mr-2" />
+            Edit Prompts
+          </Button>
         </div>
       </div>
+
+      {/* Generate Button & Progress - at TOP */}
+      {hasThemes && (
+        <div className="mb-6">
+          <Button
+            onClick={handleGenerateImages}
+            disabled={isGenerating || themeMappings.length === 0}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+            size="lg"
+          >
+            {isGenerating ? (
+              <>
+                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Generate Images ({themeMappings.length})
+              </>
+            )}
+          </Button>
+
+          {/* Progress indicator */}
+          {generationProgress && (
+            <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-400">{generationProgress.message}</span>
+                <span className="text-sm text-orange-400">{generationProgress.progress}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${generationProgress.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error display */}
+          {error && (
+            <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* No themes warning */}
       {!hasThemes && (
@@ -566,25 +710,39 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                         </div>
                       )}
 
-                      {/* View Full Size Button */}
+                      {/* Action Buttons */}
                       {(generatedImage?.url || mapping.thumbnailUrl) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewingMapping(mapping);
-                            setViewingImage(generatedImage || null);
-                            setViewDialogOpen(true);
-                          }}
-                          className="absolute top-2 left-2 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                          title="View full size"
-                        >
-                          <Maximize2 className="w-4 h-4 text-white" />
-                        </button>
+                        <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingMapping(mapping);
+                              setViewingImage(generatedImage || null);
+                              setViewDialogOpen(true);
+                            }}
+                            className="w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center"
+                            title="View full size"
+                          >
+                            <Maximize2 className="w-4 h-4 text-white" />
+                          </button>
+                          {generatedImage?.url && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAiEditingImage({ image: generatedImage, mapping });
+                              }}
+                              className="w-8 h-8 bg-orange-500/80 hover:bg-orange-500 rounded-full flex items-center justify-center"
+                              title="AI Edit Image"
+                            >
+                              <Wand2 className="w-4 h-4 text-white" />
+                            </button>
+                          )}
+                        </div>
                       )}
 
                       {/* Generated badge */}
                       {generatedImage?.url && (
-                        <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                        <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
                           <Check className="w-3 h-3" />
                           Generated
                         </div>
@@ -613,7 +771,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                         </span>
                       </div>
 
-                      {/* Export/Animation Selection Buttons (only show when image is generated) */}
+                      {/* Selection Buttons for Export/Animation (only show when image is generated) */}
                       {generatedImage?.url && (
                         <div className="flex gap-2 pt-2 border-t border-gray-800">
                           <button
@@ -623,14 +781,17 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                             }}
                             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                               selectedForExport.has(mapping.themeId)
-                                ? 'bg-green-500 text-white'
-                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300 border border-transparent'
                             }`}
                             title="Select for Export (Stage 6)"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                            Export
-                            {selectedForExport.has(mapping.themeId) && <Check className="w-3 h-3" />}
+                            {selectedForExport.has(mapping.themeId) ? (
+                              <CheckSquare className="w-3.5 h-3.5" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5" />
+                            )}
+                            For Export
                           </button>
                           <button
                             onClick={(e) => {
@@ -639,14 +800,17 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                             }}
                             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                               selectedForAnimation.has(mapping.themeId)
-                                ? 'bg-amber-500 text-white'
-                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300 border border-transparent'
                             }`}
                             title="Select for Animation (Stage 5)"
                           >
-                            <Play className="w-3.5 h-3.5" />
-                            Animate
-                            {selectedForAnimation.has(mapping.themeId) && <Check className="w-3 h-3" />}
+                            {selectedForAnimation.has(mapping.themeId) ? (
+                              <CheckSquare className="w-3.5 h-3.5" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5" />
+                            )}
+                            For Animation
                           </button>
                         </div>
                       )}
@@ -655,51 +819,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                 );
               })}
             </div>
-          </div>
-
-          {/* Generate Button */}
-          <div className="mb-8">
-            <Button
-              onClick={handleGenerateImages}
-              disabled={isGenerating || themeMappings.length === 0}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
-              size="lg"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Generate Images ({themeMappings.length})
-                </>
-              )}
-            </Button>
-
-            {/* Progress indicator */}
-            {generationProgress && (
-              <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">{generationProgress.message}</span>
-                  <span className="text-sm text-green-400">{generationProgress.progress}%</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${generationProgress.progress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Error display */}
-            {error && (
-              <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
-                <p className="text-red-400">{error}</p>
-              </div>
-            )}
           </div>
         </>
       )}
@@ -712,7 +831,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
               <div className="flex items-center gap-2">
                 <div className={`w-3 h-3 rounded-full ${selectedForExport.size > 0 ? 'bg-green-500' : 'bg-gray-600'}`} />
                 <span className="text-sm text-gray-300">
-                  <span className="font-medium text-green-400">{selectedForExport.size}</span> for Export
+                  <span className="font-medium text-orange-400">{selectedForExport.size}</span> for Export
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -725,7 +844,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
             <Button
               onClick={handleContinue}
               disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
               size="lg"
             >
               {isSaving ? 'Saving...' : 'Save & Continue'}
@@ -738,6 +857,30 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
             </p>
           )}
         </div>
+      )}
+
+      {/* AI Image Editor */}
+      {aiEditingImage && aiEditingImage.image.url && (
+        <AIImageEditor
+          originalImageUrl={aiEditingImage.image.url}
+          title={aiEditingImage.mapping.themeName}
+          accentColor="#f97316"
+          context={{
+            themeName: aiEditingImage.mapping.themeName,
+            themeDescription: aiEditingImage.mapping.themeDescription,
+            category: aiEditingImage.mapping.themeCategory
+              ? THEME_CATEGORIES[aiEditingImage.mapping.themeCategory as ThemeCategoryId]?.name
+              : undefined,
+            sportType: project.contextBrief?.sportType,
+            homeTeam: project.contextBrief?.homeTeam?.name,
+            awayTeam: project.contextBrief?.awayTeam?.name,
+            playerName: aiEditingImage.mapping.selectedPlayers.map(p => p.name).join(', '),
+          }}
+          stageType="stage_4_images"
+          projectId={project.id}
+          onSave={handleAiEditSave}
+          onClose={() => setAiEditingImage(null)}
+        />
       )}
 
       {/* Full Size Image Dialog */}
@@ -777,7 +920,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                 {/* Status Badge */}
                 <div className="mb-6">
                   {viewingImage?.url ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm">
                       <Check className="w-4 h-4" />
                       Generated
                     </span>
