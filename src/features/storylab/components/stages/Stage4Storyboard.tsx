@@ -25,6 +25,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
 import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
 import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
+import { AIImageEditor, STORYLAB_PRESETS } from '@/shared/components/AIImageEditor';
 
 interface Scene {
   id: string;
@@ -80,10 +81,7 @@ export function Stage4Storyboard({
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
   const [aiEditingScene, setAiEditingScene] = useState<Scene | null>(null);
-  const [aiEditPrompt, setAiEditPrompt] = useState('');
-  const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newGeneratedImage, setNewGeneratedImage] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -417,77 +415,13 @@ export function Stage4Storyboard({
 
   const handleAiEditOpen = (scene: Scene) => {
     setAiEditingScene(scene);
-    setAiEditPrompt('');
-    setNewGeneratedImage(null);
   };
 
-  const handleAiEditSubmit = async () => {
-    if (!aiEditingScene || !aiEditPrompt.trim()) {
-      alert('Please provide edit instructions');
-      return;
-    }
-
-    setIsRegeneratingImage(true);
-    try {
-      // Get the current scene data from local state (which has the latest image)
-      const currentSceneFromState = scenes.find(s => s.id === aiEditingScene.id);
-
-      if (!currentSceneFromState) {
-        throw new Error('Could not find scene in local state');
-      }
-
-      // Get the full scene metadata from project, but use the current image from local state
-      const fullSceneData = project?.aiGeneratedStoryboard?.scenes?.find(
-        (s: any) => s.sceneNumber?.toString() === aiEditingScene.id
-      );
-
-      if (!fullSceneData) {
-        throw new Error('Could not find complete scene data');
-      }
-
-      // Merge the scene data with the current image from local state
-      // Preserve image object structure while updating the URL
-      const sceneDataWithCurrentImage = {
-        ...fullSceneData,
-        image: typeof currentSceneFromState.image === 'string'
-          ? { ...fullSceneData.image, url: currentSceneFromState.image }
-          : currentSceneFromState.image,
-      };
-
-      // Call AI image edit API
-      const response = await fetch('/api/storyboard/edit-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: project.id,
-          sceneNumber: aiEditingScene.number,
-          sceneData: sceneDataWithCurrentImage,
-          editPrompt: aiEditPrompt,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to edit image');
-      }
-
-      const result = await response.json();
-      const newImageUrl = result.imageUrl;
-
-      // Store the new image but don't update storyboard yet
-      setNewGeneratedImage(newImageUrl);
-      setAiEditPrompt(''); // Clear prompt for next edit
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate image';
-      console.error('Error regenerating image:', errorMessage);
-      alert(`Failed to regenerate image: ${errorMessage}`);
-    } finally {
-      setIsRegeneratingImage(false);
-    }
-  };
-
-  const handleSaveEditedImage = async () => {
-    if (!aiEditingScene || !newGeneratedImage) return;
+  /**
+   * Handle saving AI edited scene image (called by AIImageEditor component)
+   */
+  const handleAiEditSave = async (newImageUrl: string) => {
+    if (!aiEditingScene) return;
 
     try {
       // Mark as locally modified to prevent useEffect from overwriting changes
@@ -495,47 +429,31 @@ export function Stage4Storyboard({
 
       // Update scene with new image
       const updatedScenes = scenes.map(s =>
-        s.id === aiEditingScene.id ? { ...s, image: newGeneratedImage } : s
+        s.id === aiEditingScene.id ? { ...s, image: newImageUrl } : s
       );
       setScenes(updatedScenes);
 
-      // Save to database
-      const updatedStoryboard = project?.aiGeneratedStoryboard?.scenes?.map((s: any) =>
-        s.sceneNumber?.toString() === aiEditingScene.id
-          ? { ...s, image: { ...s.image, url: newGeneratedImage } }
-          : s
-      );
+      // Save to database via API
+      await fetch('/api/storylab/image-edit/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          imageUrl: newImageUrl,
+          targetType: 'scene',
+          targetId: aiEditingScene.id,
+          stageType: 'stage_4_storyboard',
+        }),
+      });
 
-      if (updatedStoryboard) {
-        await updateAIStoryboard(
-          {
-            scenes: updatedStoryboard,
-            generatedAt: new Date(),
-            model: 'storyboard-generation-v2-edited',
-            count: updatedStoryboard.length,
-          },
-          project.id
-        );
+      // Reload project to get fresh data from database
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await loadProject(project.id);
 
-        console.log('AI edited image saved successfully');
-
-        // Reload project to get fresh data from database
-        // This ensures when we navigate away and back, we have the latest data
-        await new Promise(resolve => setTimeout(resolve, 800));
-        await loadProject(project.id);
-
-        // Keep locallyModified=true to prevent the useEffect from immediately overwriting
-        // It will be reset when navigating to another stage
-      }
-
-      // Close dialog
-      setAiEditingScene(null);
-      setNewGeneratedImage(null);
-      setAiEditPrompt('');
+      console.log('[Stage4Storyboard] AI edited image saved successfully');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save image';
-      console.error('Error saving image:', errorMessage);
-      alert(`Failed to save image: ${errorMessage}`);
+      console.error('[Stage4Storyboard] Failed to save AI edited image:', error);
+      throw error;
     }
   };
 
@@ -958,119 +876,37 @@ export function Stage4Storyboard({
         </DialogContent>
       </Dialog>
 
-      {/* AI Edit Dialog */}
-      <Dialog open={!!aiEditingScene} onOpenChange={() => {
-        setAiEditingScene(null);
-        setNewGeneratedImage(null);
-        setAiEditPrompt('');
-      }}>
-        <DialogContent className="bg-[#151515] border-gray-800 text-white rounded-xl max-w-6xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-blue-500" />
-              AI Edit Scene {aiEditingScene?.number} Image
-            </DialogTitle>
-          </DialogHeader>
-          {aiEditingScene && (
-            <div className="flex gap-6 mt-4 h-[calc(90vh-10rem)]">
-              {/* Left Side - Image Preview */}
-              <div className="flex-1 flex flex-col min-w-0">
-                <Label className="text-gray-300 mb-2">
-                  {newGeneratedImage ? 'New Generated Image' : 'Current Image'}
-                </Label>
-                <div className="relative flex-1 rounded-lg overflow-hidden bg-gray-900 flex items-center justify-center">
-                  <ImageWithFallback
-                    src={newGeneratedImage || aiEditingScene.image}
-                    alt={aiEditingScene.title}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-                {newGeneratedImage && (
-                  <p className="text-sm text-green-400 flex items-center gap-2 mt-3">
-                    <Sparkles className="w-4 h-4" />
-                    Image regenerated successfully! Click "Save & Apply" to update the storyboard.
-                  </p>
-                )}
-              </div>
-
-              {/* Right Side - Controls */}
-              <div className="flex-1 flex flex-col gap-4 min-w-0">
-                {/* Edit Instructions */}
-                <div className="space-y-2">
-                  <Label htmlFor="ai-edit-prompt" className="text-gray-300">
-                    What would you like to change?
-                  </Label>
-                  <Textarea
-                    id="ai-edit-prompt"
-                    value={aiEditPrompt}
-                    onChange={(e) => setAiEditPrompt(e.target.value)}
-                    className="bg-[#0a0a0a] border-gray-700 text-white rounded-lg min-h-32 resize-none"
-                    placeholder="E.g., 'Make the lighting warmer', 'Change to outdoor setting', 'Add more products in the background', etc."
-                    disabled={isRegeneratingImage}
-                  />
-                </div>
-
-                {/* Info Box */}
-                <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-3">
-                  <p className="text-sm text-blue-300">
-                    {newGeneratedImage
-                      ? 'You can continue editing or save the current result. Click "Regenerate" to apply more changes.'
-                      : 'AI will regenerate the image based on your instructions while maintaining the scene\'s overall concept and style.'
-                    }
-                  </p>
-                </div>
-
-                {/* Spacer to push buttons to bottom */}
-                <div className="flex-1"></div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-800">
-                  <Button
-                    onClick={() => {
-                      setAiEditingScene(null);
-                      setNewGeneratedImage(null);
-                      setAiEditPrompt('');
-                    }}
-                    variant="outline"
-                    className="border-gray-700 text-gray-300 hover:bg-gray-800 rounded-lg"
-                    disabled={isRegeneratingImage}
-                  >
-                    Cancel
-                  </Button>
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={handleAiEditSubmit}
-                      disabled={!aiEditPrompt.trim() || isRegeneratingImage}
-                      variant="outline"
-                      className="border-blue-600 text-blue-400 hover:bg-blue-600/10 rounded-lg"
-                    >
-                      {isRegeneratingImage ? (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2 animate-spin" />
-                          Regenerating...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="w-4 h-4 mr-2" />
-                          Regenerate
-                        </>
-                      )}
-                    </Button>
-                    {newGeneratedImage && (
-                      <Button
-                        onClick={handleSaveEditedImage}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                      >
-                        Save & Apply
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* AI Image Editor */}
+      {aiEditingScene && aiEditingScene.image && (
+        <AIImageEditor
+          originalImageUrl={aiEditingScene.image}
+          title={`Scene ${aiEditingScene.number}: ${aiEditingScene.title}`}
+          accentColor="#3b82f6"
+          context={{
+            sceneTitle: aiEditingScene.title,
+            sceneDescription: aiEditingScene.description,
+            campaignDescription: project?.campaignDetails?.campaignDescription,
+            productDescription: project?.campaignDetails?.productDescription,
+            targetAudience: project?.campaignDetails?.targetAudience,
+            productImageUrl: project?.campaignDetails?.productImageUrl,
+            narrativeTheme: project?.aiGeneratedNarratives?.narratives?.find(
+              (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
+            )?.title,
+            personaName: project?.aiGeneratedPersonas?.personas?.find(
+              (p: any) => p.id === project?.userPersonaSelection?.primaryPersonaId
+            )?.coreIdentity?.name,
+            personaImageUrl: project?.aiGeneratedPersonas?.personas?.find(
+              (p: any) => p.id === project?.userPersonaSelection?.primaryPersonaId
+            )?.image?.url,
+          }}
+          stageType="stage_4_storyboard"
+          projectId={project?.id || ''}
+          onSave={handleAiEditSave}
+          onClose={() => setAiEditingScene(null)}
+          apiBasePath="/api/storylab/image-edit"
+          presets={STORYLAB_PRESETS}
+        />
+      )}
     </div>
   );
 }

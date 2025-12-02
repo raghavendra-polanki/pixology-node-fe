@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle, X, Maximize2, ChevronDown, ChevronUp, Plus, RefreshCw } from 'lucide-react';
+import { ArrowRight, Sparkles, Palette, Check, Loader2, AlertCircle, X, Maximize2, ChevronDown, ChevronUp, Plus, RefreshCw, Edit2, Wand2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
   Dialog,
@@ -7,16 +7,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import type { GameLabProject, Theme, ThemeCategoryId, CreateProjectInput } from '../../types/project.types';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
+import { AIImageEditor } from '@/shared/components/AIImageEditor';
+import type { FlareLabProject, Theme, ThemeCategoryId, CreateProjectInput } from '../../types/project.types';
 import { THEME_CATEGORIES } from '../../types/project.types';
 
 interface Stage2Props {
-  project: GameLabProject;
+  project: FlareLabProject;
   navigateToStage: (stage: number) => void;
-  createProject: (input: CreateProjectInput) => Promise<GameLabProject | null>;
-  loadProject: (projectId: string) => Promise<GameLabProject | null>;
-  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<GameLabProject | null>;
-  updateConceptGallery: (conceptGallery: any, projectId?: string) => Promise<GameLabProject | null>;
+  createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
+  loadProject: (projectId: string) => Promise<FlareLabProject | null>;
+  markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
+  updateConceptGallery: (conceptGallery: any, projectId?: string) => Promise<FlareLabProject | null>;
 }
 
 interface CategoryState {
@@ -52,6 +54,12 @@ export const Stage2ConceptGallery = ({
   // Dialog state for viewing theme details
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewingTheme, setViewingTheme] = useState<Theme | null>(null);
+
+  // Prompt editor state
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+
+  // AI Image Editor state
+  const [aiEditingTheme, setAiEditingTheme] = useState<Theme | null>(null);
 
   // Track last loaded themes to prevent unnecessary reloads (StoryLab pattern)
   const lastLoadedThemesRef = useRef<string>('');
@@ -198,7 +206,7 @@ export const Stage2ConceptGallery = ({
       console.log(`[Stage2] Generating ${category.name} themes:`, requestBody);
 
       // Call streaming endpoint
-      const response = await fetch('/api/gamelab/generation/themes-stream', {
+      const response = await fetch('/api/flarelab/generation/themes-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -429,39 +437,123 @@ export const Stage2ConceptGallery = ({
   const hasAnyThemes = Object.values(categoryStates).some(cat => cat.themes.length > 0);
   const canContinue = hasAnyThemes && selectedThemes.length > 0;
 
+  /**
+   * Handle saving AI edited theme image
+   */
+  const handleAiEditSave = async (newImageUrl: string) => {
+    if (!aiEditingTheme) return;
+
+    try {
+      setLocallyModified(true);
+
+      // Update local state
+      setCategoryStates(prev => {
+        const newStates = { ...prev };
+        Object.keys(newStates).forEach(catId => {
+          newStates[catId as ThemeCategoryId] = {
+            ...newStates[catId as ThemeCategoryId],
+            themes: newStates[catId as ThemeCategoryId].themes.map(t =>
+              t.id === aiEditingTheme.id
+                ? { ...t, image: { url: newImageUrl } }
+                : t
+            ),
+          };
+        });
+        return newStates;
+      });
+
+      // Also update selectedThemes if this theme is selected
+      setSelectedThemes(prev =>
+        prev.map(t =>
+          t.id === aiEditingTheme.id
+            ? { ...t, image: { url: newImageUrl } }
+            : t
+        )
+      );
+
+      // Save to database via API
+      await fetch('/api/flarelab/image-edit/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          imageUrl: newImageUrl,
+          targetType: 'theme',
+          targetId: aiEditingTheme.id,
+          stageType: 'stage_2_themes',
+        }),
+      });
+
+      // Reload project to get fresh data
+      if (loadProject) {
+        await loadProject(project.id);
+      }
+
+      console.log('[Stage2] AI edited theme image saved successfully');
+    } catch (error) {
+      console.error('[Stage2] Failed to save AI edited image:', error);
+      throw error;
+    }
+  };
+
+  // Show prompt editor if editing
+  if (showPromptEditor) {
+    return (
+      <PromptTemplateEditor
+        stageType="stage_2_themes"
+        projectId={project.id}
+        onBack={() => setShowPromptEditor(false)}
+        accentColor="#f97316"
+        apiBasePath="/api/flarelab/prompts"
+        stageData={{
+          sportType: project.contextBrief?.sportType || 'Hockey',
+          homeTeam: project.contextBrief?.homeTeam?.name || '',
+          awayTeam: project.contextBrief?.awayTeam?.name || '',
+          contextPills: project.contextBrief?.contextPills?.join(', ') || '',
+          campaignGoal: project.contextBrief?.campaignGoal || '',
+          categoryFocus: 'All Categories',
+          numberOfThemes: '3',
+          categoryModifier: '',
+        }}
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-            <Palette className="w-6 h-6 text-green-500" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+              <Palette className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Theme Gallery</h2>
+              <p className="text-gray-400">Generate broadcast-ready themes organized by category</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Theme Gallery</h2>
-            <p className="text-gray-400">Generate broadcast-ready themes organized by category</p>
-          </div>
+          <Button
+            onClick={() => setShowPromptEditor(true)}
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+            size="sm"
+          >
+            <Edit2 className="w-4 h-4 mr-2" />
+            Edit Prompts
+          </Button>
         </div>
         {selectedThemes.length > 0 && (
-          <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-between">
+          <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
             <div className="flex items-center gap-2">
-              <Check className="w-5 h-5 text-green-500" />
-              <span className="text-green-400 font-medium">
+              <Check className="w-5 h-5 text-orange-500" />
+              <span className="text-orange-400 font-medium">
                 {selectedThemes.length} theme{selectedThemes.length !== 1 ? 's' : ''} selected
               </span>
               <span className="text-gray-400 text-sm">
                 ({selectedThemes.map(t => t.title).join(', ')})
               </span>
             </div>
-            <Button
-              onClick={handleContinue}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-              size="sm"
-            >
-              {isSaving ? 'Saving...' : 'Continue to Select Players'}
-              {!isSaving && <ArrowRight className="w-4 h-4 ml-2" />}
-            </Button>
           </div>
         )}
       </div>
@@ -515,7 +607,7 @@ export const Stage2ConceptGallery = ({
                         e.stopPropagation();
                         handleGenerateCategory(categoryId);
                       }}
-                      className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                      className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30"
                       size="sm"
                       disabled={!project.contextBrief}
                     >
@@ -534,7 +626,7 @@ export const Stage2ConceptGallery = ({
                 <div className="px-5 pb-5">
                   <div className="p-4 bg-gray-800/30 rounded-lg">
                     <div className="flex items-center gap-3 mb-3">
-                      <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+                      <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
                       <span className="text-white font-medium">Generating {category.name}...</span>
                     </div>
                     <div className="space-y-2">
@@ -544,7 +636,7 @@ export const Stage2ConceptGallery = ({
                       </div>
                       <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-green-500 transition-all duration-300"
+                          className="h-full bg-orange-500 transition-all duration-300"
                           style={{ width: `${state.progress}%` }}
                         />
                       </div>
@@ -584,8 +676,8 @@ export const Stage2ConceptGallery = ({
                         onClick={() => toggleThemeSelection(theme)}
                         className={`group rounded-xl border-2 transition-all text-left overflow-hidden relative cursor-pointer ${
                           isThemeSelected(theme.id)
-                            ? 'border-green-500 ring-4 ring-green-500/20'
-                            : 'border-gray-700 hover:border-green-500/50'
+                            ? 'border-orange-500 ring-4 ring-orange-500/20'
+                            : 'border-gray-700 hover:border-orange-500/50'
                         }`}
                       >
                         {/* Image */}
@@ -604,24 +696,36 @@ export const Stage2ConceptGallery = ({
 
                           {/* Selected checkmark */}
                           {isThemeSelected(theme.id) && (
-                            <div className="absolute top-4 right-4 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg z-10">
+                            <div className="absolute top-4 right-4 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg z-10">
                               <Check className="w-5 h-5 text-white" />
                             </div>
                           )}
 
-                          {/* Maximize button */}
+                          {/* Action buttons */}
                           {theme.image?.url && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setViewingTheme(theme);
-                                setViewDialogOpen(true);
-                              }}
-                              className="absolute top-4 left-4 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                              title="View full size"
-                            >
-                              <Maximize2 className="w-4 h-4 text-white" />
-                            </button>
+                            <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingTheme(theme);
+                                  setViewDialogOpen(true);
+                                }}
+                                className="w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center"
+                                title="View full size"
+                              >
+                                <Maximize2 className="w-4 h-4 text-white" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAiEditingTheme(theme);
+                                }}
+                                className="w-8 h-8 bg-orange-500/80 hover:bg-orange-500 rounded-full flex items-center justify-center"
+                                title="AI Edit Image"
+                              >
+                                <Wand2 className="w-4 h-4 text-white" />
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -674,6 +778,48 @@ export const Stage2ConceptGallery = ({
           );
         })}
       </div>
+
+      {/* Continue Button at Bottom */}
+      {canContinue && (
+        <div className="mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-lg flex items-center justify-between">
+          <div className="text-sm text-gray-400">
+            <span className="text-orange-400 font-medium">
+              <Check className="w-4 h-4 inline mr-1" />
+              {selectedThemes.length} theme{selectedThemes.length !== 1 ? 's' : ''} ready
+            </span>
+          </div>
+          <Button
+            onClick={handleContinue}
+            disabled={isSaving}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+            size="lg"
+          >
+            {isSaving ? 'Saving...' : 'Continue to Select Players'}
+            {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+          </Button>
+        </div>
+      )}
+
+      {/* AI Image Editor */}
+      {aiEditingTheme && aiEditingTheme.image?.url && (
+        <AIImageEditor
+          originalImageUrl={aiEditingTheme.image.url}
+          title={aiEditingTheme.title}
+          accentColor="#f97316"
+          context={{
+            themeName: aiEditingTheme.title,
+            themeDescription: aiEditingTheme.description,
+            category: aiEditingTheme.category ? THEME_CATEGORIES[aiEditingTheme.category].name : undefined,
+            sportType: project.contextBrief?.sportType,
+            homeTeam: project.contextBrief?.homeTeam?.name,
+            awayTeam: project.contextBrief?.awayTeam?.name,
+          }}
+          stageType="stage_2_themes"
+          projectId={project.id}
+          onSave={handleAiEditSave}
+          onClose={() => setAiEditingTheme(null)}
+        />
+      )}
 
       {/* Theme Details Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
@@ -788,14 +934,14 @@ export const Stage2ConceptGallery = ({
                           toggleThemeSelection(viewingTheme);
                           setViewDialogOpen(false);
                         }}
-                        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl"
+                        className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
                         size="lg"
                       >
                         <Check className="w-5 h-5 mr-2" />
                         Select This Theme
                       </Button>
                     ) : (
-                      <div className="flex items-center justify-center gap-2 text-green-500 py-3">
+                      <div className="flex items-center justify-center gap-2 text-orange-500 py-3">
                         <Check className="w-5 h-5" />
                         <span className="font-medium">Currently Selected</span>
                       </div>
