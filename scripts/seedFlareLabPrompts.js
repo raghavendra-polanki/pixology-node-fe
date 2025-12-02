@@ -10,7 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import admin from 'firebase-admin';
-import { GAMELAB_PROMPT_TEMPLATES } from '../api/products/gamelab/prompts/seedData.js';
+import { GAMELAB_PROMPT_TEMPLATES } from '../api/products/flarelab/prompts/seedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

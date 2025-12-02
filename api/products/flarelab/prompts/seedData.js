@@ -286,24 +286,28 @@ export const STAGE_3_PLAYER_SUGGESTION_TEMPLATE = {
   id: 'stage_3_players',
   stageType: 'stage_3_players',
   prompts: [
+    // COMBINED IMAGE ANALYSIS + PLAYER RECOMMENDATION (single AI call)
     {
-      id: 'prompt_textGeneration_players_default',
-      capability: 'textGeneration',
-      name: 'Default Player Recommendation',
-      description: 'AI-powered player recommendations based on theme characteristics',
-      systemPrompt: `You are an expert Sports Content Strategist and Player Analyst with deep knowledge of:
-- Sports broadcasting and promotional content
-- Player positioning and team dynamics
-- Visual storytelling and player representation
-- Campaign strategy and audience engagement
+      id: 'prompt_imageAnalysis_players_combined',
+      capability: 'imageAnalysisAndRecommendation',
+      name: 'Combined Image Analysis & Player Recommendation',
+      description: 'Analyzes theme image AND recommends players in a single AI call for efficiency',
+      systemPrompt: `You are an expert Sports Broadcast Visual Analyst and Player Casting Director.
 
-Your role is to analyze themes and recommend the most suitable players based on:
-1. Theme category and visual concept
-2. Player attributes (position, performance, team affiliation)
-3. Campaign context and goals
-4. Visual composition requirements (1-player vs 2-player themes)`,
+Your dual expertise includes:
+1. **Visual Analysis:** Analyzing sports promotional graphics to determine player requirements
+2. **Player Casting:** Recommending the best players based on visual and campaign requirements
 
-      userPromptTemplate: `## 🎯 CAMPAIGN CONTEXT
+You will analyze a theme image and recommend players in ONE response, ensuring:
+- Accurate detection of player count and team requirements from the image
+- Smart player recommendations that match the visual composition
+- Consideration of player attributes, performance, and campaign goals`,
+
+      userPromptTemplate: `## 🎯 COMBINED TASK: ANALYZE IMAGE & RECOMMEND PLAYERS
+
+You will analyze the provided theme image and recommend the best players in a SINGLE response.
+
+## 🏒 CAMPAIGN CONTEXT
 
 **Sport Type:** {{sportType}}
 **Home Team:** {{homeTeam}}
@@ -314,63 +318,77 @@ Your role is to analyze themes and recommend the most suitable players based on:
 ## 🎨 THEME DETAILS
 
 **Theme Name:** {{themeName}}
-**Description:** {{themeDescription}}
-**Category:** {{themeCategory}}
-**Players Needed:** {{playerCount}}
+**Theme Description:** {{themeDescription}}
+**Theme Category:** {{themeCategory}}
 
 ## 👥 AVAILABLE PLAYERS
 
 {{availablePlayers}}
 
-## 📋 YOUR TASK
+## 📋 YOUR TASKS (Complete both in one response)
 
-Analyze the theme and recommend the **best {{playerCount}} player(s)** from the available roster.
+### TASK 1: ANALYZE THE THEME IMAGE
 
-**Selection Criteria:**
+Look at the provided theme image and determine:
 
-1. **Theme Alignment:**
-   - Does the player match the theme category?
-   - For "Home Team Focus": Select home team players
-   - For "Away Team Focus": Select away team players
-   - For "Rivalry": Select 1 from each team for dramatic matchup
-   - For "Posed": Select compatible players for the specific pose/action
-   - For "Broadcast": Select high-profile or key players
+1. **Player Count:** How many distinct player positions/slots are in the image?
+   - Look for player silhouettes, cutouts, split compositions, or "vs" layouts
+   - Count the number of separate players that should appear
 
-2. **Visual Suitability:**
-   - Consider the theme description and how the player fits visually
-   - Think about player prominence, star power, and recognition
-   - Consider position relevance to the visual concept
+2. **Team Requirements:** Which team should each player position belong to?
+   - Analyze dominant colors in the image
+   - Match colors to home team ({{homeTeam}}) or away team ({{awayTeam}})
+   - Consider the theme category "{{themeCategory}}":
+     - "home-team": All players from home team
+     - "away-team": All players from away team
+     - "rivalry": Mix of both teams (typically 1 from each)
+     - "posed"/"broadcast": Determine from visual context
 
-3. **Performance & Impact:**
-   - Prioritize players with higher performance scores
-   - Consider social sentiment and fan engagement
-   - Look for "isHighlighted" players (they're trending/hot)
+### TASK 2: RECOMMEND PLAYERS
 
-4. **Campaign Goals:**
-   - Social Hype: Choose charismatic, popular players
-   - Broadcast B-Roll: Choose key players with professional presence
-   - Stadium Ribbon: Choose recognizable stars
+Based on your image analysis, recommend the best players:
+
+1. **Match Team Requirements:** Select players from the correct team(s) based on visual analysis
+2. **Visual Fit:** Choose players that match the theme's visual style and intensity
+3. **Performance:** Prioritize high-performing players (check performanceScore)
+4. **Star Power:** Consider highlighted players and social sentiment
+5. **Campaign Alignment:**
+   - Social Hype: Charismatic, popular players
+   - Broadcast B-Roll: Professional presence
+   - Stadium Ribbon: Recognizable stars
 
 ## 📄 MANDATORY OUTPUT FORMAT
 
 Return ONLY valid JSON with this exact structure:
 
 {
+  "imageAnalysis": {
+    "playerCount": <number - how many players detected in image>,
+    "teamRequirements": [
+      {
+        "position": <1-based position number>,
+        "team": "home" | "away" | "either",
+        "reasoning": "Why this team based on visual cues"
+      }
+    ],
+    "visualDescription": "2-3 sentences describing what you see in the image"
+  },
   "recommendedPlayers": [
     {
-      "playerId": "player_id_from_available_players",
+      "playerId": "exact_player_id_from_list",
       "name": "Player Name",
-      "reason": "Brief explanation (1-2 sentences) why this player is perfect for this theme"
+      "position": <which position in the image (1, 2, etc.)>,
+      "reason": "Why this player is perfect for this position (1-2 sentences)"
     }
   ],
-  "reasoning": "Overall strategy explanation for this recommendation (2-3 sentences explaining how these players work together for this theme and campaign goal)"
+  "overallReasoning": "Strategy explanation for these recommendations (2-3 sentences)"
 }
 
-**IMPORTANT:**
-- Recommend EXACTLY {{playerCount}} player(s)
-- Use actual player IDs from the available players list
-- Provide clear, actionable reasoning
-- Consider both individual fit and how players work together (for 2-player themes)`,
+**CRITICAL RULES:**
+- playerCount in imageAnalysis MUST match the number of recommendedPlayers
+- Use EXACT player IDs from the available players list
+- Each recommended player must match the team requirement for their position
+- If image analysis is uncertain, use theme category as fallback`,
 
       outputFormat: 'json',
       variables: [
@@ -406,7 +424,7 @@ Return ONLY valid JSON with this exact structure:
         },
         {
           name: 'themeName',
-          description: 'Name of the theme needing player recommendations',
+          description: 'Name of the theme',
           required: true,
           type: 'string',
         },
@@ -423,12 +441,6 @@ Return ONLY valid JSON with this exact structure:
           type: 'string',
         },
         {
-          name: 'playerCount',
-          description: 'Number of players needed for this theme (1 or 2)',
-          required: true,
-          type: 'number',
-        },
-        {
           name: 'availablePlayers',
           description: 'JSON array of available players with their attributes',
           required: true,
@@ -437,7 +449,7 @@ Return ONLY valid JSON with this exact structure:
       ],
       modelConfig: {
         adaptorId: 'gemini',
-        modelId: 'gemini-2.0-flash',
+        modelId: 'gemini-2.0-flash', // Multimodal model for image + text
       },
       isActive: true,
     },
@@ -609,12 +621,176 @@ export const STAGE_5_ANIMATION_TEMPLATE = {
   id: 'stage_5_animation',
   stageType: 'stage_5_animation',
   prompts: [
-    // SCREENPLAY PROMPT - Analyzes image and generates animation prompt
+    // ANIMATION RECOMMENDATIONS PROMPT - Analyzes image and suggests multiple animation styles
+    {
+      id: 'prompt_textGeneration_animation_recommendations_default',
+      capability: 'animationRecommendation',
+      name: 'Animation Style Recommendations',
+      description: 'Analyzes sports image and recommends 4 distinct animation styles for user to choose from',
+      systemPrompt: `You are an elite Sports Motion Graphics Director with extensive experience in:
+- Sports broadcasting motion graphics and animated overlays
+- Creating captivating, attention-grabbing sports content for social media
+- Understanding natural sports movements and cinematic sports aesthetics
+- Designing diverse animation styles from subtle to dynamic
+
+Your specialty is analyzing static sports images and recommending MULTIPLE distinct animation approaches, giving creative professionals options to choose from based on their specific needs.`,
+
+      userPromptTemplate: `## 🎯 ANIMATION RECOMMENDATION TASK
+
+Analyze the provided image and recommend **4 distinct animation styles** that would work well for this sports content.
+
+## 📸 IMAGE CONTEXT
+
+**Sport Type:** {{sportType}}
+**Home Team:** {{homeTeam}}
+**Away Team:** {{awayTeam}}
+**Theme:** {{themeName}}
+**Theme Description:** {{themeDescription}}
+**Game Context:** {{contextPills}}
+**Campaign Goal:** {{campaignGoal}}
+
+## 👥 FEATURED PLAYER(S)
+
+{{playerInfo}}
+
+## 📋 YOUR TASK
+
+1. **Analyze the Image:** Study the composition, lighting, player positioning, and current pose
+2. **Recommend 4 DISTINCT Animation Styles:** Each should be meaningfully different in approach
+3. **Rank Your Recommendations:** Identify which one is BEST for this specific image and context
+
+## 🎨 ANIMATION STYLE CATEGORIES TO CONSIDER
+
+**SUBTLE & PROFESSIONAL:**
+- Gentle breathing motion, subtle fabric movement
+- Minimal background shimmer or light flicker
+- Best for: Broadcast B-Roll, professional content
+
+**CELEBRATORY & DYNAMIC:**
+- Player gestures (fist pump, arm raise, high-five)
+- Victory poses, emotional expressions
+- Best for: Social Hype, fan engagement
+
+**INTENSE & POWERFUL:**
+- Power stance adjustments, intimidating movements
+- Head turns with intensity, muscle tension
+- Best for: Rivalry matchups, Playoff content
+
+**ATMOSPHERIC & CINEMATIC:**
+- Environmental effects (particles, light rays)
+- Dramatic lighting shifts
+- Best for: Stadium Ribbon, cinematic feel
+
+## ⚠️ CONSTRAINTS FOR ALL STYLES
+
+- **NO CAMERA MOVEMENT:** Camera must remain static
+- **NO AUDIO:** Silent video only
+- **4 SECONDS:** Each animation is exactly 4 seconds
+- **PLAYER FOCUS:** 80% of motion should be player-based, not just effects
+
+## 🚫 COPYRIGHT - CRITICAL
+
+In ALL videoGenerationPrompt outputs, use GENERIC descriptions:
+- "the hockey player" NOT real player names
+- "player in dark jersey" NOT team names
+- NO trademarked terms
+
+## 📄 MANDATORY OUTPUT FORMAT
+
+Return ONLY valid JSON with this exact structure:
+
+{
+  "imageAnalysis": "2-3 sentences describing the image - composition, lighting, player positioning, current pose, and what makes it suitable for animation",
+  "recommendations": [
+    {
+      "id": "style_1",
+      "styleName": "Short catchy name (2-4 words)",
+      "category": "subtle" | "celebratory" | "intense" | "atmospheric",
+      "description": "1-2 sentences describing what this animation looks like to a viewer",
+      "whyItWorks": "1 sentence explaining why this style fits THIS specific image",
+      "isRecommended": true | false,
+      "screenplay": {
+        "animationConcept": "1-2 sentences summarizing the overall motion",
+        "second1": "0:00-0:01: Specific player/scene movement",
+        "second2": "0:01-0:02: Continuation of movement",
+        "second3": "0:02-0:03: Peak action moment",
+        "second4": "0:03-0:04: Resolution/hold"
+      },
+      "videoGenerationPrompt": "Complete, self-contained prompt (3-5 sentences) for video AI. Describe player movements using GENERIC terms only, specify 4-second duration, state NO CAMERA MOVEMENT and NO AUDIO."
+    }
+  ]
+}
+
+**IMPORTANT RULES:**
+- Exactly 4 recommendations
+- Exactly ONE recommendation should have "isRecommended": true (your top pick for this image)
+- Each style should be MEANINGFULLY different (don't just vary intensity)
+- Order recommendations with your top pick first
+- videoGenerationPrompt must be COMPLETELY FREE of trademarked names`,
+
+      outputFormat: 'json',
+      variables: [
+        {
+          name: 'sportType',
+          description: 'Type of sport (e.g., Hockey, Basketball, Football)',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'homeTeam',
+          description: 'Home team name',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'awayTeam',
+          description: 'Away team name',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'themeName',
+          description: 'Name of the theme',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'themeDescription',
+          description: 'Detailed theme description',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'contextPills',
+          description: 'Game context (e.g., Playoff Intensity, Rivalry)',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'campaignGoal',
+          description: 'Campaign goal (Social Hype, Broadcast B-Roll, Stadium Ribbon)',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'playerInfo',
+          description: 'Information about the featured player(s)',
+          required: true,
+          type: 'string',
+        },
+      ],
+      modelConfig: {
+        adaptorId: 'gemini',
+        modelId: 'gemini-2.0-flash',
+      },
+      isActive: true,
+    },
+    // SCREENPLAY PROMPT - Legacy: Analyzes image and generates single animation prompt
     {
       id: 'prompt_textGeneration_animation_screenplay_default',
-      capability: 'textGeneration',
-      name: 'Animation Screenplay Generation',
-      description: 'Analyzes sports image and generates a 4-second animation screenplay optimized for sports broadcasting',
+      capability: 'animationScreenplay',
+      name: 'Animation Screenplay Generation (Legacy)',
+      description: 'Analyzes sports image and generates a single 4-second animation screenplay',
       systemPrompt: `You are an elite Sports Motion Graphics Director with extensive experience in:
 - Sports broadcasting motion graphics and animated overlays
 - Creating captivating, attention-grabbing sports content for social media

@@ -366,9 +366,78 @@ router.post('/images-stream', async (req, res) => {
 });
 
 /**
+ * POST /api/flarelab/generation/animation-recommendations
+ *
+ * Step 1 (New Flow): Analyze image and get multiple animation style recommendations
+ *
+ * Request Body:
+ * {
+ *   projectId: string,
+ *   imageUrl: string,
+ *   themeId: string,
+ *   themeName: string,
+ *   themeDescription: string,
+ *   themeCategory: string,
+ *   players: Array<Player>,
+ *   contextBrief: { sportType, homeTeam, awayTeam, contextPills, campaignGoal }
+ * }
+ */
+router.post('/animation-recommendations', async (req, res) => {
+  const {
+    projectId,
+    imageUrl,
+    themeId,
+    themeName,
+    themeDescription,
+    themeCategory,
+    players = [],
+    contextBrief = {},
+  } = req.body;
+
+  try {
+    const db = req.db;
+    if (!db) {
+      return res.status(500).json({ error: 'Database configuration error' });
+    }
+
+    if (!projectId || !imageUrl) {
+      return res.status(400).json({ error: 'Project ID and image URL are required' });
+    }
+
+    console.log('[FlareLab Animation Recommendations] Getting recommendations for:', themeName);
+
+    const result = await AnimationGenerationService.getAnimationRecommendations(
+      projectId,
+      {
+        imageUrl,
+        themeId,
+        themeName,
+        themeDescription,
+        themeCategory,
+        players,
+        contextBrief,
+      },
+      db,
+      AIAdaptorResolver
+    );
+
+    return res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[FlareLab Animation Recommendations] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to get animation recommendations',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/gamelab/generation/animation-screenplay
  *
- * Step 1: Analyze image and generate animation screenplay/prompt
+ * Step 1 (Legacy): Analyze image and generate animation screenplay/prompt
  *
  * Request Body:
  * {

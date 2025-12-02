@@ -1,6 +1,6 @@
-// GameLab Project Types
+// FlareLab Project Types
 
-export interface GameLabProject {
+export interface FlareLabProject {
   id: string;
   name: string; // User-facing name
   title: string; // Backend field (same as name)
@@ -285,6 +285,13 @@ export interface AnimationResult {
   themeId: string;
   themeName: string;
   imageUrl: string;
+  // New: AI-generated style recommendations
+  recommendations?: AnimationRecommendation[];
+  imageAnalysis?: string;
+  // Selected style (from recommendations or custom)
+  selectedStyle?: AnimationRecommendation | null;
+  customPrompt?: string;
+  // Screenplay (legacy or from selected style)
   screenplay?: AnimationScreenplay;
   video?: {
     videoUrl: string;
@@ -307,6 +314,27 @@ export interface AnimationScreenplay {
   imageAnalysis: string;
   animationConcept: string;
   screenplay: {
+    second1: string;
+    second2: string;
+    second3: string;
+    second4: string;
+  };
+  videoGenerationPrompt: string;
+}
+
+// Animation style category types
+export type AnimationStyleCategory = 'subtle' | 'celebratory' | 'intense' | 'atmospheric';
+
+// Animation style recommendation from AI
+export interface AnimationRecommendation {
+  id: string;
+  styleName: string;
+  category: AnimationStyleCategory;
+  description: string;
+  whyItWorks: string;
+  isRecommended: boolean;
+  screenplay: {
+    animationConcept: string;
     second1: string;
     second2: string;
     second3: string;
@@ -371,7 +399,7 @@ export interface UpdateProjectInput {
   kineticActivation?: Partial<KineticActivationData>;
   polishDownload?: Partial<PolishDownloadData>;
   stageExecutions?: Record<string, StageExecution>;
-  metadata?: Partial<GameLabProject['metadata']>;
+  metadata?: Partial<FlareLabProject['metadata']>;
 }
 
 /**
@@ -388,7 +416,7 @@ export interface UpdateStageInput {
  * Response for list of projects
  */
 export interface ProjectListResponse {
-  projects: GameLabProject[];
+  projects: FlareLabProject[];
   total: number;
   page: number;
   limit: number;
@@ -408,7 +436,7 @@ export interface WorkflowStage {
 }
 
 /**
- * Default workflow stages for GameLab
+ * Default workflow stages for FlareLab
  */
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   {

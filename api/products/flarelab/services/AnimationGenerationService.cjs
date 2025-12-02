@@ -110,6 +110,166 @@ class AnimationGenerationService {
   }
 
   /**
+   * Get animation style recommendations (new two-step flow)
+   *
+   * Analyzes the image and returns multiple animation style options
+   * for the user to choose from.
+   *
+   * @param {string} projectId - Project ID
+   * @param {Object} input - Input parameters
+   * @param {Object} db - Firestore database instance
+   * @param {Object} AIAdaptorResolver - AI adaptor resolver
+   * @returns {Promise<Object>} Recommendations data with imageAnalysis and recommendations array
+   */
+  static async getAnimationRecommendations(projectId, input, db, AIAdaptorResolver) {
+    const {
+      imageUrl,
+      themeId,
+      themeName,
+      themeDescription,
+      themeCategory,
+      players = [],
+      contextBrief = {},
+    } = input;
+
+    try {
+      console.log(`[AnimationGen] Getting animation recommendations for theme: ${themeName}`);
+
+      // Get the recommendations prompt template
+      const promptTemplate = await PromptManager.getPromptByCapability(
+        'stage_5_animation',
+        'animationRecommendation',
+        projectId,
+        db
+      );
+
+      console.log('[AnimationGen] Loaded recommendations prompt template:', promptTemplate?.id);
+
+      // Get text generation adaptor
+      const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+        projectId,
+        'stage_5_animation',
+        'textGeneration',
+        db,
+        promptTemplate.modelConfig
+      );
+
+      console.log(`[AnimationGen] Text adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
+
+      // Build player info string
+      const playerInfo = players.map((player, idx) => {
+        const teamType = player.teamId === 'home' ? contextBrief.homeTeam?.name : contextBrief.awayTeam?.name;
+        return `Player ${idx + 1}: ${player.name} (#${player.number}) - ${player.position || 'Unknown'} - ${teamType || 'Unknown Team'}`;
+      }).join('\n') || 'No specific players featured';
+
+      // Build prompt variables
+      const variables = {
+        sportType: contextBrief.sportType || 'Hockey',
+        homeTeam: contextBrief.homeTeam?.name || 'Home Team',
+        awayTeam: contextBrief.awayTeam?.name || 'Away Team',
+        themeName: themeName || 'Sports Theme',
+        themeDescription: themeDescription || '',
+        contextPills: Array.isArray(contextBrief.contextPills)
+          ? contextBrief.contextPills.join(', ')
+          : contextBrief.contextPills || '',
+        campaignGoal: contextBrief.campaignGoal || 'Social Hype',
+        playerInfo: playerInfo,
+      };
+
+      // Resolve the prompt
+      const resolvedPrompt = PromptManager.resolvePrompt(promptTemplate, variables);
+      const fullPrompt = promptTemplate.systemPrompt
+        ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
+        : resolvedPrompt.userPrompt;
+
+      console.log('[AnimationGen] Getting recommendations with image analysis...');
+
+      // Send image URL for analysis along with the prompt
+      const response = await textAdaptor.adaptor.generateText(fullPrompt, {
+        referenceImageUrl: imageUrl,
+        responseFormat: 'json',
+      });
+
+      // Parse the recommendations response
+      const recommendations = this._parseRecommendationsResponse(response.text || response);
+
+      console.log('[AnimationGen] Recommendations generated successfully:', recommendations.recommendations?.length || 0, 'options');
+
+      return {
+        themeId,
+        themeName,
+        imageUrl,
+        imageAnalysis: recommendations.imageAnalysis,
+        recommendations: recommendations.recommendations || [],
+        generatedAt: new Date().toISOString(),
+      };
+
+    } catch (error) {
+      console.error('[AnimationGen] Recommendations generation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse recommendations JSON response from AI
+   * @private
+   */
+  static _parseRecommendationsResponse(response) {
+    try {
+      // If already an object, return it
+      if (typeof response === 'object' && response !== null) {
+        return response;
+      }
+
+      // Try to parse as JSON directly
+      const text = String(response);
+
+      // Try direct parse first
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        // Try to extract from markdown code block
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[1].trim());
+        }
+
+        // Try to find JSON object in text
+        const objectMatch = text.match(/\{[\s\S]*\}/);
+        if (objectMatch) {
+          return JSON.parse(objectMatch[0]);
+        }
+
+        throw new Error('Could not parse recommendations response as JSON');
+      }
+    } catch (error) {
+      console.error('[AnimationGen] Failed to parse recommendations:', error);
+      // Return default recommendations
+      return {
+        imageAnalysis: 'Unable to parse image analysis',
+        recommendations: [
+          {
+            id: 'style_1',
+            styleName: 'Subtle Pulse',
+            category: 'subtle',
+            description: 'Gentle breathing motion with subtle fabric movement',
+            whyItWorks: 'Professional and broadcast-ready',
+            isRecommended: true,
+            screenplay: {
+              animationConcept: 'Subtle breathing and fabric motion',
+              second1: '0:00-0:01: Gentle start',
+              second2: '0:01-0:02: Breathing motion',
+              second3: '0:02-0:03: Fabric movement',
+              second4: '0:03-0:04: Settle',
+            },
+            videoGenerationPrompt: 'Create a subtle 4-second animation with gentle breathing motion. No camera movement. No audio.',
+          },
+        ],
+      };
+    }
+  }
+
+  /**
    * Step 2: Generate video from screenplay
    *
    * @param {string} projectId - Project ID
