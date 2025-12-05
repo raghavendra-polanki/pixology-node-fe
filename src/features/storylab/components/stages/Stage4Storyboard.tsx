@@ -135,13 +135,26 @@ export function Stage4Storyboard({
     try {
       if (!project) throw new Error('No project loaded. Please go back and reload the project.');
 
-      // Get selected narrative
-      const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find(
-        (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
-      );
+      // Get selected narrative - check for custom narrative first
+      let narrativeTheme = '';
+      let narrativeStructure = '';
 
-      if (!selectedNarrative) {
-        throw new Error('No narrative selected. Please select a narrative theme first.');
+      if (project?.narrativePreferences?.useCustomStructure && project?.narrativePreferences?.customNarrative) {
+        // User provided a custom narrative
+        narrativeTheme = 'Custom Narrative';
+        narrativeStructure = project.narrativePreferences.customNarrative;
+      } else {
+        // Look for AI-generated narrative
+        const selectedNarrative = project?.aiGeneratedNarratives?.narratives?.find(
+          (n: any) => n.id === project?.narrativePreferences?.narrativeStyle
+        );
+
+        if (!selectedNarrative) {
+          throw new Error('No narrative selected. Please select a narrative theme first.');
+        }
+
+        narrativeTheme = selectedNarrative.title || '';
+        narrativeStructure = selectedNarrative.structure || '';
       }
 
       // Get selected persona
@@ -166,8 +179,8 @@ export function Stage4Storyboard({
           selectedPersonaDescription: selectedPersona.coreIdentity?.bio || '',
           selectedPersonaImage: selectedPersona.image?.url || '',
           productImageUrl: project.campaignDetails.productImageUrl || '',
-          narrativeTheme: selectedNarrative.title || '',
-          narrativeStructure: selectedNarrative.structure || '',
+          narrativeTheme: narrativeTheme,
+          narrativeStructure: narrativeStructure,
           numberOfScenes: 5,
           videoDuration: project.campaignDetails.videoDuration || '30s',
         }),

@@ -220,8 +220,9 @@ router.post('/', verifyToken, async (req, res) => {
       ...(metadata && { metadata }),
     };
 
-    // Save to Firestore (new signature: projectData, userId, projectId)
-    const projectId = await saveProject(projectData, req.userId);
+    // Save to Firestore (signature: projectData, database, projectId)
+    // Pass null for database to use default StoryLab db
+    const projectId = await saveProject(projectData, null, null);
 
     return res.status(201).json({
       success: true,
@@ -342,8 +343,8 @@ router.put('/:projectId', verifyToken, async (req, res) => {
       updatedAt: new Date(),
     };
 
-    // Save to Firestore (new signature: projectData, userId, projectId)
-    await saveProject(updatedProjectData, req.userId, projectId);
+    // Save to Firestore (signature: projectData, database, projectId)
+    await saveProject(updatedProjectData, null, projectId);
 
     return res.status(200).json({
       success: true,
@@ -502,8 +503,8 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
       });
     }
 
-    // Save to Firestore
-    await saveProject(updatedProjectData, req.userId, projectId);
+    // Save to Firestore (signature: projectData, database, projectId)
+    await saveProject(updatedProjectData, null, projectId);
 
     return res.status(200).json({
       success: true,
