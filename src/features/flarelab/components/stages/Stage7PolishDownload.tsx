@@ -27,12 +27,13 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load selected items from Stage 4/5 (images) and Stage 6 (videos)
+  // Load selected items from Stage 5 (Text Studio - images) and Stage 6 (Animation - videos)
   useEffect(() => {
     const items: ExportItem[] = [];
 
-    // Get images selected for export from Stage 4
-    const selectedImageIds = project.highFidelityCapture?.selectedForExport || [];
+    // Get images selected for export from Stage 5 (Text Studio)
+    // Fall back to Stage 4 for backwards compatibility
+    const selectedImageIds = project.textStudio?.selectedForExport || project.highFidelityCapture?.selectedForExport || [];
     const allImages = project.highFidelityCapture?.generatedImages || [];
 
     selectedImageIds.forEach(themeId => {
@@ -49,7 +50,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
       }
     });
 
-    // Get videos selected for export from Stage 5
+    // Get videos selected for export from Stage 6 (Animation)
     const selectedVideoIds = project.kineticActivation?.selectedForExport || [];
     const allAnimations = project.kineticActivation?.animations || [];
 
@@ -67,7 +68,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
       }
     });
 
-    console.log('[Stage6] Export items loaded:', items.length);
+    console.log('[Stage7] Export items loaded:', items.length);
     setExportItems(items);
   }, [project]);
 
@@ -113,7 +114,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
       setDownloadedItems(prev => new Set([...prev, item.id]));
 
     } catch (error) {
-      console.error('[Stage6] Download failed:', error);
+      console.error('[Stage7] Download failed:', error);
       alert(`Failed to download ${item.name}. Please try again.`);
     } finally {
       setDownloadingId(null);
@@ -133,7 +134,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error) {
-      console.error('[Stage6] Download all failed:', error);
+      console.error('[Stage7] Download all failed:', error);
     } finally {
       setDownloadingAll(false);
     }
@@ -165,7 +166,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
 
       alert('Project marked as complete!');
     } catch (error) {
-      console.error('[Stage6] Failed to save:', error);
+      console.error('[Stage7] Failed to save:', error);
       alert('Failed to save. Please try again.');
     } finally {
       setIsSaving(false);

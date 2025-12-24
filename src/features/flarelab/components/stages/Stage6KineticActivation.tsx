@@ -131,9 +131,9 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
         updatedAt: new Date().toISOString(),
       });
 
-      console.log('[Stage5] Saved animations to project');
+      console.log('[Stage6] Saved animations to project');
     } catch (err) {
-      console.error('[Stage5] Failed to save animations:', err);
+      console.error('[Stage6] Failed to save animations:', err);
     }
   }, [project?.id]);
 
@@ -224,19 +224,20 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
       loadingInProgress.current.delete(themeId);
       return recommendations;
     } catch (err) {
-      console.error('[Stage5] Failed to get recommendations:', err);
+      console.error('[Stage6] Failed to get recommendations:', err);
       updateAnimation(themeId, { isLoadingRecommendations: false });
       loadingInProgress.current.delete(themeId);
       return null;
     }
   }, [project, updateAnimation, saveAnimationsToProject]);
 
-  // Load images selected for animation from Stage 4
+  // Load images selected for animation from Stage 5 (Text Studio)
   useEffect(() => {
-    if (!project?.highFidelityCapture) return;
+    if (!project?.textStudio && !project?.highFidelityCapture) return;
 
-    const selectedForAnimation = project.highFidelityCapture.selectedForAnimation || [];
-    const allImages = project.highFidelityCapture.generatedImages || [];
+    // First try to get from Text Studio (Stage 5), fall back to Stage 4 for backwards compatibility
+    const selectedForAnimation = project.textStudio?.selectedForAnimation || project.highFidelityCapture?.selectedForAnimation || [];
+    const allImages = project.highFidelityCapture?.generatedImages || [];
 
     const animationImages = allImages.filter((img: GeneratedImage) =>
       selectedForAnimation.includes(img.themeId || '')
@@ -249,7 +250,7 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
       initialLoadDone.current = true;
 
       if (project.kineticActivation?.animations && project.kineticActivation.animations.length > 0) {
-        console.log('[Stage5] Loading saved animations from project:', project.kineticActivation.animations.length);
+        console.log('[Stage6] Loading saved animations from project:', project.kineticActivation.animations.length);
         const animMap = new Map<string, AnimationData>();
         for (const anim of project.kineticActivation.animations) {
           animMap.set(anim.themeId, {
@@ -270,7 +271,7 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
     const tabs = new Map<string, 'styles' | 'custom'>();
     animationImages.forEach(img => tabs.set(img.themeId || '', 'styles'));
     setActiveTab(tabs);
-  }, [project?.highFidelityCapture, project?.kineticActivation]);
+  }, [project?.highFidelityCapture, project?.textStudio, project?.kineticActivation]);
 
   // Auto-load recommendations for images that don't have them
   useEffect(() => {
@@ -284,7 +285,7 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
         // Only fetch if no recommendations AND not already loading
         if ((!existing?.recommendations || existing.recommendations.length === 0) &&
             !loadingInProgress.current.has(image.themeId)) {
-          console.log('[Stage5] Auto-loading recommendations for:', image.themeName);
+          console.log('[Stage6] Auto-loading recommendations for:', image.themeName);
           getRecommendations(image);
         }
       });
@@ -449,7 +450,7 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
       await generateVideoWithStyle(image, aiPick);
 
     } catch (err) {
-      console.error('[Stage5] Generation failed:', err);
+      console.error('[Stage6] Generation failed:', err);
       updateAnimation(themeId, {
         error: err instanceof Error ? err.message : 'Generation failed',
         isGenerating: false,
@@ -551,10 +552,10 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
       });
 
       if (navigateToStage) {
-        navigateToStage(6);
+        navigateToStage(7);
       }
     } catch (err) {
-      console.error('[Stage5] Failed to save:', err);
+      console.error('[Stage6] Failed to save:', err);
       alert('Failed to save. Please try again.');
     } finally {
       setIsSaving(false);
@@ -695,13 +696,13 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
           <div className="text-center py-16">
             <Video className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-white mb-2">No Images Selected for Animation</h3>
-            <p className="text-gray-400 mb-6">Go back to Stage 4 and select images for animation.</p>
+            <p className="text-gray-400 mb-6">Go back to Text Studio (Stage 5) and select images for animation.</p>
             <Button
-              onClick={() => navigateToStage(4)}
+              onClick={() => navigateToStage(5)}
               variant="outline"
               className="border-gray-600 text-gray-300 hover:bg-gray-800"
             >
-              Back to Stage 4
+              Back to Text Studio
             </Button>
           </div>
         )}

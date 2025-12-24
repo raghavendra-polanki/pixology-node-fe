@@ -330,10 +330,12 @@ export interface TextStyle {
 export interface TextStylePreset {
   id: string;
   name: string;
+  category: string;
   description: string;
-  keywords: string[]; // For AI matching
+  keywords?: string[]; // For AI matching
   style: TextStyle;
   thumbnail?: string;
+  previewText?: string;
 }
 
 export interface CompositedImage {

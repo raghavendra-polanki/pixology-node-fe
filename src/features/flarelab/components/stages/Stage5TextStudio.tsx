@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
-import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Lock, Unlock, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import * as fabric from 'fabric';
 import type {
   FlareLabProject,
   GeneratedImage,
   CreateProjectInput,
   TextOverlay,
   ImageTextOverlays,
-  TextStylePreset,
+  TextStyle,
 } from '../../types/project.types';
+import { TEXT_STYLE_PRESETS } from './textStylePresets';
 
 interface Stage5Props {
   project: FlareLabProject;
@@ -19,8 +21,14 @@ interface Stage5Props {
   updateTextStudio?: (data: any) => Promise<FlareLabProject | null>;
 }
 
+// History state for undo/redo
+interface HistoryEntry {
+  overlays: TextOverlay[];
+  timestamp: number;
+}
+
 export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage, loadProject, updateTextStudio }: Stage5Props) => {
-  // Images from Stage 4 that are selected for text overlay
+  // Images from Stage 4
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
@@ -37,20 +45,39 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   // UI state
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingAISuggestions, setIsLoadingAISuggestions] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+
+  // Undo/Redo history per image
+  const [historyMap, setHistoryMap] = useState<Record<string, { entries: HistoryEntry[]; currentIndex: number }>>({});
+
+  // Fabric.js refs
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Load images from Stage 4
   useEffect(() => {
     if (project?.highFidelityCapture?.generatedImages) {
-      // Get images that have been generated
       const generatedImages = project.highFidelityCapture.generatedImages.filter(img => img.url);
       setImages(generatedImages);
 
       // Initialize overlays from saved data or create empty
       if (project?.textStudio?.imageOverlays) {
         setImageOverlays(project.textStudio.imageOverlays);
+
+        // Initialize history for each image
+        const newHistoryMap: Record<string, { entries: HistoryEntry[]; currentIndex: number }> = {};
+        Object.entries(project.textStudio.imageOverlays).forEach(([themeId, data]) => {
+          newHistoryMap[themeId] = {
+            entries: [{ overlays: data.overlays || [], timestamp: Date.now() }],
+            currentIndex: 0,
+          };
+        });
+        setHistoryMap(newHistoryMap);
       } else {
-        // Initialize empty overlays for each image
         const initialOverlays: Record<string, ImageTextOverlays> = {};
+        const newHistoryMap: Record<string, { entries: HistoryEntry[]; currentIndex: number }> = {};
+
         generatedImages.forEach(img => {
           if (img.themeId) {
             initialOverlays[img.themeId] = {
@@ -58,9 +85,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
               imageUrl: img.url,
               overlays: [],
             };
+            newHistoryMap[img.themeId] = {
+              entries: [{ overlays: [], timestamp: Date.now() }],
+              currentIndex: 0,
+            };
           }
         });
         setImageOverlays(initialOverlays);
+        setHistoryMap(newHistoryMap);
       }
 
       // Load selection state
@@ -73,9 +105,271 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }
   }, [project?.highFidelityCapture?.generatedImages, project?.textStudio]);
 
-  // Get current image
+  // Get current image and overlays
   const currentImage = images[currentImageIndex];
-  const currentOverlays = currentImage?.themeId ? imageOverlays[currentImage.themeId]?.overlays || [] : [];
+  const currentThemeId = currentImage?.themeId;
+  const currentOverlays = currentThemeId ? imageOverlays[currentThemeId]?.overlays || [] : [];
+
+  // Initialize Fabric.js canvas
+  useEffect(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+
+    // Dispose existing canvas
+    if (fabricCanvasRef.current) {
+      fabricCanvasRef.current.dispose();
+    }
+
+    // Create new canvas
+    const canvas = new fabric.Canvas(canvasRef.current, {
+      selection: true,
+      preserveObjectStacking: true,
+    });
+
+    fabricCanvasRef.current = canvas;
+
+    // Handle selection
+    canvas.on('selection:created', (e) => {
+      const selected = e.selected?.[0];
+      if (selected && selected.data?.overlayId) {
+        setSelectedOverlayId(selected.data.overlayId);
+      }
+    });
+
+    canvas.on('selection:updated', (e) => {
+      const selected = e.selected?.[0];
+      if (selected && selected.data?.overlayId) {
+        setSelectedOverlayId(selected.data.overlayId);
+      }
+    });
+
+    canvas.on('selection:cleared', () => {
+      setSelectedOverlayId(null);
+    });
+
+    // Handle object modification
+    canvas.on('object:modified', (e) => {
+      const obj = e.target;
+      if (obj && obj.data?.overlayId && currentThemeId) {
+        const overlayId = obj.data.overlayId;
+
+        // Calculate percentage position
+        const canvasWidth = canvas.width || 1;
+        const canvasHeight = canvas.height || 1;
+        const x = ((obj.left || 0) / canvasWidth) * 100;
+        const y = ((obj.top || 0) / canvasHeight) * 100;
+
+        // Update overlay position
+        updateOverlayPosition(overlayId, x, y, obj.angle || 0);
+      }
+    });
+
+    return () => {
+      canvas.dispose();
+      fabricCanvasRef.current = null;
+    };
+  }, [currentImageIndex]);
+
+  // Load image and overlays onto canvas
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !currentImage?.url || !containerRef.current) return;
+
+    // Clear canvas
+    canvas.clear();
+
+    // Set canvas size based on container
+    const containerWidth = containerRef.current.clientWidth;
+    const aspectRatio = 16 / 9;
+    const canvasHeight = containerWidth / aspectRatio;
+
+    canvas.setWidth(containerWidth);
+    canvas.setHeight(canvasHeight);
+
+    // Load background image
+    fabric.FabricImage.fromURL(currentImage.url, { crossOrigin: 'anonymous' }).then((img) => {
+      if (!img || !canvas) return;
+
+      // Scale image to fit canvas
+      const scale = Math.min(
+        containerWidth / (img.width || 1),
+        canvasHeight / (img.height || 1)
+      );
+
+      img.scale(scale);
+      img.set({
+        left: (containerWidth - (img.width || 0) * scale) / 2,
+        top: (canvasHeight - (img.height || 0) * scale) / 2,
+        selectable: false,
+        evented: false,
+      });
+
+      canvas.backgroundImage = img;
+      canvas.renderAll();
+
+      // Add text overlays
+      currentOverlays.forEach(overlay => {
+        addTextToCanvas(overlay, canvas, containerWidth, canvasHeight);
+      });
+    });
+  }, [currentImage?.url, currentOverlays, currentImageIndex]);
+
+  // Add a text object to the canvas
+  const addTextToCanvas = (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
+    const style = overlay.style;
+
+    // Create text object
+    const textOptions: fabric.TextboxProps = {
+      left: (overlay.position.x / 100) * canvasWidth,
+      top: (overlay.position.y / 100) * canvasHeight,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight as any,
+      fill: style.fillType === 'solid' ? style.fillColor : createGradient(style, canvasHeight),
+      stroke: style.strokeColor,
+      strokeWidth: style.strokeWidth || 0,
+      textAlign: 'center',
+      originX: 'center',
+      originY: 'center',
+      angle: style.rotation || 0,
+      charSpacing: (style.letterSpacing || 0) * 10,
+      data: { overlayId: overlay.id },
+    };
+
+    // Apply shadow/glow
+    if (style.glowColor || style.shadowColor) {
+      textOptions.shadow = new fabric.Shadow({
+        color: style.glowColor || style.shadowColor || 'rgba(0,0,0,0.5)',
+        blur: style.glowBlur || style.shadowBlur || 10,
+        offsetX: style.shadowOffsetX || 0,
+        offsetY: style.shadowOffsetY || 0,
+      });
+    }
+
+    const text = new fabric.Textbox(
+      style.textTransform === 'uppercase' ? overlay.text.toUpperCase() :
+      style.textTransform === 'lowercase' ? overlay.text.toLowerCase() :
+      overlay.text,
+      textOptions
+    );
+
+    canvas.add(text);
+  };
+
+  // Create gradient fill
+  const createGradient = (style: TextStyle, height: number): fabric.Gradient<'linear'> | string => {
+    if (!style.gradient) return style.fillColor || '#FFFFFF';
+
+    return new fabric.Gradient({
+      type: 'linear',
+      coords: {
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: height,
+      },
+      colorStops: style.gradient.stops.map(stop => ({
+        offset: stop.offset,
+        color: stop.color,
+      })),
+    });
+  };
+
+  // Update overlay position from canvas
+  const updateOverlayPosition = (overlayId: string, x: number, y: number, rotation: number) => {
+    if (!currentThemeId) return;
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === overlayId
+            ? { ...o, position: { x, y }, style: { ...o.style, rotation } }
+            : o
+        ) || [],
+      },
+    }));
+  };
+
+  // Push to history for undo/redo
+  const pushHistory = useCallback(() => {
+    if (!currentThemeId) return;
+
+    const currentHistory = historyMap[currentThemeId] || { entries: [], currentIndex: -1 };
+    const newEntries = currentHistory.entries.slice(0, currentHistory.currentIndex + 1);
+    newEntries.push({
+      overlays: JSON.parse(JSON.stringify(currentOverlays)),
+      timestamp: Date.now(),
+    });
+
+    // Keep max 50 history entries
+    if (newEntries.length > 50) {
+      newEntries.shift();
+    }
+
+    setHistoryMap(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        entries: newEntries,
+        currentIndex: newEntries.length - 1,
+      },
+    }));
+  }, [currentThemeId, currentOverlays, historyMap]);
+
+  // Undo
+  const undo = () => {
+    if (!currentThemeId) return;
+    const history = historyMap[currentThemeId];
+    if (!history || history.currentIndex <= 0) return;
+
+    const newIndex = history.currentIndex - 1;
+    const previousState = history.entries[newIndex];
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: JSON.parse(JSON.stringify(previousState.overlays)),
+      },
+    }));
+
+    setHistoryMap(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        currentIndex: newIndex,
+      },
+    }));
+  };
+
+  // Redo
+  const redo = () => {
+    if (!currentThemeId) return;
+    const history = historyMap[currentThemeId];
+    if (!history || history.currentIndex >= history.entries.length - 1) return;
+
+    const newIndex = history.currentIndex + 1;
+    const nextState = history.entries[newIndex];
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: JSON.parse(JSON.stringify(nextState.overlays)),
+      },
+    }));
+
+    setHistoryMap(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        currentIndex: newIndex,
+      },
+    }));
+  };
+
+  const canUndo = currentThemeId && historyMap[currentThemeId]?.currentIndex > 0;
+  const canRedo = currentThemeId && historyMap[currentThemeId]?.currentIndex < (historyMap[currentThemeId]?.entries.length || 0) - 1;
 
   // Navigation
   const goToPreviousImage = () => {
@@ -116,12 +410,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   // Add new text overlay
   const addTextOverlay = () => {
-    if (!currentImage?.themeId) return;
+    if (!currentThemeId) return;
+
+    pushHistory();
 
     const newOverlay: TextOverlay = {
       id: `text-${Date.now()}`,
       text: 'New Text',
-      position: { x: 50, y: 50 }, // Center
+      position: { x: 50, y: 50 },
       style: {
         fontFamily: 'Bebas Neue',
         fontSize: 48,
@@ -138,9 +434,9 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
     setImageOverlays(prev => ({
       ...prev,
-      [currentImage.themeId!]: {
-        ...prev[currentImage.themeId!],
-        overlays: [...(prev[currentImage.themeId!]?.overlays || []), newOverlay],
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: [...(prev[currentThemeId]?.overlays || []), newOverlay],
       },
     }));
 
@@ -149,19 +445,75 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   // Delete text overlay
   const deleteOverlay = (overlayId: string) => {
-    if (!currentImage?.themeId) return;
+    if (!currentThemeId) return;
+
+    pushHistory();
 
     setImageOverlays(prev => ({
       ...prev,
-      [currentImage.themeId!]: {
-        ...prev[currentImage.themeId!],
-        overlays: prev[currentImage.themeId!]?.overlays.filter(o => o.id !== overlayId) || [],
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.filter(o => o.id !== overlayId) || [],
       },
     }));
 
     if (selectedOverlayId === overlayId) {
       setSelectedOverlayId(null);
     }
+  };
+
+  // Update overlay property
+  const updateOverlayProperty = (overlayId: string, updates: Partial<TextOverlay>) => {
+    if (!currentThemeId) return;
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === overlayId ? { ...o, ...updates } : o
+        ) || [],
+      },
+    }));
+  };
+
+  // Update overlay style
+  const updateOverlayStyle = (overlayId: string, styleUpdates: Partial<TextStyle>) => {
+    if (!currentThemeId) return;
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === overlayId ? { ...o, style: { ...o.style, ...styleUpdates } } : o
+        ) || [],
+      },
+    }));
+  };
+
+  // Apply preset to selected overlay
+  const applyPreset = (presetId: string) => {
+    if (!selectedOverlayId || !currentThemeId) return;
+
+    const preset = TEXT_STYLE_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+
+    pushHistory();
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === selectedOverlayId
+            ? { ...o, style: { ...preset.style }, presetId }
+            : o
+        ) || [],
+      },
+    }));
+
+    setShowPresets(false);
   };
 
   // Get AI text suggestions
@@ -171,42 +523,27 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     setIsLoadingAISuggestions(true);
     try {
       // TODO: Call backend API for AI suggestions
-      console.log('[Stage5] Getting AI suggestions for image:', currentImage.themeId);
+      console.log('[Stage5] Getting AI suggestions for image:', currentThemeId);
 
-      // Placeholder: Add sample AI-generated text
+      // For now, add a placeholder AI-generated text
+      pushHistory();
+
+      const suggestedPreset = TEXT_STYLE_PRESETS[0]; // Use first preset as default
       const aiOverlay: TextOverlay = {
         id: `ai-${Date.now()}`,
         text: currentImage.themeName || 'GAME DAY',
-        position: { x: 50, y: 80 },
-        style: {
-          fontFamily: 'Bebas Neue',
-          fontSize: 64,
-          fontWeight: 700,
-          fillType: 'gradient',
-          gradient: {
-            type: 'linear',
-            angle: 180,
-            stops: [
-              { offset: 0, color: '#FFFFFF' },
-              { offset: 1, color: '#80DEEA' },
-            ],
-          },
-          strokeColor: '#006064',
-          strokeWidth: 2,
-          glowColor: '#00BCD4',
-          glowBlur: 20,
-          textTransform: 'uppercase',
-          letterSpacing: 4,
-        },
+        position: { x: 50, y: 85 },
+        style: { ...suggestedPreset.style },
         aiGenerated: true,
+        presetId: suggestedPreset.id,
       };
 
-      if (currentImage.themeId) {
+      if (currentThemeId) {
         setImageOverlays(prev => ({
           ...prev,
-          [currentImage.themeId!]: {
-            ...prev[currentImage.themeId!],
-            overlays: [...(prev[currentImage.themeId!]?.overlays || []), aiOverlay],
+          [currentThemeId]: {
+            ...prev[currentThemeId],
+            overlays: [...(prev[currentThemeId]?.overlays || []), aiOverlay],
           },
         }));
         setSelectedOverlayId(aiOverlay.id);
@@ -242,6 +579,9 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       setIsSaving(false);
     }
   };
+
+  // Get selected overlay
+  const selectedOverlay = currentOverlays.find(o => o.id === selectedOverlayId);
 
   // No images warning
   if (images.length === 0) {
@@ -323,6 +663,27 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
               </div>
               <div className="flex items-center gap-2">
                 <Button
+                  onClick={undo}
+                  disabled={!canUndo}
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-400 hover:text-white disabled:opacity-30"
+                  title="Undo"
+                >
+                  <Undo className="w-4 h-4" />
+                </Button>
+                <Button
+                  onClick={redo}
+                  disabled={!canRedo}
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-400 hover:text-white disabled:opacity-30"
+                  title="Redo"
+                >
+                  <Redo className="w-4 h-4" />
+                </Button>
+                <div className="w-px h-6 bg-gray-700" />
+                <Button
                   onClick={addTextOverlay}
                   variant="outline"
                   size="sm"
@@ -347,45 +708,9 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
               </div>
             </div>
 
-            {/* Canvas - Placeholder for Fabric.js */}
-            <div className="relative aspect-video bg-black">
-              {currentImage?.url && (
-                <img
-                  src={currentImage.url}
-                  alt={currentImage.themeName || 'Generated image'}
-                  className="w-full h-full object-contain"
-                />
-              )}
-
-              {/* Text overlays preview (simplified - will be replaced by Fabric.js) */}
-              {currentOverlays.map(overlay => (
-                <div
-                  key={overlay.id}
-                  onClick={() => setSelectedOverlayId(overlay.id)}
-                  className={`absolute cursor-pointer transition-all ${
-                    selectedOverlayId === overlay.id ? 'ring-2 ring-orange-500' : ''
-                  }`}
-                  style={{
-                    left: `${overlay.position.x}%`,
-                    top: `${overlay.position.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                    fontFamily: overlay.style.fontFamily,
-                    fontSize: `${overlay.style.fontSize}px`,
-                    fontWeight: overlay.style.fontWeight,
-                    color: overlay.style.fillColor || '#FFFFFF',
-                    textTransform: overlay.style.textTransform,
-                    letterSpacing: `${overlay.style.letterSpacing}px`,
-                    WebkitTextStroke: overlay.style.strokeWidth
-                      ? `${overlay.style.strokeWidth}px ${overlay.style.strokeColor}`
-                      : undefined,
-                    textShadow: overlay.style.glowColor
-                      ? `0 0 ${overlay.style.glowBlur}px ${overlay.style.glowColor}`
-                      : undefined,
-                  }}
-                >
-                  {overlay.text}
-                </div>
-              ))}
+            {/* Canvas */}
+            <div ref={containerRef} className="relative bg-black">
+              <canvas ref={canvasRef} />
             </div>
 
             {/* Image Info */}
@@ -397,14 +722,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => currentImage?.themeId && toggleExportSelection(currentImage.themeId)}
+                    onClick={() => currentThemeId && toggleExportSelection(currentThemeId)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      currentImage?.themeId && selectedForExport.has(currentImage.themeId)
+                      currentThemeId && selectedForExport.has(currentThemeId)
                         ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
                         : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
                     }`}
                   >
-                    {currentImage?.themeId && selectedForExport.has(currentImage.themeId) ? (
+                    {currentThemeId && selectedForExport.has(currentThemeId) ? (
                       <CheckSquare className="w-3.5 h-3.5" />
                     ) : (
                       <Square className="w-3.5 h-3.5" />
@@ -412,14 +737,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                     For Export
                   </button>
                   <button
-                    onClick={() => currentImage?.themeId && toggleAnimationSelection(currentImage.themeId)}
+                    onClick={() => currentThemeId && toggleAnimationSelection(currentThemeId)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      currentImage?.themeId && selectedForAnimation.has(currentImage.themeId)
+                      currentThemeId && selectedForAnimation.has(currentThemeId)
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500'
                         : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
                     }`}
                   >
-                    {currentImage?.themeId && selectedForAnimation.has(currentImage.themeId) ? (
+                    {currentThemeId && selectedForAnimation.has(currentThemeId) ? (
                       <CheckSquare className="w-3.5 h-3.5" />
                     ) : (
                       <Square className="w-3.5 h-3.5" />
@@ -433,111 +758,156 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         </div>
 
         {/* Properties Panel */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-4">
+          {/* Text Properties */}
           <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
             <h3 className="text-white font-semibold mb-4">Text Properties</h3>
 
-            {selectedOverlayId ? (
+            {selectedOverlay ? (
               <div className="space-y-4">
-                {/* Selected overlay properties */}
-                {(() => {
-                  const overlay = currentOverlays.find(o => o.id === selectedOverlayId);
-                  if (!overlay) return null;
+                {/* Text Content */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Text</label>
+                  <input
+                    type="text"
+                    value={selectedOverlay.text}
+                    onChange={(e) => updateOverlayProperty(selectedOverlay.id, { text: e.target.value })}
+                    onBlur={pushHistory}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
 
-                  return (
-                    <>
-                      {/* Text Content */}
-                      <div>
-                        <label className="text-sm text-gray-400 mb-1 block">Text</label>
-                        <input
-                          type="text"
-                          value={overlay.text}
-                          onChange={(e) => {
-                            if (!currentImage?.themeId) return;
-                            setImageOverlays(prev => ({
-                              ...prev,
-                              [currentImage.themeId!]: {
-                                ...prev[currentImage.themeId!],
-                                overlays: prev[currentImage.themeId!]?.overlays.map(o =>
-                                  o.id === selectedOverlayId ? { ...o, text: e.target.value } : o
-                                ) || [],
-                              },
-                            }));
-                          }}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                        />
-                      </div>
+                {/* Font Family */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Font</label>
+                  <select
+                    value={selectedOverlay.style.fontFamily}
+                    onChange={(e) => {
+                      pushHistory();
+                      updateOverlayStyle(selectedOverlay.id, { fontFamily: e.target.value });
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="Bebas Neue">Bebas Neue</option>
+                    <option value="Oswald">Oswald</option>
+                    <option value="Roboto Condensed">Roboto Condensed</option>
+                    <option value="Anton">Anton</option>
+                    <option value="Teko">Teko</option>
+                    <option value="Impact">Impact</option>
+                    <option value="Arial Black">Arial Black</option>
+                  </select>
+                </div>
 
-                      {/* Font Size */}
-                      <div>
-                        <label className="text-sm text-gray-400 mb-1 block">
-                          Font Size: {overlay.style.fontSize}px
-                        </label>
-                        <input
-                          type="range"
-                          min="12"
-                          max="200"
-                          value={overlay.style.fontSize}
-                          onChange={(e) => {
-                            if (!currentImage?.themeId) return;
-                            setImageOverlays(prev => ({
-                              ...prev,
-                              [currentImage.themeId!]: {
-                                ...prev[currentImage.themeId!],
-                                overlays: prev[currentImage.themeId!]?.overlays.map(o =>
-                                  o.id === selectedOverlayId
-                                    ? { ...o, style: { ...o.style, fontSize: parseInt(e.target.value) } }
-                                    : o
-                                ) || [],
-                              },
-                            }));
-                          }}
-                          className="w-full"
-                        />
-                      </div>
+                {/* Font Size */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">
+                    Font Size: {selectedOverlay.style.fontSize}px
+                  </label>
+                  <input
+                    type="range"
+                    min="12"
+                    max="200"
+                    value={selectedOverlay.style.fontSize}
+                    onChange={(e) => updateOverlayStyle(selectedOverlay.id, { fontSize: parseInt(e.target.value) })}
+                    onMouseUp={pushHistory}
+                    className="w-full"
+                  />
+                </div>
 
-                      {/* Color */}
-                      <div>
-                        <label className="text-sm text-gray-400 mb-1 block">Color</label>
-                        <input
-                          type="color"
-                          value={overlay.style.fillColor || '#FFFFFF'}
-                          onChange={(e) => {
-                            if (!currentImage?.themeId) return;
-                            setImageOverlays(prev => ({
-                              ...prev,
-                              [currentImage.themeId!]: {
-                                ...prev[currentImage.themeId!],
-                                overlays: prev[currentImage.themeId!]?.overlays.map(o =>
-                                  o.id === selectedOverlayId
-                                    ? { ...o, style: { ...o.style, fillColor: e.target.value } }
-                                    : o
-                                ) || [],
-                              },
-                            }));
-                          }}
-                          className="w-full h-10 rounded-lg cursor-pointer"
-                        />
-                      </div>
+                {/* Font Weight */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Weight</label>
+                  <select
+                    value={selectedOverlay.style.fontWeight}
+                    onChange={(e) => {
+                      pushHistory();
+                      updateOverlayStyle(selectedOverlay.id, { fontWeight: parseInt(e.target.value) });
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="400">Regular</option>
+                    <option value="500">Medium</option>
+                    <option value="600">Semi-Bold</option>
+                    <option value="700">Bold</option>
+                    <option value="800">Extra Bold</option>
+                    <option value="900">Black</option>
+                  </select>
+                </div>
 
-                      {/* Delete Button */}
-                      <Button
-                        onClick={() => deleteOverlay(selectedOverlayId)}
-                        variant="outline"
-                        className="w-full border-red-500/50 text-red-400 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Text
-                      </Button>
-                    </>
-                  );
-                })()}
+                {/* Color */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Fill Color</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={selectedOverlay.style.fillColor || '#FFFFFF'}
+                      onChange={(e) => {
+                        updateOverlayStyle(selectedOverlay.id, { fillType: 'solid', fillColor: e.target.value });
+                      }}
+                      onBlur={pushHistory}
+                      className="w-12 h-10 rounded-lg cursor-pointer border border-gray-700"
+                    />
+                    <input
+                      type="text"
+                      value={selectedOverlay.style.fillColor || '#FFFFFF'}
+                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { fillType: 'solid', fillColor: e.target.value })}
+                      onBlur={pushHistory}
+                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Stroke */}
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">
+                    Stroke: {selectedOverlay.style.strokeWidth || 0}px
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={selectedOverlay.style.strokeColor || '#000000'}
+                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { strokeColor: e.target.value })}
+                      onBlur={pushHistory}
+                      className="w-12 h-10 rounded-lg cursor-pointer border border-gray-700"
+                    />
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      value={selectedOverlay.style.strokeWidth || 0}
+                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { strokeWidth: parseInt(e.target.value) })}
+                      onMouseUp={pushHistory}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => setShowPresets(!showPresets)}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-gray-700 text-gray-300"
+                  >
+                    <Palette className="w-4 h-4 mr-1" />
+                    Presets
+                  </Button>
+                  <Button
+                    onClick={() => deleteOverlay(selectedOverlay.id)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="text-center py-8">
                 <Type className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                 <p className="text-gray-400 text-sm">
-                  Select a text layer to edit its properties
+                  Select a text layer to edit
                 </p>
                 <Button
                   onClick={addTextOverlay}
@@ -552,12 +922,59 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             )}
           </div>
 
-          {/* Style Presets - Placeholder */}
-          <div className="bg-[#151515] border border-gray-800 rounded-xl p-4 mt-4">
-            <h3 className="text-white font-semibold mb-4">Style Presets</h3>
-            <p className="text-gray-400 text-sm">
-              Coming soon: Pre-designed text styles like Frozen, Fire, Metallic Gold, and more.
-            </p>
+          {/* Style Presets */}
+          {showPresets && selectedOverlay && (
+            <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
+              <h3 className="text-white font-semibold mb-4">Style Presets</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {TEXT_STYLE_PRESETS.map(preset => (
+                  <button
+                    key={preset.id}
+                    onClick={() => applyPreset(preset.id)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      selectedOverlay.presetId === preset.id
+                        ? 'border-orange-500 bg-orange-500/10'
+                        : 'border-gray-700 hover:border-gray-600 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    <div className="text-sm font-medium text-white">{preset.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{preset.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Layers List */}
+          <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
+            <h3 className="text-white font-semibold mb-4">Layers ({currentOverlays.length})</h3>
+            {currentOverlays.length > 0 ? (
+              <div className="space-y-2">
+                {currentOverlays.map(overlay => (
+                  <button
+                    key={overlay.id}
+                    onClick={() => setSelectedOverlayId(overlay.id)}
+                    className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all ${
+                      selectedOverlayId === overlay.id
+                        ? 'bg-orange-500/20 border border-orange-500'
+                        : 'bg-gray-800/50 border border-transparent hover:bg-gray-800'
+                    }`}
+                  >
+                    <Type className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-white truncate flex-1 text-left">
+                      {overlay.text}
+                    </span>
+                    {overlay.aiGenerated && (
+                      <Sparkles className="w-3 h-3 text-orange-400" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No text layers yet
+              </p>
+            )}
           </div>
         </div>
       </div>
