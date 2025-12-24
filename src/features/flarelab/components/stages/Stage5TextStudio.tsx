@@ -62,7 +62,6 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const setContainerRef = useCallback((node: HTMLDivElement | null) => {
     containerRef.current = node;
     if (node) {
-      // Use requestAnimationFrame to ensure layout is complete
       requestAnimationFrame(() => {
         setContainerElement(node);
       });
@@ -126,7 +125,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   // Initialize Fabric.js canvas
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return;
+    if (!canvasRef.current || !containerElement) return;
 
     // Dispose existing canvas
     if (fabricCanvasRef.current) {
@@ -181,7 +180,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       canvas.dispose();
       fabricCanvasRef.current = null;
     };
-  }, [currentImageIndex]);
+  }, [currentImageIndex, containerElement]);
 
   // Load image and overlays onto canvas
   useEffect(() => {
@@ -198,8 +197,6 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     // Use container dimensions (aspect-video class gives us 16:9)
     const canvasWidth = containerWidth;
     const canvasHeight = containerHeight > 0 ? containerHeight : containerWidth * (9/16);
-
-    console.log('[Stage5] Canvas dimensions:', { canvasWidth, canvasHeight, containerWidth, containerHeight });
 
     canvas.setWidth(canvasWidth);
     canvas.setHeight(canvasHeight);
@@ -239,8 +236,6 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
         canvas.backgroundImage = img;
         canvas.renderAll();
-
-        console.log('[Stage5] Image loaded successfully:', { width: img.width, height: img.height, scale });
 
         // Add text overlays
         currentOverlays.forEach(overlay => {
