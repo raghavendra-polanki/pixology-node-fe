@@ -83,6 +83,7 @@ export const StorylabPage = () => {
           // currentStageIndex is 0-based, so add 1 for display (Stage 1-6)
           currentStage: (apiProject.currentStageIndex || 0) + 1,
           createdAt: createdAtStr,
+          ownerId: apiProject.ownerId,
           ownerName: apiProject.ownerName,
           data: {
             campaignDetails: apiProject.campaignDetails,
@@ -152,6 +153,26 @@ export const StorylabPage = () => {
     setCurrentView('projects');
     setSelectedProject(null);
     fetchProjects(); // Refresh projects
+  };
+
+  const handleDuplicateProject = async (projectId: string) => {
+    try {
+      setError(null);
+      const response = await storyLabProjectService.duplicateProject(projectId);
+      // Refresh projects list to show the duplicate
+      await fetchProjects();
+      // Optionally open the duplicated project
+      if (response.projectId) {
+        const duplicatedProject = projects.find((p) => p.id === response.projectId);
+        if (duplicatedProject) {
+          setSelectedProject(duplicatedProject);
+          setCurrentView('workflow');
+        }
+      }
+    } catch (err) {
+      console.error('Error duplicating project:', err);
+      setError(err instanceof Error ? err.message : 'Failed to duplicate project');
+    }
   };
 
   const handleUpdateProject = async (updatedProject: Project) => {
@@ -225,10 +246,12 @@ export const StorylabPage = () => {
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}
           onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
           onLogout={handleLogout}
           isLoading={isLoading}
           error={error}
           onRetry={fetchProjects}
+          currentUserId={user?.id}
         />
       ) : selectedProject ? (
         <WorkflowView

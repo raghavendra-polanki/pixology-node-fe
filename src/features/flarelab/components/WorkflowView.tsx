@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Check, Zap, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Check, Zap, AlertTriangle, Share2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { ShareProjectDialog } from '@/shared/components/ShareProjectDialog';
 import { useFlareLabProject } from '../hooks/useFlareLabProject';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { DEFAULT_WORKFLOW_STAGES, STAGE_NAMES } from '../types/project.types';
 
 // Import stages
@@ -44,8 +46,11 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
     updatePolishDownload,
   } = useFlareLabProject({ autoLoad: true, projectId });
 
+  const { user } = useAuth();
+
   // Local UI state - tracks which stage component to display
   const [currentStage, setCurrentStage] = useState(1);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Track backend's currentStageIndex to avoid override on navigation
   const lastBackendStageIndexRef = useRef<number | null>(null);
@@ -191,8 +196,23 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           )}
 
           {/* Project Info */}
-          <h2 className="text-white mb-1">{project?.name || 'New Campaign'}</h2>
-          <p className="text-gray-500">6-Stage Workflow</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-white mb-1">{project?.name || 'New Campaign'}</h2>
+              <p className="text-gray-500">6-Stage Workflow</p>
+            </div>
+            {!projectId.startsWith('temp-') && (
+              <Button
+                onClick={() => setShowShareDialog(true)}
+                variant="ghost"
+                size="icon"
+                className="text-gray-400 hover:text-white hover:bg-gray-800"
+                title="Share project"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Stage Navigation */}
@@ -273,6 +293,18 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           />
         )}
       </div>
+
+      {/* Share Project Dialog */}
+      {showShareDialog && project && (
+        <ShareProjectDialog
+          open={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          projectId={projectId}
+          projectTitle={project.name || 'Project'}
+          isOwner={project.ownerId === user?.id}
+          productType="flarelab"
+        />
+      )}
     </div>
   );
 };

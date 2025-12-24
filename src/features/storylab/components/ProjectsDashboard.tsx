@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut, User } from 'lucide-react';
+import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut, User, Share2, Copy } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -14,6 +14,7 @@ import {
 } from './ui/alert-dialog';
 import { Logo } from './Logo';
 import { BrandFooter } from './BrandFooter';
+import { ShareProjectDialog } from '@/shared/components/ShareProjectDialog';
 import type { Project } from '../types';
 
 interface ProjectsDashboardProps {
@@ -21,10 +22,12 @@ interface ProjectsDashboardProps {
   onCreateProject: () => void;
   onSelectProject: (project: Project) => void;
   onDeleteProject?: (projectId: string) => void;
+  onDuplicateProject?: (projectId: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  currentUserId?: string;
 }
 
 export function ProjectsDashboard({
@@ -32,13 +35,16 @@ export function ProjectsDashboard({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onDuplicateProject,
   onLogout,
   isLoading = false,
   error = null,
-  onRetry
+  onRetry,
+  currentUserId,
 }: ProjectsDashboardProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [shareProject, setShareProject] = useState<Project | null>(null);
 
   const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -192,8 +198,30 @@ export function ProjectsDashboard({
                         {menuOpenId === project.id && (
                           <div className="absolute right-0 mt-1 w-48 bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-lg z-50">
                             <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareProject(project);
+                                setMenuOpenId(null);
+                              }}
+                              className="w-full text-left px-4 py-3 text-gray-300 hover:bg-gray-800/50 flex items-center gap-2 transition-colors first:rounded-t-lg"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              Share
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDuplicateProject?.(project.id);
+                                setMenuOpenId(null);
+                              }}
+                              className="w-full text-left px-4 py-3 text-gray-300 hover:bg-gray-800/50 flex items-center gap-2 transition-colors"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Duplicate
+                            </button>
+                            <button
                               onClick={(e) => handleDeleteClick(project.id, e)}
-                              className="w-full text-left px-4 py-3 text-red-500 hover:bg-gray-800/50 flex items-center gap-2 rounded-lg transition-colors first:rounded-t-lg last:rounded-b-lg"
+                              className="w-full text-left px-4 py-3 text-red-500 hover:bg-gray-800/50 flex items-center gap-2 transition-colors last:rounded-b-lg"
                             >
                               <Trash2 className="w-4 h-4" />
                               Delete Project
@@ -261,6 +289,19 @@ export function ProjectsDashboard({
             </div>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Share Project Dialog */}
+        {shareProject && (
+          <ShareProjectDialog
+            open={!!shareProject}
+            onClose={() => setShareProject(null)}
+            projectId={shareProject.id}
+            projectTitle={shareProject.name}
+            isOwner={shareProject.ownerId === currentUserId}
+            productType="storylab"
+            onDuplicate={() => onDuplicateProject?.(shareProject.id)}
+          />
+        )}
       </div>
     </div>
   );

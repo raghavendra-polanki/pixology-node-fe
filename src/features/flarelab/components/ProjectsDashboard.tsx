@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Folder, Clock, Trash2, LogOut, RefreshCw, MoreVertical, Zap, User } from 'lucide-react';
+import { Plus, Folder, Clock, Trash2, LogOut, RefreshCw, MoreVertical, Zap, User, Share2, Copy } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import {
@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
+import { ShareProjectDialog } from '@/shared/components/ShareProjectDialog';
 import type { FlareLabProject } from '../types/project.types';
 
 interface ProjectsDashboardProps {
@@ -18,10 +19,12 @@ interface ProjectsDashboardProps {
   onCreateProject: () => void;
   onSelectProject: (project: FlareLabProject) => void;
   onDeleteProject?: (projectId: string) => void;
+  onDuplicateProject?: (projectId: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  currentUserId?: string;
 }
 
 export const ProjectsDashboard = ({
@@ -29,13 +32,16 @@ export const ProjectsDashboard = ({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onDuplicateProject,
   onLogout,
   isLoading,
   error,
-  onRetry
+  onRetry,
+  currentUserId,
 }: ProjectsDashboardProps) => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [shareProject, setShareProject] = useState<FlareLabProject | null>(null);
 
   const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -148,8 +154,30 @@ export const ProjectsDashboard = ({
                       {menuOpenId === project.id && (
                         <div className="absolute right-0 mt-1 w-48 bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-lg z-50">
                           <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShareProject(project);
+                              setMenuOpenId(null);
+                            }}
+                            className="w-full text-left px-4 py-3 text-gray-300 hover:bg-gray-800/50 flex items-center gap-2 transition-colors first:rounded-t-lg"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Share
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDuplicateProject?.(project.id);
+                              setMenuOpenId(null);
+                            }}
+                            className="w-full text-left px-4 py-3 text-gray-300 hover:bg-gray-800/50 flex items-center gap-2 transition-colors"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Duplicate
+                          </button>
+                          <button
                             onClick={(e) => handleDeleteClick(project.id, e)}
-                            className="w-full text-left px-4 py-3 text-red-500 hover:bg-gray-800/50 flex items-center gap-2 rounded-lg transition-colors first:rounded-t-lg last:rounded-b-lg"
+                            className="w-full text-left px-4 py-3 text-red-500 hover:bg-gray-800/50 flex items-center gap-2 transition-colors last:rounded-b-lg"
                           >
                             <Trash2 className="w-4 h-4" />
                             Delete Project
@@ -215,6 +243,19 @@ export const ProjectsDashboard = ({
             </div>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Share Project Dialog */}
+        {shareProject && (
+          <ShareProjectDialog
+            open={!!shareProject}
+            onClose={() => setShareProject(null)}
+            projectId={shareProject.id}
+            projectTitle={shareProject.name}
+            isOwner={shareProject.ownerId === currentUserId}
+            productType="flarelab"
+            onDuplicate={() => onDuplicateProject?.(shareProject.id)}
+          />
+        )}
     </div>
   );
 };

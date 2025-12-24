@@ -48,6 +48,7 @@ import helmet from 'helmet';
 import authRouter from './api/auth.js';
 import allowlistRouter from './api/allowlist.js';
 import adaptorsRouter from './api/adaptors.js';
+import usersRouter from './api/core/routes/users.js';
 
 // Product context middleware
 import { productContext, legacyStoryLabContext } from './api/core/middleware/productContext.js';
@@ -181,6 +182,9 @@ app.use('/api/allowlist', allowlistRouter);
 
 // AI Adaptor management API routes
 app.use('/api/adaptors', adaptorsRouter);
+
+// Users API routes (search, profile)
+app.use('/api/users', usersRouter);
 
 // ===== Product-Scoped Routes =====
 // StoryLab routes (with product context middleware)

@@ -90,6 +90,26 @@ export const FlareLabPage = () => {
     fetchProjects(); // Refresh projects
   };
 
+  const handleDuplicateProject = async (projectId: string) => {
+    try {
+      setError(null);
+      const response = await flareLabProjectService.duplicateProject(projectId);
+      // Refresh projects list to show the duplicate
+      await fetchProjects();
+      // Optionally open the duplicated project
+      if (response.projectId) {
+        const duplicatedProject = projects.find((p) => p.id === response.projectId);
+        if (duplicatedProject) {
+          setSelectedProject(duplicatedProject);
+          setCurrentView('workflow');
+        }
+      }
+    } catch (err) {
+      console.error('Error duplicating project:', err);
+      setError(err instanceof Error ? err.message : 'Failed to duplicate project');
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     // Router will handle redirect to login page
@@ -116,10 +136,12 @@ export const FlareLabPage = () => {
           onCreateProject={handleCreateProject}
           onSelectProject={handleSelectProject}
           onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
           onLogout={handleLogout}
           isLoading={isLoading}
           error={error}
           onRetry={fetchProjects}
+          currentUserId={user?.id}
         />
       ) : selectedProject ? (
         <WorkflowView

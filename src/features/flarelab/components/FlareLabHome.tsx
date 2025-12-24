@@ -11,10 +11,12 @@ interface FlareLabHomeProps {
   onCreateProject: () => void;
   onSelectProject: (project: FlareLabProject) => void;
   onDeleteProject?: (projectId: string) => void;
+  onDuplicateProject?: (projectId: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  currentUserId?: string;
 }
 
 type NavSection = 'projects' | 'teams';
@@ -24,10 +26,12 @@ export const FlareLabHome = ({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onDuplicateProject,
   onLogout,
   isLoading,
   error,
   onRetry,
+  currentUserId,
 }: FlareLabHomeProps) => {
   const [activeSection, setActiveSection] = useState<NavSection>('projects');
 
@@ -121,9 +125,11 @@ export const FlareLabHome = ({
               onCreateProject={onCreateProject}
               onSelectProject={onSelectProject}
               onDeleteProject={onDeleteProject}
+              onDuplicateProject={onDuplicateProject}
               isLoading={isLoading}
               error={error}
               onRetry={onRetry}
+              currentUserId={currentUserId}
             />
           </div>
         )}

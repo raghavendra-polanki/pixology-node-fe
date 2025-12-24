@@ -10,6 +10,7 @@ export interface FlareLabProject {
   createdAt: string | Date;
   updatedAt: string | Date;
   userId: string;
+  ownerId?: string; // Owner of the project (for sharing)
   ownerName?: string;
   sportType?: string; // e.g., "Hockey", "Basketball", "Football", etc.
 

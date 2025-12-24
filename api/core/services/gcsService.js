@@ -269,6 +269,75 @@ export async function uploadVideoToGCS(videoBuffer, projectId, sceneName) {
 }
 
 /**
+ * Delete all files for a project from GCS
+ * Cleans up personas/, videos/, and storyboard/ folders for the project
+ * @param {string} projectId - The project ID
+ * @returns {Promise<{deleted: number, errors: string[]}>} Summary of deletion
+ */
+export async function deleteProjectResourcesFromGCS(projectId) {
+  try {
+    if (!projectId) {
+      throw new Error('Missing required parameter: projectId');
+    }
+
+    const bucket = storage.bucket(bucketName);
+    const deletedFiles = [];
+    const errors = [];
+
+    // Folders where project files might be stored
+    const projectFolders = [
+      `personas/${projectId}/`,
+      `videos/${projectId}/`,
+      `storyboard/${projectId}/`,
+      `themes/${projectId}/`,
+      `players/${projectId}/`,
+    ];
+
+    for (const folder of projectFolders) {
+      try {
+        // List all files in the folder
+        const [files] = await bucket.getFiles({ prefix: folder });
+
+        if (files.length > 0) {
+          console.log(`[GCS] Found ${files.length} files in ${folder}`);
+
+          // Delete each file
+          for (const file of files) {
+            try {
+              await file.delete();
+              deletedFiles.push(file.name);
+              console.log(`[GCS] Deleted: ${file.name}`);
+            } catch (deleteError) {
+              const errorMsg = `Failed to delete ${file.name}: ${deleteError.message}`;
+              console.warn(`[GCS] ${errorMsg}`);
+              errors.push(errorMsg);
+            }
+          }
+        }
+      } catch (listError) {
+        // Folder might not exist, which is fine
+        if (listError.code !== 404) {
+          const errorMsg = `Failed to list files in ${folder}: ${listError.message}`;
+          console.warn(`[GCS] ${errorMsg}`);
+          errors.push(errorMsg);
+        }
+      }
+    }
+
+    console.log(`[GCS] Project ${projectId} cleanup complete: ${deletedFiles.length} files deleted, ${errors.length} errors`);
+
+    return {
+      deleted: deletedFiles.length,
+      deletedFiles,
+      errors,
+    };
+  } catch (error) {
+    console.error(`[GCS] Error cleaning up project ${projectId}:`, error);
+    throw new Error(`Failed to clean up project resources: ${error.message}`);
+  }
+}
+
+/**
  * Upload team/player asset (logo, headshot, etc.) to GCS
  * Supports overwriting by using consistent filenames
  * @param {Buffer} imageBuffer - The image file buffer

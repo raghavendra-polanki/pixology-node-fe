@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Share2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Logo } from './Logo';
+import { ShareProjectDialog } from '@/shared/components/ShareProjectDialog';
 import { useStoryLabProject } from '../hooks/useStoryLabProject';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { Stage1CampaignDetails } from './stages/Stage1CampaignDetails';
 import { Stage2Personas } from './stages/Stage2Personas';
 import { Stage3Narratives } from './stages/Stage3Narratives';
@@ -47,8 +49,10 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
     advanceToNextStage,
   } = useStoryLabProject({ autoLoad: true, projectId });
 
+  const { user } = useAuth();
   const [currentStage, setCurrentStage] = useState(1);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Track if initial sync from backend has happened
   const hasInitializedRef = useRef(false);
@@ -168,8 +172,23 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Projects
           </Button>
-          <h2 className="text-white mb-1">{project?.name || 'Project'}</h2>
-          <p className="text-gray-500">6-Stage Workflow</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-white mb-1">{project?.name || 'Project'}</h2>
+              <p className="text-gray-500">6-Stage Workflow</p>
+            </div>
+            {!projectId.startsWith('temp-') && (
+              <Button
+                onClick={() => setShowShareDialog(true)}
+                variant="ghost"
+                size="icon"
+                className="text-gray-400 hover:text-white hover:bg-gray-800"
+                title="Share project"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Stage List */}
@@ -269,6 +288,18 @@ export function WorkflowView({ projectId, onBack }: WorkflowViewProps) {
           </div>
         )}
       </div>
+
+      {/* Share Project Dialog */}
+      {showShareDialog && project && (
+        <ShareProjectDialog
+          open={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          projectId={projectId}
+          projectTitle={project.name || 'Project'}
+          isOwner={project.ownerId === user?.id}
+          productType="storylab"
+        />
+      )}
     </div>
   );
 }

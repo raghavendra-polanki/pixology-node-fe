@@ -326,7 +326,7 @@ class FlareLabProjectService {
    */
 
   /**
-   * Clone/duplicate a project
+   * Clone/duplicate a project (legacy endpoint)
    */
   async cloneProject(projectId: string, newName: string): Promise<FlareLabProject> {
     const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}/clone`, {
@@ -343,6 +343,29 @@ class FlareLabProjectService {
 
     const data = await response.json();
     return this.parseProjectResponse(data.project);
+  }
+
+  /**
+   * Duplicate a project (creates a copy with new ownership)
+   */
+  async duplicateProject(projectId: string, name?: string): Promise<{ projectId: string; project: FlareLabProject }> {
+    const response = await fetch(`${this.apiBaseUrl}/api/flarelab/projects/${projectId}/duplicate`, {
+      method: 'POST',
+      headers: this.getAuthHeader(),
+      credentials: 'include',
+      body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to duplicate project');
+    }
+
+    const data = await response.json();
+    return {
+      projectId: data.projectId,
+      project: this.parseProjectResponse(data.project),
+    };
   }
 
   /**

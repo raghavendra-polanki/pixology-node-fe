@@ -41,6 +41,49 @@ export const getUser = async (userId) => {
 };
 
 /**
+ * Search users by email or name (for auto-suggest in share dialogs)
+ * @param {string} query - Search query (partial email or name)
+ * @param {number} limit - Max results to return (default 10)
+ * @returns {Promise<array>} Array of matching users
+ */
+export const searchUsers = async (query, limit = 10) => {
+  try {
+    if (!query || query.length < 2) {
+      return [];
+    }
+
+    const queryLower = query.toLowerCase();
+
+    // Firestore doesn't support LIKE queries, so we fetch all users and filter
+    // In production with many users, consider using a search service like Algolia
+    const snapshot = await db.collection('users').get();
+
+    const matchingUsers = snapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((user) => {
+        const emailMatch = user.email?.toLowerCase().includes(queryLower);
+        const nameMatch = user.name?.toLowerCase().includes(queryLower);
+        return emailMatch || nameMatch;
+      })
+      .slice(0, limit)
+      .map((user) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      }));
+
+    return matchingUsers;
+  } catch (error) {
+    console.error('Error searching users:', error);
+    throw error;
+  }
+};
+
+/**
  * Get user by email
  * @param {string} email - User email
  * @returns {Promise<object|null>} User data or null if not found
