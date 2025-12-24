@@ -177,40 +177,94 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     // Clear canvas
     canvas.clear();
 
-    // Set canvas size based on container
-    const containerWidth = containerRef.current.clientWidth;
-    const aspectRatio = 16 / 9;
-    const canvasHeight = containerWidth / aspectRatio;
+    // Get container dimensions - use clientWidth/clientHeight with fallbacks
+    const containerWidth = containerRef.current.clientWidth || containerRef.current.offsetWidth || 800;
+    const containerHeight = containerRef.current.clientHeight || containerRef.current.offsetHeight || 450;
 
-    canvas.setWidth(containerWidth);
+    // Use container dimensions (aspect-video class gives us 16:9)
+    const canvasWidth = containerWidth;
+    const canvasHeight = containerHeight > 0 ? containerHeight : containerWidth * (9/16);
+
+    console.log('[Stage5] Canvas dimensions:', { canvasWidth, canvasHeight, containerWidth, containerHeight });
+
+    canvas.setWidth(canvasWidth);
     canvas.setHeight(canvasHeight);
 
-    // Load background image
-    fabric.FabricImage.fromURL(currentImage.url, { crossOrigin: 'anonymous' }).then((img) => {
-      if (!img || !canvas) return;
+    // Load background image using HTML Image element for better CORS handling
+    const loadImage = async () => {
+      try {
+        // Create an HTML image element first
+        const imgElement = new Image();
+        imgElement.crossOrigin = 'anonymous';
 
-      // Scale image to fit canvas
-      const scale = Math.min(
-        containerWidth / (img.width || 1),
-        canvasHeight / (img.height || 1)
-      );
+        // Wait for image to load
+        await new Promise<void>((resolve, reject) => {
+          imgElement.onload = () => resolve();
+          imgElement.onerror = (e) => reject(new Error(`Failed to load image: ${e}`));
+          imgElement.src = currentImage.url;
+        });
 
-      img.scale(scale);
-      img.set({
-        left: (containerWidth - (img.width || 0) * scale) / 2,
-        top: (canvasHeight - (img.height || 0) * scale) / 2,
-        selectable: false,
-        evented: false,
-      });
+        // Create Fabric image from the loaded element
+        const img = new fabric.FabricImage(imgElement);
 
-      canvas.backgroundImage = img;
-      canvas.renderAll();
+        if (!img || !canvas) return;
 
-      // Add text overlays
-      currentOverlays.forEach(overlay => {
-        addTextToCanvas(overlay, canvas, containerWidth, canvasHeight);
-      });
-    });
+        // Scale image to fit canvas
+        const scale = Math.min(
+          canvasWidth / (img.width || 1),
+          canvasHeight / (img.height || 1)
+        );
+
+        img.scale(scale);
+        img.set({
+          left: (canvasWidth - (img.width || 0) * scale) / 2,
+          top: (canvasHeight - (img.height || 0) * scale) / 2,
+          selectable: false,
+          evented: false,
+        });
+
+        canvas.backgroundImage = img;
+        canvas.renderAll();
+
+        console.log('[Stage5] Image loaded successfully:', { width: img.width, height: img.height, scale });
+
+        // Add text overlays
+        currentOverlays.forEach(overlay => {
+          addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+        });
+      } catch (error) {
+        console.error('[Stage5] Failed to load image:', error);
+        // Try alternative approach without CORS
+        try {
+          const img = await fabric.FabricImage.fromURL(currentImage.url);
+          if (!img || !canvas) return;
+
+          const scale = Math.min(
+            canvasWidth / (img.width || 1),
+            canvasHeight / (img.height || 1)
+          );
+
+          img.scale(scale);
+          img.set({
+            left: (canvasWidth - (img.width || 0) * scale) / 2,
+            top: (canvasHeight - (img.height || 0) * scale) / 2,
+            selectable: false,
+            evented: false,
+          });
+
+          canvas.backgroundImage = img;
+          canvas.renderAll();
+
+          currentOverlays.forEach(overlay => {
+            addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+          });
+        } catch (fallbackError) {
+          console.error('[Stage5] Fallback image load also failed:', fallbackError);
+        }
+      }
+    };
+
+    loadImage();
   }, [currentImage?.url, currentOverlays, currentImageIndex]);
 
   // Add a text object to the canvas
@@ -800,8 +854,8 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             </div>
 
             {/* Canvas */}
-            <div ref={containerRef} className="relative bg-black">
-              <canvas ref={canvasRef} />
+            <div ref={containerRef} className="relative bg-black aspect-video">
+              <canvas ref={canvasRef} className="absolute inset-0" />
             </div>
 
             {/* Image Info */}
