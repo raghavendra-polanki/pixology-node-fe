@@ -55,46 +55,18 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Track container readiness
-  const [isContainerReady, setIsContainerReady] = useState(false);
+  // Track container element - using callback ref pattern
+  const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null);
 
-  // Monitor container dimensions and mark ready when available
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const checkContainer = () => {
-      const container = containerRef.current;
-      if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-        setIsContainerReady(true);
-        return true;
-      }
-      return false;
-    };
-
-    // Check immediately
-    if (checkContainer()) return;
-
-    // Use ResizeObserver to detect when container gets dimensions
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-          setIsContainerReady(true);
-          resizeObserver.disconnect();
-        }
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    // Fallback: check after a short delay
-    const timeoutId = setTimeout(() => {
-      checkContainer();
-    }, 100);
-
-    return () => {
-      resizeObserver.disconnect();
-      clearTimeout(timeoutId);
-    };
+  // Callback ref to capture container element when mounted
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    if (node) {
+      // Use requestAnimationFrame to ensure layout is complete
+      requestAnimationFrame(() => {
+        setContainerElement(node);
+      });
+    }
   }, []);
 
   // Load images from Stage 4
@@ -214,14 +186,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   // Load image and overlays onto canvas
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !currentImage?.url || !containerRef.current || !isContainerReady) return;
+    if (!canvas || !currentImage?.url || !containerElement) return;
 
     // Clear canvas
     canvas.clear();
 
     // Get container dimensions - use clientWidth/clientHeight with fallbacks
-    const containerWidth = containerRef.current.clientWidth || containerRef.current.offsetWidth || 800;
-    const containerHeight = containerRef.current.clientHeight || containerRef.current.offsetHeight || 450;
+    const containerWidth = containerElement.clientWidth || containerElement.offsetWidth || 800;
+    const containerHeight = containerElement.clientHeight || containerElement.offsetHeight || 450;
 
     // Use container dimensions (aspect-video class gives us 16:9)
     const canvasWidth = containerWidth;
@@ -307,7 +279,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     };
 
     loadImage();
-  }, [currentImage?.url, currentOverlays, currentImageIndex, isContainerReady]);
+  }, [currentImage?.url, currentOverlays, currentImageIndex, containerElement]);
 
   // Add a text object to the canvas
   const addTextToCanvas = (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
@@ -1048,7 +1020,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             </div>
 
             {/* Canvas */}
-            <div ref={containerRef} className="relative bg-black aspect-video">
+            <div ref={setContainerRef} className="relative bg-black aspect-video">
               <canvas ref={canvasRef} className="absolute inset-0" />
             </div>
 
