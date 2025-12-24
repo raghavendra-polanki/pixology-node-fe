@@ -294,7 +294,8 @@ export interface TextOverlay {
   style: TextStyle;
   aiGenerated: boolean;
   locked?: boolean;
-  presetId?: string; // Reference to style preset used
+  presetId?: string; // Reference to basic style preset used
+  cssPresetId?: string; // Reference to CSS preset for broadcast-quality rendering
 }
 
 export interface TextStyle {

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy, RefreshCw, ChevronDown, Layers, PenTool, Droplet, Sun } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import * as fabric from 'fabric';
 import type {
@@ -11,6 +11,7 @@ import type {
   TextStyle,
 } from '../../types/project.types';
 import { TEXT_STYLE_PRESETS } from './textStylePresets';
+import { CSS_TEXT_PRESETS, renderTextAsImage, mapToCSSSPreset, getPresetPreviewStyles } from './htmlTextRenderer';
 
 interface Stage5Props {
   project: FlareLabProject;
@@ -46,6 +47,43 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingAISuggestions, setIsLoadingAISuggestions] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
+  const [useHTMLRendering, setUseHTMLRendering] = useState(true); // Use HTML/CSS rendering by default
+  const [isRenderingText, setIsRenderingText] = useState(false);
+
+  // Cache for rendered text images (to avoid re-rendering on every change)
+  const renderedTextCache = useRef<Map<string, string>>(new Map());
+
+  // Flag to prevent selection clear during canvas reload
+  const isReloadingCanvas = useRef(false);
+
+  // Debounce timer for canvas updates
+  const canvasUpdateTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Track which overlay changed to do targeted updates
+  const pendingOverlayUpdate = useRef<string | null>(null);
+
+  // Accordion state for properties sections - only style expanded by default
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['style']));
+
+  // Refs for font size controls (avoid React re-renders during interaction)
+  const fontSizeInputRef = useRef<HTMLInputElement>(null);
+  const fontSizeSliderRef = useRef<HTMLInputElement>(null);
+  const lastSelectedOverlayId = useRef<string | null>(null);
+  const baseFontSizeRef = useRef<number>(72);
+  const baseScaleRef = useRef<number>(1);
+
+  // Toggle accordion section
+  const toggleSection = useCallback((section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  }, []);
 
   // Undo/Redo history per image
   const [historyMap, setHistoryMap] = useState<Record<string, { entries: HistoryEntry[]; currentIndex: number }>>({});
@@ -123,6 +161,44 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const currentThemeId = currentImage?.themeId;
   const currentOverlays = currentThemeId ? imageOverlays[currentThemeId]?.overlays || [] : [];
 
+  // Sync font size inputs when selected overlay changes
+  useEffect(() => {
+    if (selectedOverlayId !== lastSelectedOverlayId.current) {
+      lastSelectedOverlayId.current = selectedOverlayId;
+      const overlay = currentOverlays.find(o => o.id === selectedOverlayId);
+      if (overlay) {
+        const fontSize = overlay.style.fontSize;
+        baseFontSizeRef.current = fontSize;
+        // Update input values directly via refs (no React state)
+        if (fontSizeInputRef.current) {
+          fontSizeInputRef.current.value = String(fontSize);
+        }
+        if (fontSizeSliderRef.current) {
+          fontSizeSliderRef.current.value = String(Math.min(200, Math.max(24, fontSize)));
+        }
+      }
+    }
+  }, [selectedOverlayId, currentOverlays]);
+
+  // Direct canvas update without React state (for real-time preview during slider drag)
+  const updateCanvasTextSize = useCallback((fontSize: number) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !selectedOverlayId) return;
+
+    const obj = canvas.getObjects().find(o => o.data?.overlayId === selectedOverlayId);
+    if (obj) {
+      // For HTML-rendered text (images), we scale relative to base size
+      if (obj.data?.isHTMLRendered) {
+        const baseSize = baseFontSizeRef.current;
+        const scaleFactor = fontSize / baseSize;
+        obj.set({ scaleX: baseScaleRef.current * scaleFactor, scaleY: baseScaleRef.current * scaleFactor });
+      } else if (obj instanceof fabric.Textbox) {
+        obj.set({ fontSize });
+      }
+      canvas.renderAll();
+    }
+  }, [selectedOverlayId]);
+
   // Initialize Fabric.js canvas
   useEffect(() => {
     if (!canvasRef.current || !containerElement) return;
@@ -156,7 +232,10 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     });
 
     canvas.on('selection:cleared', () => {
-      setSelectedOverlayId(null);
+      // Don't clear selection if we're in the middle of a canvas reload
+      if (!isReloadingCanvas.current) {
+        setSelectedOverlayId(null);
+      }
     });
 
     // Handle object modification
@@ -182,72 +261,106 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     };
   }, [currentImageIndex, containerElement]);
 
-  // Load image and overlays onto canvas
+  // Sync canvas selection when layer is selected from panel
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    if (selectedOverlayId) {
+      // Find the canvas object with matching overlayId
+      const objects = canvas.getObjects();
+      const targetObj = objects.find(obj => obj.data?.overlayId === selectedOverlayId);
+
+      if (targetObj) {
+        // Only select if not already selected
+        const activeObj = canvas.getActiveObject();
+        if (activeObj !== targetObj) {
+          canvas.setActiveObject(targetObj);
+          canvas.renderAll();
+        }
+      }
+    } else {
+      // Deselect if no overlay selected
+      canvas.discardActiveObject();
+      canvas.renderAll();
+    }
+  }, [selectedOverlayId]);
+
+  // Load image and overlays onto canvas (debounced)
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !currentImage?.url || !containerElement) return;
 
-    // Clear canvas
-    canvas.clear();
+    // Clear any pending update timer
+    if (canvasUpdateTimer.current) {
+      clearTimeout(canvasUpdateTimer.current);
+    }
 
-    // Get container dimensions - use clientWidth/clientHeight with fallbacks
+    // Debounce canvas updates to prevent flicker
+    canvasUpdateTimer.current = setTimeout(() => {
+      loadCanvasContent();
+    }, 150); // Increased delay to batch rapid updates and reduce flicker
+
+    return () => {
+      if (canvasUpdateTimer.current) {
+        clearTimeout(canvasUpdateTimer.current);
+      }
+    };
+  }, [currentImage?.url, currentOverlays, currentImageIndex, containerElement]);
+
+  // Track last loaded image URL to avoid reloading background
+  const lastLoadedImageUrl = useRef<string | null>(null);
+
+  // Actual canvas loading logic (separated for debouncing)
+  const loadCanvasContent = useCallback(async () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !currentImage?.url || !containerElement) return;
+
+    // Set flag to prevent selection clearing during reload
+    isReloadingCanvas.current = true;
+
+    // Get container dimensions
     const containerWidth = containerElement.clientWidth || containerElement.offsetWidth || 800;
     const containerHeight = containerElement.clientHeight || containerElement.offsetHeight || 450;
-
-    // Use container dimensions (aspect-video class gives us 16:9)
     const canvasWidth = containerWidth;
     const canvasHeight = containerHeight > 0 ? containerHeight : containerWidth * (9/16);
 
     canvas.setWidth(canvasWidth);
     canvas.setHeight(canvasHeight);
 
-    // Load background image using HTML Image element for better CORS handling
-    const loadImage = async () => {
-      try {
-        // Create an HTML image element first
-        const imgElement = new Image();
-        imgElement.crossOrigin = 'anonymous';
+    // Check if we need to reload the background image or just update text overlays
+    const needsBackgroundReload = lastLoadedImageUrl.current !== currentImage.url;
 
-        // Wait for image to load
-        await new Promise<void>((resolve, reject) => {
-          imgElement.onload = () => resolve();
-          imgElement.onerror = (e) => reject(new Error(`Failed to load image: ${e}`));
-          imgElement.src = currentImage.url;
-        });
+    // Only remove text objects, keep background if same image
+    if (!needsBackgroundReload && canvas.backgroundImage) {
+      // Remove only text objects (not background)
+      const objects = canvas.getObjects();
+      objects.forEach(obj => canvas.remove(obj));
+    } else {
+      // Full clear needed for new image
+      canvas.clear();
+    }
 
-        // Create Fabric image from the loaded element
-        const img = new fabric.FabricImage(imgElement);
+    try {
+        // Only load background image if needed
+        if (needsBackgroundReload) {
+          // Create an HTML image element first
+          const imgElement = new Image();
+          imgElement.crossOrigin = 'anonymous';
 
-        if (!img || !canvas) return;
+          // Wait for image to load
+          await new Promise<void>((resolve, reject) => {
+            imgElement.onload = () => resolve();
+            imgElement.onerror = (e) => reject(new Error(`Failed to load image: ${e}`));
+            imgElement.src = currentImage.url;
+          });
 
-        // Scale image to fit canvas
-        const scale = Math.min(
-          canvasWidth / (img.width || 1),
-          canvasHeight / (img.height || 1)
-        );
+          // Create Fabric image from the loaded element
+          const img = new fabric.FabricImage(imgElement);
 
-        img.scale(scale);
-        img.set({
-          left: (canvasWidth - (img.width || 0) * scale) / 2,
-          top: (canvasHeight - (img.height || 0) * scale) / 2,
-          selectable: false,
-          evented: false,
-        });
-
-        canvas.backgroundImage = img;
-        canvas.renderAll();
-
-        // Add text overlays
-        currentOverlays.forEach(overlay => {
-          addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
-        });
-      } catch (error) {
-        console.error('[Stage5] Failed to load image:', error);
-        // Try alternative approach without CORS
-        try {
-          const img = await fabric.FabricImage.fromURL(currentImage.url);
           if (!img || !canvas) return;
 
+          // Scale image to fit canvas
           const scale = Math.min(
             canvasWidth / (img.width || 1),
             canvasHeight / (img.height || 1)
@@ -262,25 +375,141 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
           });
 
           canvas.backgroundImage = img;
-          canvas.renderAll();
+          lastLoadedImageUrl.current = currentImage.url;
+        }
 
-          currentOverlays.forEach(overlay => {
-            addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
-          });
-        } catch (fallbackError) {
-          console.error('[Stage5] Fallback image load also failed:', fallbackError);
+        // Add text overlays (async - need to await all)
+        for (const overlay of currentOverlays) {
+          await addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+        }
+        canvas.renderAll();
+
+        // Re-select the previously selected object after reload
+        if (selectedOverlayId) {
+          const objects = canvas.getObjects();
+          const targetObj = objects.find(obj => obj.data?.overlayId === selectedOverlayId);
+          if (targetObj) {
+            canvas.setActiveObject(targetObj);
+            canvas.renderAll();
+          }
+        }
+
+        // Reset reload flag
+        isReloadingCanvas.current = false;
+      } catch (error) {
+        console.error('[Stage5] Failed to load image:', error);
+        // Try alternative approach without CORS (only if background needed)
+        if (needsBackgroundReload) {
+          try {
+            const img = await fabric.FabricImage.fromURL(currentImage.url);
+            if (!img || !canvas) {
+              isReloadingCanvas.current = false;
+              return;
+            }
+
+            const scale = Math.min(
+              canvasWidth / (img.width || 1),
+              canvasHeight / (img.height || 1)
+            );
+
+            img.scale(scale);
+            img.set({
+              left: (canvasWidth - (img.width || 0) * scale) / 2,
+              top: (canvasHeight - (img.height || 0) * scale) / 2,
+              selectable: false,
+              evented: false,
+            });
+
+            canvas.backgroundImage = img;
+            lastLoadedImageUrl.current = currentImage.url;
+
+            // Add text overlays
+            for (const overlay of currentOverlays) {
+              await addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+            }
+            canvas.renderAll();
+
+            // Re-select
+            if (selectedOverlayId) {
+              const objects = canvas.getObjects();
+              const targetObj = objects.find(obj => obj.data?.overlayId === selectedOverlayId);
+              if (targetObj) {
+                canvas.setActiveObject(targetObj);
+                canvas.renderAll();
+              }
+            }
+
+            isReloadingCanvas.current = false;
+          } catch (fallbackError) {
+            console.error('[Stage5] Fallback image load also failed:', fallbackError);
+            isReloadingCanvas.current = false;
+          }
+        } else {
+          isReloadingCanvas.current = false;
         }
       }
-    };
+  }, [currentImage?.url, currentOverlays, selectedOverlayId, containerElement, useHTMLRendering]);
 
-    loadImage();
-  }, [currentImage?.url, currentOverlays, currentImageIndex, containerElement]);
-
-  // Add a text object to the canvas
-  const addTextToCanvas = (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
+  // Add a text object to the canvas (using HTML/CSS rendering for broadcast quality)
+  const addTextToCanvas = async (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
     const style = overlay.style;
 
-    // Create text object
+    // Check if we should use HTML rendering (for CSS presets with broadcast-quality effects)
+    const cssPresetId = overlay.cssPresetId || (overlay.presetId ? mapToCSSSPreset(overlay.presetId) : null);
+
+    console.log('[Stage5] addTextToCanvas:', { text: overlay.text, cssPresetId, useHTMLRendering, canvasWidth, canvasHeight });
+
+    if (useHTMLRendering && cssPresetId) {
+      // Use HTML/CSS rendering for broadcast-quality text
+      try {
+        // Scale font size for display canvas (base: 1920px width)
+        const displayScaleFactor = canvasWidth / 1920;
+        const displayFontSize = Math.round((style.fontSize || 96) * displayScaleFactor);
+
+        // Generate cache key with display size and font family
+        const fontFamily = style.fontFamily || 'Bebas Neue';
+        const cacheKey = `${overlay.text}-${cssPresetId}-${displayFontSize}-${fontFamily}`;
+
+        // Check cache first
+        let dataUrl = renderedTextCache.current.get(cacheKey);
+
+        if (!dataUrl) {
+          // Render text as image using HTML/CSS at display size
+          const textToRender = style.textTransform === 'uppercase' ? overlay.text.toUpperCase() :
+                               style.textTransform === 'lowercase' ? overlay.text.toLowerCase() :
+                               overlay.text;
+
+          console.log('[Stage5] Rendering text as image:', { textToRender, cssPresetId, displayFontSize, fontFamily, originalFontSize: style.fontSize });
+          // Pass custom font family to renderer
+          dataUrl = await renderTextAsImage(textToRender, cssPresetId, displayFontSize, canvasWidth, fontFamily);
+          console.log('[Stage5] Rendered data URL length:', dataUrl?.length);
+          renderedTextCache.current.set(cacheKey, dataUrl);
+        }
+
+        // Create fabric image from the rendered text
+        const img = await fabric.FabricImage.fromURL(dataUrl);
+        console.log('[Stage5] Created fabric image:', { width: img.width, height: img.height });
+
+        // Position the image
+        img.set({
+          left: (overlay.position.x / 100) * canvasWidth,
+          top: (overlay.position.y / 100) * canvasHeight,
+          originX: 'center',
+          originY: 'center',
+          angle: style.rotation || 0,
+          data: { overlayId: overlay.id, isHTMLRendered: true },
+        });
+
+        canvas.add(img);
+        console.log('[Stage5] Added HTML-rendered text to canvas');
+        return;
+      } catch (error) {
+        console.error('[Stage5] HTML rendering failed, falling back to Fabric.js:', error);
+        // Fall through to Fabric.js rendering
+      }
+    }
+
+    // Fallback: Create text object using Fabric.js (basic styling)
     const textOptions: fabric.TextboxProps = {
       left: (overlay.position.x / 100) * canvasWidth,
       top: (overlay.position.y / 100) * canvasHeight,
@@ -477,14 +706,17 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
     pushHistory();
 
+    // Default to broadcast-pro CSS preset for new text
+    const defaultCSSPreset = CSS_TEXT_PRESETS.find(p => p.id === 'broadcast-pro') || CSS_TEXT_PRESETS[0];
+
     const newOverlay: TextOverlay = {
       id: `text-${Date.now()}`,
       text: 'New Text',
       position: { x: 50, y: 50 },
       style: {
-        fontFamily: 'Bebas Neue',
-        fontSize: 48,
-        fontWeight: 700,
+        fontFamily: defaultCSSPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
+        fontSize: 72,
+        fontWeight: defaultCSSPreset.css.fontWeight,
         fillType: 'solid',
         fillColor: '#FFFFFF',
         strokeColor: '#000000',
@@ -493,6 +725,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         letterSpacing: 2,
       },
       aiGenerated: false,
+      cssPresetId: defaultCSSPreset.id, // Use CSS preset for broadcast quality
     };
 
     setImageOverlays(prev => ({
@@ -529,6 +762,11 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const updateOverlayProperty = (overlayId: string, updates: Partial<TextOverlay>) => {
     if (!currentThemeId) return;
 
+    // Clear cache if text content changes (affects rendered image)
+    if (updates.text) {
+      renderedTextCache.current.clear();
+    }
+
     setImageOverlays(prev => ({
       ...prev,
       [currentThemeId]: {
@@ -544,6 +782,11 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const updateOverlayStyle = (overlayId: string, styleUpdates: Partial<TextStyle>) => {
     if (!currentThemeId) return;
 
+    // Clear cache if fontSize changes (affects rendered image)
+    if (styleUpdates.fontSize) {
+      renderedTextCache.current.clear();
+    }
+
     setImageOverlays(prev => ({
       ...prev,
       [currentThemeId]: {
@@ -555,7 +798,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }));
   };
 
-  // Apply preset to selected overlay
+  // Apply basic preset to selected overlay (legacy)
   const applyPreset = (presetId: string) => {
     if (!selectedOverlayId || !currentThemeId) return;
 
@@ -564,13 +807,52 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
     pushHistory();
 
+    // Clear rendered text cache for this overlay
+    renderedTextCache.current.clear();
+
     setImageOverlays(prev => ({
       ...prev,
       [currentThemeId]: {
         ...prev[currentThemeId],
         overlays: prev[currentThemeId]?.overlays.map(o =>
           o.id === selectedOverlayId
-            ? { ...o, style: { ...preset.style }, presetId }
+            ? { ...o, style: { ...preset.style }, presetId, cssPresetId: undefined }
+            : o
+        ) || [],
+      },
+    }));
+
+    setShowPresets(false);
+  };
+
+  // Apply CSS preset for broadcast-quality text rendering
+  const applyCSSPreset = (cssPresetId: string) => {
+    if (!selectedOverlayId || !currentThemeId) return;
+
+    const cssPreset = CSS_TEXT_PRESETS.find(p => p.id === cssPresetId);
+    if (!cssPreset) return;
+
+    pushHistory();
+
+    // Clear rendered text cache to force re-render with new preset
+    renderedTextCache.current.clear();
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === selectedOverlayId
+            ? {
+                ...o,
+                cssPresetId,
+                presetId: undefined, // Clear basic preset
+                style: {
+                  ...o.style,
+                  fontFamily: cssPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
+                  fontWeight: cssPreset.css.fontWeight,
+                },
+              }
             : o
         ) || [],
       },
@@ -624,15 +906,25 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
       if (suggestions.length === 0) {
         console.log('[Stage5] No AI suggestions returned, using fallback');
-        // Fallback to default suggestion
-        const suggestedPreset = TEXT_STYLE_PRESETS[0];
+        // Fallback to default suggestion - use CSS preset for broadcast quality
+        const fallbackCSSPreset = CSS_TEXT_PRESETS.find(p => p.id === 'frozen-knightfall') || CSS_TEXT_PRESETS[0];
         const aiOverlay: TextOverlay = {
           id: `ai-${Date.now()}`,
           text: currentImage.themeName || 'GAME DAY',
-          position: { x: 50, y: 85 },
-          style: { ...suggestedPreset.style },
+          position: { x: 50, y: 20 },
+          style: {
+            fontFamily: fallbackCSSPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
+            fontSize: 96,
+            fontWeight: fallbackCSSPreset.css.fontWeight,
+            fillType: 'solid',
+            fillColor: '#FFFFFF',
+            strokeColor: '#000000',
+            strokeWidth: 2,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+          },
           aiGenerated: true,
-          presetId: suggestedPreset.id,
+          cssPresetId: fallbackCSSPreset.id, // Use CSS preset for broadcast quality
         };
 
         pushHistory();
@@ -659,22 +951,30 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       pushHistory();
 
       const newOverlays: TextOverlay[] = suggestions.map((suggestion: any, index: number) => {
-        // Find matching preset
-        const preset = TEXT_STYLE_PRESETS.find(p => p.id === suggestion.presetId) || TEXT_STYLE_PRESETS[0];
+        // Map AI-suggested preset to CSS preset for broadcast quality
+        const cssPresetId = mapToCSSSPreset(suggestion.presetId || 'broadcast-clean');
+        const cssPreset = CSS_TEXT_PRESETS.find(p => p.id === cssPresetId) || CSS_TEXT_PRESETS[0];
 
-        // Use AI-suggested fontSize or fall back to preset default
-        const fontSize = suggestion.fontSize || preset.style.fontSize;
+        // Use AI-suggested fontSize or fall back to appropriate size based on role
+        const fontSize = suggestion.fontSize || (index === 0 ? 96 : index === 1 ? 64 : 48);
 
         return {
           id: `ai-${Date.now()}-${index}`,
           text: suggestion.text || 'GAME DAY',
-          position: suggestion.position || { x: 50, y: 85 - (index * 15) },
+          position: suggestion.position || { x: 50, y: 20 + (index * 15) },
           style: {
-            ...preset.style,
-            fontSize, // Apply AI-recommended size
+            fontFamily: cssPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
+            fontSize,
+            fontWeight: cssPreset.css.fontWeight,
+            fillType: 'solid',
+            fillColor: '#FFFFFF',
+            strokeColor: '#000000',
+            strokeWidth: 2,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
           },
           aiGenerated: true,
-          presetId: preset.id,
+          cssPresetId, // Use CSS preset for broadcast quality
         };
       });
 
@@ -692,24 +992,34 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       }
 
       console.log('[Stage5] AI suggestions applied:', newOverlays.length);
-      console.log('[Stage5] Suggestions:', newOverlays.map(o => ({ text: o.text, preset: o.presetId, fontSize: o.style.fontSize })));
+      console.log('[Stage5] Suggestions:', newOverlays.map(o => ({ text: o.text, cssPreset: o.cssPresetId, fontSize: o.style.fontSize })));
     } catch (error) {
       console.error('[Stage5] Failed to get AI suggestions:', error);
-      // Fallback on error - create context-aware defaults
+      // Fallback on error - create context-aware defaults using CSS presets
       const themeKeywords = (currentImage.themeName || '').toLowerCase();
-      const fallbackPresetId = themeKeywords.includes('ice') || themeKeywords.includes('cold') ? 'frozen-ice' :
-                               themeKeywords.includes('fire') || themeKeywords.includes('heat') ? 'fire-intensity' :
-                               themeKeywords.includes('rival') ? 'rivalry-clash' : 'broadcast-clean';
+      const fallbackCSSPresetId = themeKeywords.includes('ice') || themeKeywords.includes('cold') ? 'ice-storm' :
+                                  themeKeywords.includes('fire') || themeKeywords.includes('heat') ? 'fire-rivalry' :
+                                  themeKeywords.includes('rival') ? 'fire-rivalry' : 'frozen-knightfall';
 
-      const fallbackPreset = TEXT_STYLE_PRESETS.find(p => p.id === fallbackPresetId) || TEXT_STYLE_PRESETS[0];
+      const fallbackCSSPreset = CSS_TEXT_PRESETS.find(p => p.id === fallbackCSSPresetId) || CSS_TEXT_PRESETS[0];
 
       const aiOverlay: TextOverlay = {
         id: `ai-${Date.now()}`,
         text: currentImage.themeName?.toUpperCase() || 'GAME DAY',
         position: { x: 50, y: 20 },
-        style: { ...fallbackPreset.style, fontSize: 96 },
+        style: {
+          fontFamily: fallbackCSSPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
+          fontSize: 96,
+          fontWeight: fallbackCSSPreset.css.fontWeight,
+          fillType: 'solid',
+          fillColor: '#FFFFFF',
+          strokeColor: '#000000',
+          strokeWidth: 2,
+          textTransform: 'uppercase',
+          letterSpacing: 2,
+        },
         aiGenerated: true,
-        presetId: fallbackPreset.id,
+        cssPresetId: fallbackCSSPresetId, // Use CSS preset for broadcast quality
       };
 
       pushHistory();
@@ -761,6 +1071,9 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       // Draw the background image
       ctx.drawImage(imgElement, 0, 0);
 
+      // Scale factor for font size (base 1920px width)
+      const scaleFactor = offscreenCanvas.width / 1920;
+
       // Draw each text overlay
       for (const overlay of overlays) {
         const style = overlay.style;
@@ -769,11 +1082,54 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         const x = (overlay.position.x / 100) * offscreenCanvas.width;
         const y = (overlay.position.y / 100) * offscreenCanvas.height;
 
-        // Scale font size proportionally to image size (base 1920px width)
-        const scaleFactor = offscreenCanvas.width / 1920;
+        // Scale font size proportionally to image size
         const scaledFontSize = style.fontSize * scaleFactor;
 
-        // Set text properties
+        // Apply text transform
+        let text = overlay.text;
+        if (style.textTransform === 'uppercase') text = text.toUpperCase();
+        else if (style.textTransform === 'lowercase') text = text.toLowerCase();
+
+        // Check if overlay uses CSS preset (broadcast-quality rendering)
+        const cssPresetId = overlay.cssPresetId || (overlay.presetId ? mapToCSSSPreset(overlay.presetId) : null);
+
+        if (useHTMLRendering && cssPresetId) {
+          // Use HTML/CSS rendering for broadcast-quality text
+          try {
+            const fontFamily = style.fontFamily || 'Bebas Neue';
+            const textDataUrl = await renderTextAsImage(text, cssPresetId, scaledFontSize, offscreenCanvas.width, fontFamily);
+
+            // Load the rendered text image
+            const textImg = new Image();
+            await new Promise<void>((resolve, reject) => {
+              textImg.onload = () => resolve();
+              textImg.onerror = () => reject(new Error('Failed to load text image'));
+              textImg.src = textDataUrl;
+            });
+
+            // Draw the text image centered at the position
+            ctx.save();
+            ctx.translate(x, y);
+
+            if (style.rotation) {
+              ctx.rotate((style.rotation * Math.PI) / 180);
+            }
+
+            // Draw centered
+            ctx.drawImage(
+              textImg,
+              -textImg.width / 2,
+              -textImg.height / 2
+            );
+            ctx.restore();
+            continue; // Skip to next overlay
+          } catch (error) {
+            console.error('[Stage5] HTML rasterization failed for overlay, using fallback:', error);
+            // Fall through to basic canvas rendering
+          }
+        }
+
+        // Fallback: Basic canvas text rendering
         ctx.save();
         ctx.translate(x, y);
 
@@ -786,11 +1142,6 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         ctx.font = `${fontWeight} ${scaledFontSize}px "${style.fontFamily}"`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        // Apply text transform
-        let text = overlay.text;
-        if (style.textTransform === 'uppercase') text = text.toUpperCase();
-        else if (style.textTransform === 'lowercase') text = text.toLowerCase();
 
         // Shadow/glow
         if (style.shadowColor || style.glowColor) {
@@ -930,453 +1281,522 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto p-8 lg:p-12">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
-              <Type className="w-6 h-6 text-orange-500" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Text Studio</h2>
-              <p className="text-gray-400">Add text overlays to your images</p>
-            </div>
+  // Accordion Section Component
+  const AccordionSection = ({ id, title, icon: Icon, children }: { id: string; title: string; icon: any; children: React.ReactNode }) => {
+    const isExpanded = expandedSections.has(id);
+    return (
+      <div className="border-b border-gray-800/30 last:border-b-0">
+        <button
+          onClick={() => toggleSection(id)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Icon className={`w-4 h-4 ${isExpanded ? 'text-orange-400' : 'text-gray-500'}`} />
+            <span className={`text-xs font-medium ${isExpanded ? 'text-gray-200' : 'text-gray-400'}`}>{title}</span>
           </div>
+          <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+        </button>
+        <div className={`overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="px-4 pb-4">
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-[calc(100vh-100px)] flex flex-col px-6 py-4 max-w-[1800px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 flex items-center justify-center ring-1 ring-orange-500/20">
+            <Type className="w-5 h-5 text-orange-500" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Text Studio</h2>
+            <p className="text-xs text-gray-500">Add broadcast-quality text overlays</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
           <Button
             onClick={() => {/* TODO: Open prompt editor */}}
             variant="outline"
             size="sm"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+            className="h-9 px-4 border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg"
           >
             <Edit2 className="w-4 h-4 mr-2" />
             Edit Prompts
           </Button>
+          <Button
+            onClick={handleContinue}
+            disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
+            className="h-9 px-5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg disabled:opacity-40"
+          >
+            {isSaving ? 'Saving...' : 'Save & Continue'}
+            {!isSaving && <ArrowRight className="w-4 h-4 ml-2" />}
+          </Button>
         </div>
       </div>
 
-      {/* Main Editor Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Canvas Area */}
-        <div className="lg:col-span-2">
-          <div className="bg-[#151515] border border-gray-800 rounded-xl overflow-hidden">
-            {/* Canvas Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={goToPreviousImage}
-                  disabled={currentImageIndex === 0}
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-white"
-                >
-                  <ChevronLeft className="w-5 h-5" />
+      {/* Main Editor - Fills remaining viewport height */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Left: Canvas Area */}
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          {/* Canvas Container */}
+          <div className="flex-1 min-h-0 bg-[#0c0c0c] border border-gray-800/50 rounded-xl overflow-hidden flex flex-col">
+            {/* Canvas Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800/50 bg-[#0a0a0a] flex-shrink-0">
+              <div className="flex items-center gap-3">
+                {/* Navigation */}
+                <div className="flex items-center bg-gray-800/50 rounded-lg p-0.5">
+                  <Button onClick={goToPreviousImage} disabled={currentImageIndex === 0} variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-white rounded-md disabled:opacity-30">
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-gray-400 tabular-nums px-3 min-w-[60px] text-center">
+                    <span className="text-white font-medium">{currentImageIndex + 1}</span> / {images.length}
+                  </span>
+                  <Button onClick={goToNextImage} disabled={currentImageIndex === images.length - 1} variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-white rounded-md disabled:opacity-30">
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="w-px h-6 bg-gray-700" />
+                <Button onClick={undo} disabled={!canUndo} variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-white disabled:opacity-30">
+                  <Undo className="w-4 h-4" />
                 </Button>
-                <span className="text-sm text-gray-400">
-                  {currentImageIndex + 1} / {images.length}
-                </span>
-                <Button
-                  onClick={goToNextImage}
-                  disabled={currentImageIndex === images.length - 1}
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-white"
-                >
-                  <ChevronRight className="w-5 h-5" />
+                <Button onClick={redo} disabled={!canRedo} variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-white disabled:opacity-30">
+                  <Redo className="w-4 h-4" />
                 </Button>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  onClick={undo}
-                  disabled={!canUndo}
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-white disabled:opacity-30"
-                  title="Undo"
-                >
-                  <Undo className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={redo}
-                  disabled={!canRedo}
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-white disabled:opacity-30"
-                  title="Redo"
-                >
-                  <Redo className="w-4 h-4" />
-                </Button>
-                <div className="w-px h-6 bg-gray-700" />
-                <Button
-                  onClick={addTextOverlay}
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-700 text-gray-300"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
+                <Button onClick={addTextOverlay} variant="outline" size="sm" className="h-8 border-gray-700 text-gray-300 hover:bg-gray-800">
+                  <Plus className="w-4 h-4 mr-1.5" />
                   Add Text
                 </Button>
-                <Button
-                  onClick={getAISuggestions}
-                  disabled={isLoadingAISuggestions}
-                  size="sm"
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  {isLoadingAISuggestions ? (
-                    <Sparkles className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 mr-1" />
-                  )}
+                <Button onClick={getAISuggestions} disabled={isLoadingAISuggestions} size="sm" className="h-8 bg-orange-500 hover:bg-orange-600 text-white">
+                  <Sparkles className={`w-4 h-4 mr-1.5 ${isLoadingAISuggestions ? 'animate-spin' : ''}`} />
                   AI Suggest
                 </Button>
               </div>
             </div>
 
             {/* Canvas */}
-            <div ref={setContainerRef} className="relative bg-black aspect-video">
+            <div ref={setContainerRef} className="relative bg-black flex-1 min-h-0">
               <canvas ref={canvasRef} className="absolute inset-0" />
             </div>
 
-            {/* Image Info */}
-            <div className="p-4 border-t border-gray-800">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-white font-medium">{currentImage?.themeName}</h3>
-                  <p className="text-sm text-gray-400">{currentOverlays.length} text layer(s)</p>
+            {/* Canvas Footer */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-800/50 bg-[#0a0a0a] flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-medium text-white">{currentImage?.themeName}</h3>
+                <span className="text-xs text-gray-500">{currentOverlays.length} layer{currentOverlays.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => currentThemeId && toggleExportSelection(currentThemeId)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    currentThemeId && selectedForExport.has(currentThemeId)
+                      ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30'
+                      : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                  }`}
+                >
+                  {currentThemeId && selectedForExport.has(currentThemeId) ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  Export
+                </button>
+                <button
+                  onClick={() => currentThemeId && toggleAnimationSelection(currentThemeId)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    currentThemeId && selectedForAnimation.has(currentThemeId)
+                      ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30'
+                      : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                  }`}
+                >
+                  {currentThemeId && selectedForAnimation.has(currentThemeId) ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  Animate
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Thumbnail Strip - Below canvas */}
+          <div className="flex-shrink-0 bg-gradient-to-b from-[#0d0d0d] to-[#0a0a0a] border border-gray-800/50 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-4">
+              <div className="flex gap-2.5 overflow-x-auto flex-1 py-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
+                {images.map((img, index) => {
+                  const isSelected = index === currentImageIndex;
+                  const hasExport = img.themeId && selectedForExport.has(img.themeId);
+                  const hasAnimate = img.themeId && selectedForAnimation.has(img.themeId);
+                  const layerCount = img.themeId ? (imageOverlays[img.themeId]?.overlays?.length || 0) : 0;
+
+                  return (
+                    <button
+                      key={img.themeId || index}
+                      onClick={() => { setCurrentImageIndex(index); setSelectedOverlayId(null); }}
+                      className={`group relative flex-shrink-0 rounded-lg overflow-hidden transition-all duration-200 ${
+                        isSelected
+                          ? 'w-[96px] h-[60px] ring-2 ring-orange-500 shadow-xl shadow-orange-500/25 scale-105'
+                          : 'w-[80px] h-[52px] opacity-50 hover:opacity-90 hover:scale-[1.03] ring-1 ring-gray-700/50'
+                      }`}
+                    >
+                      <img src={img.url} alt={img.themeName} className="w-full h-full object-cover" />
+                      {/* Gradient overlay */}
+                      <div className={`absolute inset-0 transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-t from-black/30 via-transparent to-transparent'
+                          : 'bg-gradient-to-t from-black/50 via-black/20 to-transparent group-hover:from-black/30 group-hover:via-transparent'
+                      }`} />
+                      {/* Inner glow for selected */}
+                      {isSelected && <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-lg" />}
+                      {/* Status indicators */}
+                      <div className="absolute bottom-1.5 left-1.5 flex gap-1">
+                        {hasExport && <div className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-md shadow-orange-500/50 ring-1 ring-orange-400/30" />}
+                        {hasAnimate && <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-md shadow-amber-400/50 ring-1 ring-amber-300/30" />}
+                      </div>
+                      {/* Layer count badge */}
+                      {layerCount > 0 && (
+                        <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-black/80 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                          <Type className="w-2 h-2 text-orange-400" />
+                          {layerCount}
+                        </div>
+                      )}
+                      {/* Index number */}
+                      {!isSelected && (
+                        <div className="absolute bottom-1 right-1 text-[9px] font-semibold text-white/40 group-hover:text-white/70 transition-all">
+                          {index + 1}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Selection summary - pill style */}
+              <div className="flex items-center gap-2 pl-4 border-l border-gray-700/50 flex-shrink-0">
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all ${
+                  selectedForExport.size > 0 ? 'bg-orange-500/15 ring-1 ring-orange-500/30' : 'bg-gray-800/30'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${selectedForExport.size > 0 ? 'bg-orange-500' : 'bg-gray-600'}`} />
+                  <span className={`font-semibold tabular-nums ${selectedForExport.size > 0 ? 'text-orange-400' : 'text-gray-600'}`}>{selectedForExport.size}</span>
+                  <span className="text-gray-500">export</span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => currentThemeId && toggleExportSelection(currentThemeId)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      currentThemeId && selectedForExport.has(currentThemeId)
-                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
-                    }`}
-                  >
-                    {currentThemeId && selectedForExport.has(currentThemeId) ? (
-                      <CheckSquare className="w-3.5 h-3.5" />
-                    ) : (
-                      <Square className="w-3.5 h-3.5" />
-                    )}
-                    For Export
-                  </button>
-                  <button
-                    onClick={() => currentThemeId && toggleAnimationSelection(currentThemeId)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                      currentThemeId && selectedForAnimation.has(currentThemeId)
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-transparent'
-                    }`}
-                  >
-                    {currentThemeId && selectedForAnimation.has(currentThemeId) ? (
-                      <CheckSquare className="w-3.5 h-3.5" />
-                    ) : (
-                      <Square className="w-3.5 h-3.5" />
-                    )}
-                    For Animation
-                  </button>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all ${
+                  selectedForAnimation.size > 0 ? 'bg-amber-500/15 ring-1 ring-amber-500/30' : 'bg-gray-800/30'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-400' : 'bg-gray-600'}`} />
+                  <span className={`font-semibold tabular-nums ${selectedForAnimation.size > 0 ? 'text-amber-400' : 'text-gray-600'}`}>{selectedForAnimation.size}</span>
+                  <span className="text-gray-500">animate</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Properties Panel */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Text Properties */}
-          <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
-            <h3 className="text-white font-semibold mb-4">Text Properties</h3>
+        {/* Right: Properties Panel - Photoshop-style scrollable panel */}
+        <div className="w-[340px] flex-shrink-0 bg-[#0c0c0c] border border-gray-800/50 rounded-xl flex flex-col overflow-hidden">
+          {/* Layers Section - Fixed at top */}
+          <div className="flex-shrink-0">
+            <div className="px-4 py-3 border-b border-gray-800/50 bg-[#0a0a0a]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-300">Layers</span>
+                </div>
+                <span className="text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded">{currentOverlays.length}</span>
+              </div>
+            </div>
 
+            {/* Layers List - Scrollable within fixed height */}
+            <div className="max-h-[200px] overflow-y-auto border-b border-gray-800/50" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
+              {currentOverlays.length > 0 ? (
+                <div className="p-2 space-y-1.5">
+                  {currentOverlays.map((overlay, index) => {
+                    const isSelected = selectedOverlayId === overlay.id;
+                    const styleName = CSS_TEXT_PRESETS.find(p => p.id === overlay.cssPresetId)?.name;
+                    return (
+                      <div
+                        key={overlay.id}
+                        className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 cursor-pointer ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-orange-500/20 to-orange-600/10 ring-1 ring-orange-500/40'
+                            : 'hover:bg-white/[0.04] hover:ring-1 hover:ring-gray-700/50'
+                        }`}
+                        onClick={() => setSelectedOverlayId(overlay.id)}
+                      >
+                        {/* Layer icon with number */}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
+                          isSelected ? 'bg-orange-500/25' : 'bg-gray-800/50 group-hover:bg-gray-700/50'
+                        }`}>
+                          <Type className={`w-4 h-4 ${isSelected ? 'text-orange-400' : 'text-gray-500'}`} />
+                        </div>
+                        {/* Text and style info */}
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm truncate font-medium ${isSelected ? 'text-orange-300' : 'text-gray-300'}`}>
+                            {overlay.text}
+                          </div>
+                          {styleName && (
+                            <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                              {styleName} • {overlay.style.fontSize}px
+                            </div>
+                          )}
+                        </div>
+                        {/* AI badge */}
+                        {overlay.aiGenerated && (
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-orange-500/15 flex-shrink-0">
+                            <Sparkles className="w-3 h-3 text-orange-500/70" />
+                          </div>
+                        )}
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteOverlay(overlay.id); }}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                            isSelected ? 'text-red-400/60 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-10 px-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gray-800/50 to-gray-900/50 flex items-center justify-center mx-auto mb-3 ring-1 ring-gray-700/30">
+                    <Type className="w-7 h-7 text-gray-600" />
+                  </div>
+                  <p className="text-sm text-gray-400 mb-1">No text layers</p>
+                  <p className="text-xs text-gray-600 mb-4">Add text or use AI suggestions</p>
+                  <button
+                    onClick={addTextOverlay}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 ring-1 ring-orange-500/20 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Text Layer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Properties Section - Scrollable, fills remaining height */}
+          <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
             {selectedOverlay ? (
-              <div className="space-y-4">
+              <div>
                 {/* Text Content */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Text</label>
+                <div className="p-4 border-b border-gray-800/30">
+                  <label className="text-xs text-gray-500 mb-2 block uppercase tracking-wide">Text Content</label>
                   <input
                     type="text"
                     value={selectedOverlay.text}
                     onChange={(e) => updateOverlayProperty(selectedOverlay.id, { text: e.target.value })}
                     onBlur={pushHistory}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                    placeholder="Enter text..."
+                    className="w-full bg-[#0a0a0a] border border-gray-700/50 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-orange-500/50 focus:outline-none"
                   />
                 </div>
 
-                {/* Font Family */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Font</label>
-                  <select
-                    value={selectedOverlay.style.fontFamily}
-                    onChange={(e) => {
-                      pushHistory();
-                      updateOverlayStyle(selectedOverlay.id, { fontFamily: e.target.value });
-                    }}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="Bebas Neue">Bebas Neue</option>
-                    <option value="Oswald">Oswald</option>
-                    <option value="Roboto Condensed">Roboto Condensed</option>
-                    <option value="Anton">Anton</option>
-                    <option value="Teko">Teko</option>
-                    <option value="Impact">Impact</option>
-                    <option value="Arial Black">Arial Black</option>
-                  </select>
-                </div>
-
-                {/* Font Size */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">
-                    Font Size: {selectedOverlay.style.fontSize}px
-                  </label>
-                  <input
-                    type="range"
-                    min="12"
-                    max="200"
-                    value={selectedOverlay.style.fontSize}
-                    onChange={(e) => updateOverlayStyle(selectedOverlay.id, { fontSize: parseInt(e.target.value) })}
-                    onMouseUp={pushHistory}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Font Weight */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Weight</label>
-                  <select
-                    value={selectedOverlay.style.fontWeight}
-                    onChange={(e) => {
-                      pushHistory();
-                      updateOverlayStyle(selectedOverlay.id, { fontWeight: parseInt(e.target.value) });
-                    }}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="400">Regular</option>
-                    <option value="500">Medium</option>
-                    <option value="600">Semi-Bold</option>
-                    <option value="700">Bold</option>
-                    <option value="800">Extra Bold</option>
-                    <option value="900">Black</option>
-                  </select>
-                </div>
-
-                {/* Color */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Fill Color</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={selectedOverlay.style.fillColor || '#FFFFFF'}
-                      onChange={(e) => {
-                        updateOverlayStyle(selectedOverlay.id, { fillType: 'solid', fillColor: e.target.value });
-                      }}
-                      onBlur={pushHistory}
-                      className="w-12 h-10 rounded-lg cursor-pointer border border-gray-700"
-                    />
-                    <input
-                      type="text"
-                      value={selectedOverlay.style.fillColor || '#FFFFFF'}
-                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { fillType: 'solid', fillColor: e.target.value })}
-                      onBlur={pushHistory}
-                      className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
-                    />
+                {/* Style Preset */}
+                <AccordionSection id="style" title="Style Preset" icon={Palette}>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {CSS_TEXT_PRESETS.map(preset => {
+                      const isActive = selectedOverlay.cssPresetId === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => applyCSSPreset(preset.id)}
+                          className={`group relative p-2.5 rounded-xl transition-all duration-200 ${
+                            isActive
+                              ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 ring-2 ring-orange-500/60 shadow-lg shadow-orange-500/10'
+                              : 'bg-[#0a0a0a] hover:bg-[#111111] ring-1 ring-gray-700/50 hover:ring-gray-600/50'
+                          }`}
+                        >
+                          {/* Preview - larger */}
+                          <div
+                            className="h-10 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-2"
+                            style={getPresetPreviewStyles(preset.id, 14)}
+                          >
+                            Aa
+                          </div>
+                          {/* Name */}
+                          <div className={`text-[10px] font-medium truncate text-center ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                            {preset.name}
+                          </div>
+                          {/* Active checkmark */}
+                          {isActive && (
+                            <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
+                              <CheckSquare className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
+                </AccordionSection>
 
-                {/* Stroke */}
-                <div>
-                  <label className="text-sm text-gray-400 mb-1 block">
-                    Stroke: {selectedOverlay.style.strokeWidth || 0}px
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={selectedOverlay.style.strokeColor || '#000000'}
-                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { strokeColor: e.target.value })}
-                      onBlur={pushHistory}
-                      className="w-12 h-10 rounded-lg cursor-pointer border border-gray-700"
-                    />
-                    <input
-                      type="range"
-                      min="0"
-                      max="10"
-                      value={selectedOverlay.style.strokeWidth || 0}
-                      onChange={(e) => updateOverlayStyle(selectedOverlay.id, { strokeWidth: parseInt(e.target.value) })}
-                      onMouseUp={pushHistory}
-                      className="flex-1"
-                    />
+                {/* Typography */}
+                <AccordionSection id="typography" title="Typography" icon={Type}>
+                  <div className="space-y-5">
+                    {/* Font Family */}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Font Family</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['Bebas Neue', 'Oswald', 'Anton', 'Teko'].map(font => {
+                          const isActive = selectedOverlay.style.fontFamily === font;
+                          return (
+                            <button
+                              key={font}
+                              onClick={() => { pushHistory(); renderedTextCache.current.clear(); updateOverlayStyle(selectedOverlay.id, { fontFamily: font }); }}
+                              className={`relative px-3 py-3 rounded-xl text-base font-bold transition-all duration-200 ${
+                                isActive
+                                  ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 text-orange-400 ring-2 ring-orange-500/50'
+                                  : 'bg-[#0a0a0a] text-gray-400 hover:bg-[#111111] hover:text-gray-300 ring-1 ring-gray-700/50'
+                              }`}
+                              style={{ fontFamily: font }}
+                            >
+                              {font.split(' ')[0]}
+                              {isActive && (
+                                <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-orange-500" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Font Size - Using uncontrolled inputs to avoid React re-renders */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs text-gray-500 uppercase tracking-wide">Size</span>
+                        <div className="flex items-center gap-1 bg-[#0a0a0a] rounded-lg ring-1 ring-gray-700/50 overflow-hidden">
+                          <input
+                            ref={fontSizeInputRef}
+                            type="number"
+                            min="12"
+                            max="300"
+                            defaultValue={selectedOverlay.style.fontSize}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value) || 72;
+                              const clamped = Math.min(300, Math.max(12, val));
+                              e.target.value = String(clamped);
+                              // Sync slider
+                              if (fontSizeSliderRef.current) {
+                                fontSizeSliderRef.current.value = String(Math.min(200, Math.max(24, clamped)));
+                              }
+                              // Commit to parent state
+                              if (clamped !== selectedOverlay.style.fontSize) {
+                                renderedTextCache.current.clear();
+                                updateOverlayStyle(selectedOverlay.id, { fontSize: clamped });
+                                pushHistory();
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-14 bg-transparent text-sm font-semibold text-orange-400 tabular-nums text-center py-1.5 focus:outline-none focus:bg-orange-500/10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-xs text-gray-500 pr-2.5">px</span>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          ref={fontSizeSliderRef}
+                          type="range"
+                          min="24"
+                          max="200"
+                          step="1"
+                          defaultValue={Math.min(200, Math.max(24, selectedOverlay.style.fontSize))}
+                          onMouseDown={() => {
+                            // Capture base size and scale at start of drag
+                            baseFontSizeRef.current = selectedOverlay.style.fontSize;
+                            const canvas = fabricCanvasRef.current;
+                            if (canvas && selectedOverlayId) {
+                              const obj = canvas.getObjects().find(o => o.data?.overlayId === selectedOverlayId);
+                              if (obj) {
+                                baseScaleRef.current = obj.scaleX || 1;
+                              }
+                            }
+                          }}
+                          onInput={(e) => {
+                            // Update during drag - no React state, direct DOM + canvas
+                            const newSize = parseInt((e.target as HTMLInputElement).value);
+                            // Sync number input
+                            if (fontSizeInputRef.current) {
+                              fontSizeInputRef.current.value = String(newSize);
+                            }
+                            // Direct canvas update
+                            updateCanvasTextSize(newSize);
+                          }}
+                          onMouseUp={(e) => {
+                            const newSize = parseInt((e.target as HTMLInputElement).value);
+                            // Commit to parent state
+                            if (newSize !== selectedOverlay.style.fontSize) {
+                              renderedTextCache.current.clear();
+                              updateOverlayStyle(selectedOverlay.id, { fontSize: newSize });
+                              pushHistory();
+                            }
+                          }}
+                          onTouchStart={() => {
+                            baseFontSizeRef.current = selectedOverlay.style.fontSize;
+                            const canvas = fabricCanvasRef.current;
+                            if (canvas && selectedOverlayId) {
+                              const obj = canvas.getObjects().find(o => o.data?.overlayId === selectedOverlayId);
+                              if (obj) {
+                                baseScaleRef.current = obj.scaleX || 1;
+                              }
+                            }
+                          }}
+                          onTouchEnd={(e) => {
+                            const newSize = parseInt((e.target as HTMLInputElement).value);
+                            if (newSize !== selectedOverlay.style.fontSize) {
+                              renderedTextCache.current.clear();
+                              updateOverlayStyle(selectedOverlay.id, { fontSize: newSize });
+                              pushHistory();
+                            }
+                          }}
+                          className="w-full h-2 bg-[#0a0a0a] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-gradient-to-b [&::-webkit-slider-thumb]:from-orange-400 [&::-webkit-slider-thumb]:to-orange-600 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-orange-500/30 [&::-webkit-slider-runnable-track]:rounded-full"
+                        />
+                        {/* Scale markers */}
+                        <div className="flex justify-between mt-2 px-0.5 text-[9px] text-gray-600">
+                          <span>24</span>
+                          <span>72</span>
+                          <span>120</span>
+                          <span>200</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </AccordionSection>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => setShowPresets(!showPresets)}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 border-gray-700 text-gray-300"
-                  >
-                    <Palette className="w-4 h-4 mr-1" />
-                    Presets
-                  </Button>
-                  <Button
-                    onClick={() => deleteOverlay(selectedOverlay.id)}
-                    variant="outline"
-                    size="sm"
-                    className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                {/* Colors */}
+                <AccordionSection id="colors" title="Colors" icon={Droplet}>
+                  <div className="bg-gray-800/30 rounded-lg p-3 text-xs text-gray-500">
+                    Colors are controlled by the style preset. Custom color controls coming soon.
+                  </div>
+                </AccordionSection>
+
+                {/* Effects */}
+                <AccordionSection id="effects" title="Effects" icon={Sun}>
+                  <div className="bg-gray-800/30 rounded-lg p-3 text-xs text-gray-500">
+                    Shadow, glow, and stroke effects are part of the style preset.
+                  </div>
+                </AccordionSection>
               </div>
             ) : (
-              <div className="text-center py-8">
-                <Type className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 text-sm">
-                  Select a text layer to edit
-                </p>
-                <Button
+              <div className="flex flex-col items-center justify-center h-full py-12 px-6">
+                <Type className="w-12 h-12 text-gray-700 mb-3" />
+                <h4 className="text-sm font-medium text-gray-400 mb-1">No Layer Selected</h4>
+                <p className="text-xs text-gray-500 text-center mb-4">Select a layer to edit its properties</p>
+                <button
                   onClick={addTextOverlay}
-                  variant="outline"
-                  size="sm"
-                  className="mt-4 border-gray-700 text-gray-300"
+                  className="text-sm text-orange-400 hover:text-orange-300 font-medium"
                 >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Text
-                </Button>
+                  + Add Text Layer
+                </button>
               </div>
             )}
           </div>
-
-          {/* Style Presets */}
-          {showPresets && selectedOverlay && (
-            <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
-              <h3 className="text-white font-semibold mb-4">Style Presets</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {TEXT_STYLE_PRESETS.map(preset => (
-                  <button
-                    key={preset.id}
-                    onClick={() => applyPreset(preset.id)}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      selectedOverlay.presetId === preset.id
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-gray-700 hover:border-gray-600 hover:bg-gray-800/50'
-                    }`}
-                  >
-                    <div className="text-sm font-medium text-white">{preset.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{preset.description}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Layers List */}
-          <div className="bg-[#151515] border border-gray-800 rounded-xl p-4">
-            <h3 className="text-white font-semibold mb-4">Layers ({currentOverlays.length})</h3>
-            {currentOverlays.length > 0 ? (
-              <div className="space-y-2">
-                {currentOverlays.map(overlay => (
-                  <button
-                    key={overlay.id}
-                    onClick={() => setSelectedOverlayId(overlay.id)}
-                    className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all ${
-                      selectedOverlayId === overlay.id
-                        ? 'bg-orange-500/20 border border-orange-500'
-                        : 'bg-gray-800/50 border border-transparent hover:bg-gray-800'
-                    }`}
-                  >
-                    <Type className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-white truncate flex-1 text-left">
-                      {overlay.text}
-                    </span>
-                    {overlay.aiGenerated && (
-                      <Sparkles className="w-3 h-3 text-orange-400" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
-                No text layers yet
-              </p>
-            )}
-          </div>
         </div>
-      </div>
-
-      {/* Thumbnail Strip */}
-      <div className="mt-6 p-4 bg-[#151515] border border-gray-800 rounded-xl">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {images.map((img, index) => (
-            <button
-              key={img.themeId || index}
-              onClick={() => {
-                setCurrentImageIndex(index);
-                setSelectedOverlayId(null);
-              }}
-              className={`relative flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                index === currentImageIndex
-                  ? 'border-orange-500'
-                  : 'border-transparent hover:border-gray-600'
-              }`}
-            >
-              <img
-                src={img.url}
-                alt={img.themeName}
-                className="w-full h-full object-cover"
-              />
-              {/* Selection indicators */}
-              <div className="absolute bottom-1 right-1 flex gap-0.5">
-                {img.themeId && selectedForExport.has(img.themeId) && (
-                  <div className="w-2 h-2 rounded-full bg-orange-500" title="For Export" />
-                )}
-                {img.themeId && selectedForAnimation.has(img.themeId) && (
-                  <div className="w-2 h-2 rounded-full bg-amber-500" title="For Animation" />
-                )}
-              </div>
-              {/* Overlay count */}
-              {img.themeId && (imageOverlays[img.themeId]?.overlays?.length || 0) > 0 && (
-                <div className="absolute top-1 right-1 bg-orange-500 text-white text-xs px-1 rounded">
-                  {imageOverlays[img.themeId]?.overlays?.length}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Continue Button */}
-      <div className="mt-6 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${selectedForExport.size > 0 ? 'bg-orange-500' : 'bg-gray-600'}`} />
-              <span className="text-sm text-gray-300">
-                <span className="font-medium text-orange-400">{selectedForExport.size}</span> for Export
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-500' : 'bg-gray-600'}`} />
-              <span className="text-sm text-gray-300">
-                <span className="font-medium text-amber-400">{selectedForAnimation.size}</span> for Animation
-              </span>
-            </div>
-          </div>
-          <Button
-            onClick={handleContinue}
-            disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-            size="lg"
-          >
-            {isSaving ? 'Saving...' : 'Save & Continue'}
-            {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-          </Button>
-        </div>
-        {selectedForExport.size === 0 && selectedForAnimation.size === 0 && (
-          <p className="text-sm text-yellow-400 mt-3">
-            Select at least one image for Export or Animation to continue
-          </p>
-        )}
       </div>
     </div>
   );
