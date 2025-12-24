@@ -55,6 +55,48 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Track container readiness
+  const [isContainerReady, setIsContainerReady] = useState(false);
+
+  // Monitor container dimensions and mark ready when available
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const checkContainer = () => {
+      const container = containerRef.current;
+      if (container && container.clientWidth > 0 && container.clientHeight > 0) {
+        setIsContainerReady(true);
+        return true;
+      }
+      return false;
+    };
+
+    // Check immediately
+    if (checkContainer()) return;
+
+    // Use ResizeObserver to detect when container gets dimensions
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          setIsContainerReady(true);
+          resizeObserver.disconnect();
+        }
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    // Fallback: check after a short delay
+    const timeoutId = setTimeout(() => {
+      checkContainer();
+    }, 100);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Load images from Stage 4
   useEffect(() => {
     if (project?.highFidelityCapture?.generatedImages) {
@@ -172,7 +214,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   // Load image and overlays onto canvas
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !currentImage?.url || !containerRef.current) return;
+    if (!canvas || !currentImage?.url || !containerRef.current || !isContainerReady) return;
 
     // Clear canvas
     canvas.clear();
@@ -265,7 +307,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     };
 
     loadImage();
-  }, [currentImage?.url, currentOverlays, currentImageIndex]);
+  }, [currentImage?.url, currentOverlays, currentImageIndex, isContainerReady]);
 
   // Add a text object to the canvas
   const addTextToCanvas = (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
