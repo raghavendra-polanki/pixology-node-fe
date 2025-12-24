@@ -103,6 +103,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   const [themeMappings, setThemeMappings] = useState<ThemeWithPlayers[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingThemeIds, setGeneratingThemeIds] = useState<Set<string>>(new Set());
   const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -382,6 +383,115 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   };
 
   /**
+   * Generate image for a single theme
+   */
+  const handleGenerateSingleImage = async (themeId: string) => {
+    if (!project?.id) return;
+
+    const mapping = themeMappings.find(m => m.themeId === themeId);
+    if (!mapping) return;
+
+    // Mark this theme as generating
+    setGeneratingThemeIds(prev => new Set(prev).add(themeId));
+    setError(null);
+
+    try {
+      // Build request payload for single theme
+      const themePlayerMappings: Record<string, any> = {
+        [themeId]: {
+          ...mapping,
+          themeDescription: project.conceptGallery?.selectedThemes?.find(
+            (t: any) => t.id === themeId
+          )?.description || '',
+        },
+      };
+
+      const contextBrief = {
+        sportType: 'Hockey',
+        homeTeam: project.contextBrief?.homeTeam,
+        awayTeam: project.contextBrief?.awayTeam,
+        contextPills: project.contextBrief?.contextPills || [],
+        campaignGoal: project.contextBrief?.campaignGoal || 'Social Hype',
+      };
+
+      console.log('[Stage4] Generating single image for theme:', mapping.themeName);
+
+      const response = await fetch('/api/flarelab/generation/images-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: project.id,
+          themePlayerMappings,
+          contextBrief,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start image generation');
+      }
+
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7);
+          } else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              // Handle the events for single image generation
+              if (currentEvent === 'image') {
+                // Remove old image for this theme if exists
+                setGeneratedImages(prev => {
+                  const filtered = prev.filter(img => img.themeId !== themeId);
+                  return [...filtered, data.image];
+                });
+              } else if (currentEvent === 'error' && data.fatal) {
+                setError(data.message);
+              } else if (currentEvent === 'complete') {
+                console.log('[Stage4] Single image generation complete');
+                // Don't reload project here - local state already has all images
+                // Reloading would cause backend to overwrite existing images with only the new one
+              }
+            } catch (e) {
+              console.error('[Stage4] Failed to parse SSE data:', e);
+            }
+            currentEvent = '';
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Stage4] Single image generation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate image');
+    } finally {
+      setGeneratingThemeIds(prev => {
+        const next = new Set(prev);
+        next.delete(themeId);
+        return next;
+      });
+    }
+  };
+
+  /**
    * Handle SSE events from the server
    */
   const handleSSEEvent = (eventType: string, data: any) => {
@@ -611,24 +721,47 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
       {/* Generate Button & Progress - at TOP */}
       {hasThemes && (
         <div className="mb-6">
-          <Button
-            onClick={handleGenerateImages}
-            disabled={isGenerating || themeMappings.length === 0}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-            size="lg"
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate Images ({themeMappings.length})
-              </>
-            )}
-          </Button>
+          {(() => {
+            const pendingCount = themeMappings.filter(m => !generatedImages.find(img => img.themeId === m.themeId)).length;
+            const generatedCount = generatedImages.length;
+            return (
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleGenerateImages}
+                  disabled={isGenerating || generatingThemeIds.size > 0 || themeMappings.length === 0}
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+                  size="lg"
+                >
+                  {isGenerating ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : generatedCount > 0 ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-2" />
+                      Regenerate All ({themeMappings.length})
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Generate All ({themeMappings.length})
+                    </>
+                  )}
+                </Button>
+                {pendingCount > 0 && pendingCount < themeMappings.length && (
+                  <span className="text-sm text-yellow-400">
+                    {pendingCount} image{pendingCount > 1 ? 's' : ''} pending generation
+                  </span>
+                )}
+                {generatedCount > 0 && (
+                  <span className="text-sm text-gray-400">
+                    {generatedCount} of {themeMappings.length} generated
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Progress indicator */}
           {generationProgress && (
@@ -740,13 +873,47 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                         </div>
                       )}
 
-                      {/* Generated badge */}
-                      {generatedImage?.url && (
-                        <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          Generated
-                        </div>
-                      )}
+                      {/* Status badge and Generate button */}
+                      <div className="absolute top-2 right-2 flex items-center gap-2">
+                        {generatingThemeIds.has(mapping.themeId) ? (
+                          <div className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Generating...
+                          </div>
+                        ) : generatedImage?.url ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGenerateSingleImage(mapping.themeId);
+                              }}
+                              disabled={isGenerating || generatingThemeIds.size > 0}
+                              className="bg-gray-800/80 hover:bg-gray-700 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
+                              title="Regenerate this image"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Regenerate
+                            </button>
+                            <div className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              Generated
+                            </div>
+                          </>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGenerateSingleImage(mapping.themeId);
+                            }}
+                            disabled={isGenerating || generatingThemeIds.size > 0}
+                            className="border border-orange-500 bg-black/60 hover:bg-orange-500 text-orange-400 hover:text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-600 disabled:text-gray-500 disabled:hover:bg-black/60"
+                            title="Generate image for this theme"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Generate
+                          </button>
+                        )}
+                      </div>
 
                       {/* Category badge */}
                       <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
@@ -917,18 +1084,50 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
 
               {/* Right Side - Details Panel */}
               <div className="w-80 bg-gray-900 border-l border-gray-700 p-6 overflow-y-auto">
-                {/* Status Badge */}
+                {/* Status Badge & Generate Button */}
                 <div className="mb-6">
-                  {viewingImage?.url ? (
+                  {generatingThemeIds.has(viewingMapping.themeId) ? (
                     <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm">
-                      <Check className="w-4 h-4" />
-                      Generated
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Generating...
                     </span>
+                  ) : viewingImage?.url ? (
+                    <div className="flex flex-col gap-2">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-sm w-fit">
+                        <Check className="w-4 h-4" />
+                        Generated
+                      </span>
+                      <Button
+                        onClick={() => {
+                          handleGenerateSingleImage(viewingMapping.themeId);
+                        }}
+                        disabled={isGenerating || generatingThemeIds.size > 0}
+                        variant="outline"
+                        size="sm"
+                        className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Regenerate Image
+                      </Button>
+                    </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">
-                      <AlertCircle className="w-4 h-4" />
-                      Pending Generation
-                    </span>
+                    <div className="flex flex-col gap-2">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm w-fit">
+                        <AlertCircle className="w-4 h-4" />
+                        Pending Generation
+                      </span>
+                      <Button
+                        onClick={() => {
+                          handleGenerateSingleImage(viewingMapping.themeId);
+                        }}
+                        disabled={isGenerating || generatingThemeIds.size > 0}
+                        variant="outline"
+                        className="border-orange-500 text-orange-400 hover:bg-orange-500 hover:text-white"
+                      >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Generate Image
+                      </Button>
+                    </div>
                   )}
                 </div>
 

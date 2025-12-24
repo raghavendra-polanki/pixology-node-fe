@@ -317,7 +317,10 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
   };
 
   const allThemesComplete = (): boolean => {
-    return Object.values(themePlayerStates).every(
+    const states = Object.values(themePlayerStates);
+    // Must have states for all selected themes, and all must have required players
+    if (states.length === 0 || states.length !== selectedThemes.length) return false;
+    return states.every(
       state => state.selectedPlayers.length === state.playerCount
     );
   };
@@ -511,17 +514,17 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
       </div>
 
       {/* Loading State */}
-      {(isLoadingPlayers || isLoadingRecommendations) && (
+      {(isLoadingPlayers || isLoadingRecommendations || (selectedThemes.length > 0 && Object.keys(themePlayerStates).length === 0)) && (
         <div className="flex flex-col items-center justify-center py-16">
           <RefreshCw className="w-10 h-10 text-orange-500 animate-spin mb-4" />
           <p className="text-gray-400">
-            {isLoadingPlayers ? 'Loading players...' : 'AI is analyzing themes and recommending players...'}
+            {isLoadingPlayers ? 'Loading players...' : isLoadingRecommendations ? 'AI is analyzing themes and recommending players...' : 'Loading theme selections...'}
           </p>
         </div>
       )}
 
       {/* Theme Cards - 2 Column Grid */}
-      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && (
+      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && Object.keys(themePlayerStates).length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {selectedThemes.map((theme: SelectedTheme) => {
             const themeState = themePlayerStates[theme.id];
@@ -661,7 +664,7 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
       )}
 
       {/* Continue Button - Outside grid */}
-      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && (
+      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && Object.keys(themePlayerStates).length > 0 && (
         <div className="flex items-center justify-between mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-xl">
             <div className="text-sm text-gray-400">
               {allThemesComplete() ? (
