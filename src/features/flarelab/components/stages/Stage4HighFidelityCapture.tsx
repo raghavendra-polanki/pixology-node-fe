@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Maximize2, X, Edit2, Wand2, Square, CheckSquare, Film, Package } from 'lucide-react';
+import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Maximize2, X, Edit2, Wand2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { AIImageEditor } from '@/shared/components/AIImageEditor';
@@ -116,10 +116,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   const [viewingMapping, setViewingMapping] = useState<ThemeWithPlayers | null>(null);
   const [viewingImage, setViewingImage] = useState<GeneratedImage | null>(null);
 
-  // Selection state for export (Stage 6) and animation (Stage 5)
-  const [selectedForExport, setSelectedForExport] = useState<Set<string>>(new Set());
-  const [selectedForAnimation, setSelectedForAnimation] = useState<Set<string>>(new Set());
-
   // AI Image Editor state
   const [aiEditingImage, setAiEditingImage] = useState<{
     image: GeneratedImage;
@@ -152,20 +148,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
         setGeneratedImages(filteredImages);
         console.log('[Stage4] Filtered images:', filteredImages.length, 'of',
           project.highFidelityCapture.generatedImages.length);
-      }
-
-      // Load existing export/animation selections (filtered to current themes)
-      if (project?.highFidelityCapture?.selectedForExport) {
-        const filteredExport = project.highFidelityCapture.selectedForExport.filter(
-          (id: string) => selectedThemeIds.has(id)
-        );
-        setSelectedForExport(new Set(filteredExport));
-      }
-      if (project?.highFidelityCapture?.selectedForAnimation) {
-        const filteredAnimation = project.highFidelityCapture.selectedForAnimation.filter(
-          (id: string) => selectedThemeIds.has(id)
-        );
-        setSelectedForAnimation(new Set(filteredAnimation));
       }
 
       // Try to refresh player photos from current team data
@@ -243,36 +225,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
 
     loadMappingsWithFreshPlayerData();
   }, [project?.castingCall?.themePlayerMappings, project?.highFidelityCapture?.generatedImages, project?.contextBrief?.homeTeam?.teamId, project?.contextBrief?.awayTeam?.teamId]);
-
-  /**
-   * Toggle selection for export (Stage 6)
-   */
-  const toggleExportSelection = (themeId: string) => {
-    setSelectedForExport(prev => {
-      const next = new Set(prev);
-      if (next.has(themeId)) {
-        next.delete(themeId);
-      } else {
-        next.add(themeId);
-      }
-      return next;
-    });
-  };
-
-  /**
-   * Toggle selection for animation (Stage 5)
-   */
-  const toggleAnimationSelection = (themeId: string) => {
-    setSelectedForAnimation(prev => {
-      const next = new Set(prev);
-      if (next.has(themeId)) {
-        next.delete(themeId);
-      } else {
-        next.add(themeId);
-      }
-      return next;
-    });
-  };
 
   /**
    * Start generating images for all themes
@@ -553,7 +505,7 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
   };
 
   /**
-   * Save and continue to next stage
+   * Save and continue to next stage (Text Studio)
    */
   const handleContinue = async () => {
     if (generatedImages.length === 0) return;
@@ -584,13 +536,9 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
       }));
 
       console.log('[Stage4] Optimized images payload size:', JSON.stringify(optimizedImages).length, 'bytes');
-      console.log('[Stage4] Selected for export:', selectedForExport.size, 'images');
-      console.log('[Stage4] Selected for animation:', selectedForAnimation.size, 'images');
 
       const highFidelityCaptureData = {
         generatedImages: optimizedImages,
-        selectedForExport: Array.from(selectedForExport),
-        selectedForAnimation: Array.from(selectedForAnimation),
         generatedAt: new Date(),
       };
 
@@ -938,49 +886,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
                         </span>
                       </div>
 
-                      {/* Selection Buttons for Export/Animation (only show when image is generated) */}
-                      {generatedImage?.url && (
-                        <div className="flex gap-2 pt-2 border-t border-gray-800">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleExportSelection(mapping.themeId);
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                              selectedForExport.has(mapping.themeId)
-                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
-                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300 border border-transparent'
-                            }`}
-                            title="Select for Export (Stage 6)"
-                          >
-                            {selectedForExport.has(mapping.themeId) ? (
-                              <CheckSquare className="w-3.5 h-3.5" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5" />
-                            )}
-                            For Export
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleAnimationSelection(mapping.themeId);
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                              selectedForAnimation.has(mapping.themeId)
-                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500'
-                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300 border border-transparent'
-                            }`}
-                            title="Select for Animation (Stage 5)"
-                          >
-                            {selectedForAnimation.has(mapping.themeId) ? (
-                              <CheckSquare className="w-3.5 h-3.5" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5" />
-                            )}
-                            For Animation
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -990,39 +895,23 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
         </>
       )}
 
-      {/* Selection Summary & Continue Button */}
+      {/* Continue Button */}
       {hasGeneratedImages && (
         <div className="mt-6 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${selectedForExport.size > 0 ? 'bg-green-500' : 'bg-gray-600'}`} />
-                <span className="text-sm text-gray-300">
-                  <span className="font-medium text-orange-400">{selectedForExport.size}</span> for Export
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-500' : 'bg-gray-600'}`} />
-                <span className="text-sm text-gray-300">
-                  <span className="font-medium text-amber-400">{selectedForAnimation.size}</span> for Animation
-                </span>
-              </div>
+            <div className="text-sm text-gray-400">
+              <span className="font-medium text-white">{generatedImages.length}</span> images ready for text overlays
             </div>
             <Button
               onClick={handleContinue}
-              disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
+              disabled={isSaving}
               className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
               size="lg"
             >
-              {isSaving ? 'Saving...' : 'Save & Continue'}
+              {isSaving ? 'Saving...' : 'Continue to Text Studio'}
               {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
             </Button>
           </div>
-          {selectedForExport.size === 0 && selectedForAnimation.size === 0 && (
-            <p className="text-sm text-yellow-400 mt-3">
-              Select at least one image for Export or Animation to continue
-            </p>
-          )}
         </div>
       )}
 
