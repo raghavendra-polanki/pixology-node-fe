@@ -1421,7 +1421,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
           {/* Thumbnail Strip - Below canvas */}
           <div className="flex-shrink-0 bg-gradient-to-b from-[#0d0d0d] to-[#0a0a0a] border border-gray-800/50 rounded-xl px-4 py-3">
             <div className="flex items-center gap-4">
-              <div className="flex gap-2.5 overflow-x-auto flex-1 py-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
+              <div className="flex gap-2.5 overflow-x-auto flex-1 py-1 px-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
                 {images.map((img, index) => {
                   const isSelected = index === currentImageIndex;
                   const hasExport = img.themeId && selectedForExport.has(img.themeId);
@@ -1595,33 +1595,33 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
                 {/* Style Preset */}
                 <AccordionSection id="style" title="Style Preset" icon={Palette}>
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2">
                     {CSS_TEXT_PRESETS.map(preset => {
                       const isActive = selectedOverlay.cssPresetId === preset.id;
                       return (
                         <button
                           key={preset.id}
                           onClick={() => applyCSSPreset(preset.id)}
-                          className={`group relative p-2.5 rounded-xl transition-all duration-200 ${
+                          className={`group relative p-2 rounded-xl transition-all duration-200 ${
                             isActive
                               ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 ring-2 ring-orange-500/60 shadow-lg shadow-orange-500/10'
                               : 'bg-[#0a0a0a] hover:bg-[#111111] ring-1 ring-gray-700/50 hover:ring-gray-600/50'
                           }`}
                         >
-                          {/* Preview - larger */}
+                          {/* Preview */}
                           <div
-                            className="h-10 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-2"
+                            className="h-9 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-1.5"
                             style={getPresetPreviewStyles(preset.id, 14)}
                           >
                             Aa
                           </div>
                           {/* Name */}
-                          <div className={`text-[10px] font-medium truncate text-center ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                          <div className={`text-[10px] font-medium truncate text-center px-0.5 ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
                             {preset.name}
                           </div>
                           {/* Active checkmark */}
                           {isActive && (
-                            <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
+                            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
                               <CheckSquare className="w-2.5 h-2.5 text-white" />
                             </div>
                           )}
