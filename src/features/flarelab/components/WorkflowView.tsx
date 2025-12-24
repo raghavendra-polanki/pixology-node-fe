@@ -11,8 +11,9 @@ import { Stage1ContextBrief } from './stages/Stage1ContextBrief';
 import { Stage2ConceptGallery } from './stages/Stage2ConceptGallery';
 import { Stage3CastingCall } from './stages/Stage3CastingCall';
 import { Stage4HighFidelityCapture } from './stages/Stage4HighFidelityCapture';
-import { Stage5KineticActivation } from './stages/Stage5KineticActivation';
-import { Stage6PolishDownload } from './stages/Stage6PolishDownload';
+import { Stage5TextStudio } from './stages/Stage5TextStudio';
+import { Stage6KineticActivation } from './stages/Stage6KineticActivation';
+import { Stage7PolishDownload } from './stages/Stage7PolishDownload';
 
 interface WorkflowViewProps {
   projectId: string;
@@ -24,8 +25,9 @@ const stages = [
   { id: 2, name: DEFAULT_WORKFLOW_STAGES[1].title, component: Stage2ConceptGallery },
   { id: 3, name: DEFAULT_WORKFLOW_STAGES[2].title, component: Stage3CastingCall },
   { id: 4, name: DEFAULT_WORKFLOW_STAGES[3].title, component: Stage4HighFidelityCapture },
-  { id: 5, name: DEFAULT_WORKFLOW_STAGES[4].title, component: Stage5KineticActivation },
-  { id: 6, name: DEFAULT_WORKFLOW_STAGES[5].title, component: Stage6PolishDownload },
+  { id: 5, name: DEFAULT_WORKFLOW_STAGES[4].title, component: Stage5TextStudio },
+  { id: 6, name: DEFAULT_WORKFLOW_STAGES[5].title, component: Stage6KineticActivation },
+  { id: 7, name: DEFAULT_WORKFLOW_STAGES[6].title, component: Stage7PolishDownload },
 ];
 
 export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
@@ -42,6 +44,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
     updateConceptGallery,
     updateCastingCall,
     updateHighFidelityCapture,
+    updateTextStudio,
     updateKineticActivation,
     updatePolishDownload,
   } = useFlareLabProject({ autoLoad: true, projectId });
@@ -199,7 +202,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-white mb-1">{project?.name || 'New Campaign'}</h2>
-              <p className="text-gray-500">6-Stage Workflow</p>
+              <p className="text-gray-500">7-Stage Workflow</p>
             </div>
             {!projectId.startsWith('temp-') && (
               <Button
@@ -288,6 +291,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
             updateConceptGallery={updateConceptGallery}
             updateCastingCall={updateCastingCall}
             updateHighFidelityCapture={updateHighFidelityCapture}
+            updateTextStudio={updateTextStudio}
             updateKineticActivation={updateKineticActivation}
             updatePolishDownload={updatePolishDownload}
           />

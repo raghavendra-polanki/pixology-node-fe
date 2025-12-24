@@ -3,7 +3,7 @@ import { Download, FileVideo, Image as ImageIcon, CheckCircle2, Package, Refresh
 import { Button } from '@/shared/components/ui/button';
 import type { FlareLabProject, GeneratedImage, CreateProjectInput } from '../../types/project.types';
 
-interface Stage6Props {
+interface Stage7Props {
   project: FlareLabProject;
   navigateToStage: (stage: number) => void;
   createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
@@ -20,14 +20,14 @@ interface ExportItem {
   themeCategory?: string;
 }
 
-export const Stage6PolishDownload = ({ project, markStageCompleted }: Stage6Props) => {
+export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Props) => {
   const [exportItems, setExportItems] = useState<ExportItem[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load selected items from Stage 4 (images) and Stage 5 (videos)
+  // Load selected items from Stage 4/5 (images) and Stage 6 (videos)
   useEffect(() => {
     const items: ExportItem[] = [];
 

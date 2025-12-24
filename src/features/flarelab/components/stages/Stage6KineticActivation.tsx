@@ -13,7 +13,7 @@ import type {
 
 const projectService = new FlareLabProjectService();
 
-interface Stage5Props {
+interface Stage6Props {
   project: FlareLabProject;
   navigateToStage: (stage: number) => void;
   createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
@@ -85,7 +85,7 @@ const scrollbarStyles = `
   }
 `;
 
-export const Stage5KineticActivation = ({ project, markStageCompleted, navigateToStage, loadProject }: Stage5Props) => {
+export const Stage6KineticActivation = ({ project, markStageCompleted, navigateToStage, loadProject }: Stage6Props) => {
   const [imagesToAnimate, setImagesToAnimate] = useState<GeneratedImage[]>([]);
   const [animations, setAnimations] = useState<Map<string, AnimationData>>(new Map());
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);

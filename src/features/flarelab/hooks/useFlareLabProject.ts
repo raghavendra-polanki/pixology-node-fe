@@ -14,6 +14,7 @@ import {
   ConceptGalleryData,
   CastingCallData,
   HighFidelityCaptureData,
+  TextStudioData,
   KineticActivationData,
   PolishDownloadData,
   DEFAULT_WORKFLOW_STAGES,
@@ -46,6 +47,7 @@ export interface UseFlareLabProjectResult {
   updateConceptGallery: (conceptGallery: Partial<ConceptGalleryData>, projectId?: string) => Promise<FlareLabProject | null>;
   updateCastingCall: (castingCall: Partial<CastingCallData>, projectId?: string) => Promise<FlareLabProject | null>;
   updateHighFidelityCapture: (capture: Partial<HighFidelityCaptureData>, projectId?: string) => Promise<FlareLabProject | null>;
+  updateTextStudio: (textStudio: Partial<TextStudioData>, projectId?: string) => Promise<FlareLabProject | null>;
   updateKineticActivation: (activation: Partial<KineticActivationData>, projectId?: string) => Promise<FlareLabProject | null>;
   updatePolishDownload: (polish: Partial<PolishDownloadData>, projectId?: string) => Promise<FlareLabProject | null>;
 
@@ -260,6 +262,13 @@ export function useFlareLabProject(options: UseFlareLabProjectOptions = {}): Use
   const updateHighFidelityCapture = useCallback(
     async (capture: Partial<HighFidelityCaptureData>, projectId?: string) => {
       return updateProject({ highFidelityCapture: capture }, projectId);
+    },
+    [updateProject],
+  );
+
+  const updateTextStudio = useCallback(
+    async (textStudio: Partial<TextStudioData>, projectId?: string) => {
+      return updateProject({ textStudio }, projectId);
     },
     [updateProject],
   );
@@ -493,6 +502,7 @@ export function useFlareLabProject(options: UseFlareLabProjectOptions = {}): Use
     updateConceptGallery,
     updateCastingCall,
     updateHighFidelityCapture,
+    updateTextStudio,
     updateKineticActivation,
     updatePolishDownload,
 

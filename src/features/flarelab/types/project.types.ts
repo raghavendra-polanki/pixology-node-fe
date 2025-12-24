@@ -5,7 +5,7 @@ export interface FlareLabProject {
   name: string; // User-facing name
   title: string; // Backend field (same as name)
   status: 'draft' | 'generating' | 'complete';
-  currentStageIndex: number; // 0-5 for stages 1-6
+  currentStageIndex: number; // 0-6 for stages 1-7
   completionPercentage: number;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -19,6 +19,7 @@ export interface FlareLabProject {
   conceptGallery?: ConceptGalleryData;
   castingCall?: CastingCallData;
   highFidelityCapture?: HighFidelityCaptureData;
+  textStudio?: TextStudioData;
   kineticActivation?: KineticActivationData;
   polishDownload?: PolishDownloadData;
 
@@ -267,7 +268,86 @@ export interface GeneratedImage {
   error?: string;
 }
 
-// Stage 5: Kinetic Activation
+// Stage 5: Text Studio (NEW)
+export interface TextStudio {
+  // Text overlays per image
+  imageOverlays: Record<string, ImageTextOverlays>;
+  // Images selected to continue to animation/export
+  selectedForAnimation?: string[]; // Theme IDs
+  selectedForExport?: string[]; // Theme IDs
+  // Composited images (rasterized with text)
+  compositedImages?: CompositedImage[];
+  updatedAt?: Date;
+}
+
+export interface ImageTextOverlays {
+  themeId: string;
+  imageUrl: string;
+  overlays: TextOverlay[];
+  updatedAt?: Date;
+}
+
+export interface TextOverlay {
+  id: string;
+  text: string;
+  position: { x: number; y: number }; // percentage-based (0-100)
+  style: TextStyle;
+  aiGenerated: boolean;
+  locked?: boolean;
+  presetId?: string; // Reference to style preset used
+}
+
+export interface TextStyle {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  // Fill
+  fillType: 'solid' | 'gradient';
+  fillColor?: string;
+  gradient?: {
+    type: 'linear' | 'radial';
+    angle: number;
+    stops: Array<{ offset: number; color: string }>;
+  };
+  // Stroke
+  strokeColor?: string;
+  strokeWidth?: number;
+  // Shadow
+  shadowColor?: string;
+  shadowBlur?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  // Glow
+  glowColor?: string;
+  glowBlur?: number;
+  // Text properties
+  textTransform?: 'uppercase' | 'lowercase' | 'none';
+  letterSpacing?: number;
+  rotation?: number;
+  opacity?: number;
+}
+
+export interface TextStylePreset {
+  id: string;
+  name: string;
+  description: string;
+  keywords: string[]; // For AI matching
+  style: TextStyle;
+  thumbnail?: string;
+}
+
+export interface CompositedImage {
+  themeId: string;
+  originalImageUrl: string;
+  compositedImageUrl: string;
+  overlays: TextOverlay[];
+  compositedAt: Date;
+}
+
+// Type alias for service compatibility
+export type TextStudioData = TextStudio;
+
+// Stage 6: Kinetic Activation (was Stage 5)
 export interface KineticActivation {
   // New animation-based approach
   animations?: AnimationResult[];
@@ -350,7 +430,7 @@ export type MotionPreset = 'Loop' | 'Slow Zoom' | 'Action Pan';
 // Type alias for service compatibility
 export type KineticActivationData = KineticActivation;
 
-// Stage 6: Polish & Download
+// Stage 7: Polish & Download (was Stage 6)
 export interface PolishData {
   format: ExportFormat;
   metadata: VideoMetadata;
@@ -398,6 +478,7 @@ export interface UpdateProjectInput {
   conceptGallery?: Partial<ConceptGalleryData>;
   castingCall?: Partial<CastingCallData>;
   highFidelityCapture?: Partial<HighFidelityCaptureData>;
+  textStudio?: Partial<TextStudioData>;
   kineticActivation?: Partial<KineticActivationData>;
   polishDownload?: Partial<PolishDownloadData>;
   stageExecutions?: Record<string, StageExecution>;
@@ -438,7 +519,7 @@ export interface WorkflowStage {
 }
 
 /**
- * Default workflow stages for FlareLab
+ * Default workflow stages for FlareLab (7 stages)
  */
 export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   {
@@ -471,13 +552,20 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
   },
   {
     id: 5,
+    name: 'text-studio',
+    title: 'Text Studio',
+    description: 'Add text overlays to your images',
+    requiresPreviousCompletion: true,
+  },
+  {
+    id: 6,
     name: 'kinetic-activation',
     title: 'Animate Videos',
     description: 'Apply motion and animation effects',
     requiresPreviousCompletion: true,
   },
   {
-    id: 6,
+    id: 7,
     name: 'polish-download',
     title: 'Export',
     description: 'Finalize and export your campaign',
