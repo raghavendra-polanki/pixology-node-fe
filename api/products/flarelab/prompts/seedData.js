@@ -614,10 +614,224 @@ Create a **single broadcast-quality image** that:
 };
 
 // ============================================
-// STAGE 5: KINETIC ACTIVATION (Animation Generation)
+// STAGE 5: TEXT STUDIO (Text Overlay Generation)
 // ============================================
 
-export const STAGE_5_ANIMATION_TEMPLATE = {
+export const STAGE_5_TEXT_STUDIO_TEMPLATE = {
+  id: 'stage_5_text',
+  stageType: 'stage_5_text',
+  prompts: [
+    // TEXT SUGGESTIONS PROMPT - Analyzes image and suggests text overlays
+    {
+      id: 'prompt_textGeneration_text_suggestions_default',
+      capability: 'textGeneration',
+      name: 'AI Text Overlay Suggestions',
+      description: 'Analyzes sports image and recommends text overlays with positions, sizes, and styles',
+      systemPrompt: `You are an expert broadcast graphics designer with extensive experience in:
+- Sports broadcasting graphics and lower-thirds
+- Social media promotional graphics for professional sports
+- Typography and text placement for maximum visual impact
+- Color theory and contrast for readability
+- Creating text that enhances without competing with the image
+
+Your specialty is analyzing sports images and designing professional text overlays that captivate viewers while maintaining broadcast quality standards.`,
+
+      userPromptTemplate: `## 🎯 TEXT OVERLAY DESIGN TASK
+
+Analyze the provided image and design **professional text overlays** that enhance its visual impact for sports marketing.
+
+## 📸 IMAGE CONTEXT
+
+**Theme:** {{themeName}}
+**Theme Description:** {{themeDescription}}
+**Category:** {{themeCategory}}
+**Sport Type:** {{sportType}}
+**Home Team:** {{homeTeam}}
+**Away Team:** {{awayTeam}}
+**Featured Players:** {{playerNames}}
+**Mood/Context:** {{contextPills}}
+**Campaign Goal:** {{campaignGoal}}
+
+## 📋 YOUR TASK
+
+1. **Analyze the Image:**
+   - Where are the subjects (players/faces)?
+   - What areas have visual breathing room for text?
+   - What are the dominant colors? Where are dark vs light areas for contrast?
+   - What is the overall mood/atmosphere?
+
+2. **Design 3 Text Overlays** with different purposes:
+
+**SUGGESTION 1 - HEADLINE (Primary impact text):**
+- Bold, attention-grabbing message (2-5 words max)
+- Placed in a visually prominent position with good contrast
+- Large font size (80-120px range)
+
+**SUGGESTION 2 - SUPPORTING TEXT (Secondary message):**
+- Team matchup, player name, or event details
+- Complementary position that doesn't compete with headline
+- Medium font size (48-72px range)
+
+**SUGGESTION 3 - CALL-TO-ACTION or ACCENT (Tertiary element):**
+- Hashtag, date, channel branding, or short tagline
+- Subtle placement, often bottom corners or edges
+- Smaller font size (32-48px range)
+
+## 🎨 STYLE PRESET SELECTION GUIDE
+
+**CRITICAL: Choose DRAMATIC presets for headlines!** The headline should have visual impact with gradients, glows, or metallic effects. NEVER use "team-primary" or plain solid colors for the main headline.
+
+**FOR HEADLINES (Suggestion 1) - Use these dramatic presets:**
+- "frozen-ice" - Icy blue gradient with frost glow (BEST for ice/winter/hockey themes)
+- "metallic-gold" - Luxurious gold metallic gradient (BEST for championship/winning)
+- "chrome-steel" - Silver metallic gradient (BEST for modern/sleek/professional)
+- "fire-intensity" - Orange/red gradient with ember glow (BEST for intense/rivalry)
+- "epic-cinematic" - White-to-gray gradient with dramatic shadow (BEST for movie-poster look)
+- "cyber-blue" - Electric blue with neon glow (BEST for futuristic/tech)
+
+**FOR SUPPORTING TEXT (Suggestion 2) - Use clean professional presets:**
+- "broadcast-clean" - White with black stroke (clean, readable)
+- "sports-bold" - White with heavy drop shadow (athletic, impactful)
+- "headline-impact" - Yellow/cream with hard shadow (news-style)
+
+**FOR ACCENTS/HASHTAGS (Suggestion 3) - Use subtle presets:**
+- "broadcast-clean" - Simple white for hashtags
+- "team-primary" - Team color for branding elements only
+
+**AVOID for headlines:** "team-primary" (too plain), "dark-knight" (too dark)
+
+## 📍 POSITION GUIDELINES (x, y as percentage 0-100)
+
+- **Headlines:** Position in the LOWER THIRD (y = 75-85) or TOP (y = 10-20) depending on player position
+- **Supporting text:** Directly below headline (y = headline + 10-15)
+- **Accents:** Bottom corner (x = 80-90, y = 90-95)
+- **AVOID:** Placing text over player faces (analyze image carefully)
+
+## 📏 FONT SIZE REQUIREMENTS (CRITICAL!)
+
+- **Headline:** MUST be 80-120px (default: 96px) - Large and impactful
+- **Supporting text:** MUST be 48-64px (default: 56px) - Clearly readable
+- **Accent:** MUST be 32-42px (default: 36px) - Subtle but visible
+
+## 📄 MANDATORY OUTPUT FORMAT
+
+Return ONLY valid JSON:
+
+{
+  "imageAnalysis": {
+    "composition": "Where players/subjects are positioned",
+    "colorPalette": "Dominant colors and best contrast areas",
+    "mood": "Overall atmosphere (intense, celebratory, icy, fiery, etc.)",
+    "bestTextAreas": "2-3 specific areas safe for text placement"
+  },
+  "suggestions": [
+    {
+      "id": "headline",
+      "purpose": "Primary headline - DRAMATIC STYLE REQUIRED",
+      "text": "IMPACTFUL 2-4 WORD HEADLINE",
+      "presetId": "frozen-ice OR metallic-gold OR chrome-steel OR fire-intensity OR epic-cinematic",
+      "position": { "x": 50, "y": 80 },
+      "fontSize": 96,
+      "reasoning": "Why this dramatic preset matches the image mood"
+    },
+    {
+      "id": "subtext",
+      "purpose": "Supporting text - team matchup or player info",
+      "text": "TEAM VS TEAM or PLAYER NAME",
+      "presetId": "broadcast-clean OR sports-bold",
+      "position": { "x": 50, "y": 90 },
+      "fontSize": 48,
+      "reasoning": "Clean readable style below headline"
+    },
+    {
+      "id": "accent",
+      "purpose": "Hashtag or branding",
+      "text": "#HASHTAG",
+      "presetId": "broadcast-clean",
+      "position": { "x": 85, "y": 95 },
+      "fontSize": 36,
+      "reasoning": "Subtle corner placement"
+    }
+  ]
+}
+
+**RULES:**
+- Headline MUST use a dramatic gradient/glow preset (frozen-ice, metallic-gold, chrome-steel, fire-intensity, epic-cinematic, cyber-blue)
+- Font sizes MUST follow the requirements above
+- Headline text should be creative and thematic (e.g., "FROZEN FURY", "BATTLE ON ICE", "RIVALRY IGNITED")
+- NOT just team names or generic phrases`,
+
+      outputFormat: 'json',
+      variables: [
+        {
+          name: 'themeName',
+          description: 'Name of the visual theme',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'themeDescription',
+          description: 'Description of the visual theme',
+          required: false,
+          type: 'string',
+        },
+        {
+          name: 'themeCategory',
+          description: 'Category of the theme (home-team, rivalry, etc.)',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'sportType',
+          description: 'Type of sport (e.g., Hockey, Basketball)',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'homeTeam',
+          description: 'Home team name',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'awayTeam',
+          description: 'Away team name',
+          required: true,
+          type: 'string',
+        },
+        {
+          name: 'playerNames',
+          description: 'Names of featured players',
+          required: false,
+          type: 'string',
+        },
+        {
+          name: 'contextPills',
+          description: 'Context/mood tags (e.g., Rivalry, Playoff)',
+          required: false,
+          type: 'string',
+        },
+        {
+          name: 'campaignGoal',
+          description: 'Campaign goal (Social Hype, Broadcast B-Roll, Stadium Ribbon)',
+          required: true,
+          type: 'string',
+        },
+      ],
+      modelConfig: {
+        adaptorId: 'gemini',
+        modelId: 'gemini-2.0-flash',
+      },
+      isActive: true,
+    },
+  ],
+};
+
+// ============================================
+// STAGE 6: KINETIC ACTIVATION (Animation Generation)
+// ============================================
+
+export const STAGE_6_ANIMATION_TEMPLATE = {
   id: 'stage_5_animation',
   stageType: 'stage_5_animation',
   prompts: [
@@ -1022,19 +1236,25 @@ Generate a professional 4-second animation that brings this sports image to life
   ],
 };
 
-// Export all GameLab stage templates
-export const GAMELAB_PROMPT_TEMPLATES = [
+// Export all FlareLab stage templates
+export const FLARELAB_PROMPT_TEMPLATES = [
   STAGE_2_THEME_GENERATION_TEMPLATE,
   STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
   STAGE_4_IMAGE_GENERATION_TEMPLATE,
-  STAGE_5_ANIMATION_TEMPLATE,
+  STAGE_5_TEXT_STUDIO_TEMPLATE,
+  STAGE_6_ANIMATION_TEMPLATE,
 ];
+
+// Legacy alias for backwards compatibility
+export const GAMELAB_PROMPT_TEMPLATES = FLARELAB_PROMPT_TEMPLATES;
 
 // Export individual stages for direct import
 export default {
   STAGE_2_THEME_GENERATION_TEMPLATE,
   STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
   STAGE_4_IMAGE_GENERATION_TEMPLATE,
-  STAGE_5_ANIMATION_TEMPLATE,
+  STAGE_5_TEXT_STUDIO_TEMPLATE,
+  STAGE_6_ANIMATION_TEMPLATE,
+  FLARELAB_PROMPT_TEMPLATES,
   GAMELAB_PROMPT_TEMPLATES,
 };

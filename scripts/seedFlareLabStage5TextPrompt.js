@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Seed GameLab Stage 5 Animation Prompt Templates
- * Seeds both the screenplay (textGeneration) and video (videoGeneration) prompts
- * Run: node scripts/seedGameLabStage5AnimationPrompt.js
+ * Seed FlareLab Stage 5 Text Studio Prompt Templates
+ * Seeds the text suggestions prompt for AI-powered text overlay generation
+ * Run: node scripts/seedFlareLabStage5TextPrompt.js
  */
 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import admin from 'firebase-admin';
-import { STAGE_6_ANIMATION_TEMPLATE } from '../api/products/flarelab/prompts/seedData.js';
+import { STAGE_5_TEXT_STUDIO_TEMPLATE } from '../api/products/flarelab/prompts/seedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,30 +44,30 @@ const db = admin.firestore();
 const flarelabDatabaseId = process.env.FLARELAB_DATABASE_ID || 'pixology-flarelab';
 db.settings({ databaseId: flarelabDatabaseId });
 
-async function seedStage5AnimationPrompt() {
+async function seedStage5TextPrompt() {
   try {
-    console.log('\n🎬 Seeding FlareLab Stage 5 Animation Prompts...\n');
+    console.log('\n📝 Seeding FlareLab Stage 5 Text Studio Prompts...\n');
     console.log(`Database: ${flarelabDatabaseId}`);
-    console.log(`Template ID: ${STAGE_6_ANIMATION_TEMPLATE.id}`);
-    console.log(`Stage Type: ${STAGE_6_ANIMATION_TEMPLATE.stageType}`);
-    console.log(`Prompts count: ${STAGE_6_ANIMATION_TEMPLATE.prompts.length}`);
+    console.log(`Template ID: ${STAGE_5_TEXT_STUDIO_TEMPLATE.id}`);
+    console.log(`Stage Type: ${STAGE_5_TEXT_STUDIO_TEMPLATE.stageType}`);
+    console.log(`Prompts count: ${STAGE_5_TEXT_STUDIO_TEMPLATE.prompts.length}`);
 
     // List prompts
     console.log('\nPrompts:');
-    STAGE_6_ANIMATION_TEMPLATE.prompts.forEach((prompt, idx) => {
+    STAGE_5_TEXT_STUDIO_TEMPLATE.prompts.forEach((prompt, idx) => {
       console.log(`  ${idx + 1}. [${prompt.capability}] ${prompt.name}`);
       console.log(`     ID: ${prompt.id}`);
       console.log(`     Model: ${prompt.modelConfig?.adaptorId || 'default'}/${prompt.modelConfig?.modelId || 'default'}`);
     });
 
     // Check if template exists
-    const existingDoc = await db.collection('prompt_templates').doc(STAGE_6_ANIMATION_TEMPLATE.id).get();
+    const existingDoc = await db.collection('prompt_templates').doc(STAGE_5_TEXT_STUDIO_TEMPLATE.id).get();
 
     if (existingDoc.exists) {
       console.log('\n⚠️  Template already exists - updating...');
-      await db.collection('prompt_templates').doc(STAGE_6_ANIMATION_TEMPLATE.id).set(
+      await db.collection('prompt_templates').doc(STAGE_5_TEXT_STUDIO_TEMPLATE.id).set(
         {
-          ...STAGE_6_ANIMATION_TEMPLATE,
+          ...STAGE_5_TEXT_STUDIO_TEMPLATE,
           updatedAt: new Date().toISOString(),
         },
         { merge: false }
@@ -75,15 +75,15 @@ async function seedStage5AnimationPrompt() {
       console.log('✅ Template updated!');
     } else {
       console.log('\n📝 Creating new template...');
-      await db.collection('prompt_templates').doc(STAGE_6_ANIMATION_TEMPLATE.id).set({
-        ...STAGE_6_ANIMATION_TEMPLATE,
+      await db.collection('prompt_templates').doc(STAGE_5_TEXT_STUDIO_TEMPLATE.id).set({
+        ...STAGE_5_TEXT_STUDIO_TEMPLATE,
         createdAt: new Date().toISOString(),
       });
       console.log('✅ Template created!');
     }
 
     // Verify
-    const verifyDoc = await db.collection('prompt_templates').doc(STAGE_6_ANIMATION_TEMPLATE.id).get();
+    const verifyDoc = await db.collection('prompt_templates').doc(STAGE_5_TEXT_STUDIO_TEMPLATE.id).get();
     if (verifyDoc.exists) {
       const data = verifyDoc.data();
       console.log('\n🔍 Verification:');
@@ -95,12 +95,12 @@ async function seedStage5AnimationPrompt() {
       });
     }
 
-    console.log('\n✨ Stage 5 Animation prompt seeding complete!\n');
+    console.log('\n✨ Stage 5 Text Studio prompt seeding complete!\n');
     process.exit(0);
   } catch (error) {
-    console.error('\n❌ Error seeding Stage 5 Animation prompt:', error);
+    console.error('\n❌ Error seeding Stage 5 Text Studio prompt:', error);
     process.exit(1);
   }
 }
 
-seedStage5AnimationPrompt();
+seedStage5TextPrompt();

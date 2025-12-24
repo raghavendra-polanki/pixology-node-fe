@@ -649,48 +649,67 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         return;
       }
 
-      // Add AI-suggested text overlays
+      // Log image analysis from AI
+      const imageAnalysis = result.data?.imageAnalysis;
+      if (imageAnalysis) {
+        console.log('[Stage5] AI Image Analysis:', imageAnalysis);
+      }
+
+      // Add ALL AI-suggested text overlays
       pushHistory();
 
       const newOverlays: TextOverlay[] = suggestions.map((suggestion: any, index: number) => {
         // Find matching preset
         const preset = TEXT_STYLE_PRESETS.find(p => p.id === suggestion.presetId) || TEXT_STYLE_PRESETS[0];
 
+        // Use AI-suggested fontSize or fall back to preset default
+        const fontSize = suggestion.fontSize || preset.style.fontSize;
+
         return {
           id: `ai-${Date.now()}-${index}`,
           text: suggestion.text || 'GAME DAY',
-          position: suggestion.position || { x: 50, y: 85 - (index * 10) },
-          style: { ...preset.style },
+          position: suggestion.position || { x: 50, y: 85 - (index * 15) },
+          style: {
+            ...preset.style,
+            fontSize, // Apply AI-recommended size
+          },
           aiGenerated: true,
           presetId: preset.id,
         };
       });
 
-      if (currentThemeId) {
-        // Add only the first suggestion (user can request more)
-        const firstOverlay = newOverlays[0];
+      if (currentThemeId && newOverlays.length > 0) {
+        // Add ALL suggestions to give user a complete starting point
         setImageOverlays(prev => ({
           ...prev,
           [currentThemeId]: {
             ...prev[currentThemeId],
-            overlays: [...(prev[currentThemeId]?.overlays || []), firstOverlay],
+            overlays: [...(prev[currentThemeId]?.overlays || []), ...newOverlays],
           },
         }));
-        setSelectedOverlayId(firstOverlay.id);
+        // Select the headline (first suggestion)
+        setSelectedOverlayId(newOverlays[0].id);
       }
 
       console.log('[Stage5] AI suggestions applied:', newOverlays.length);
+      console.log('[Stage5] Suggestions:', newOverlays.map(o => ({ text: o.text, preset: o.presetId, fontSize: o.style.fontSize })));
     } catch (error) {
       console.error('[Stage5] Failed to get AI suggestions:', error);
-      // Fallback on error
-      const suggestedPreset = TEXT_STYLE_PRESETS[0];
+      // Fallback on error - create context-aware defaults
+      const themeKeywords = (currentImage.themeName || '').toLowerCase();
+      const fallbackPresetId = themeKeywords.includes('ice') || themeKeywords.includes('cold') ? 'frozen-ice' :
+                               themeKeywords.includes('fire') || themeKeywords.includes('heat') ? 'fire-intensity' :
+                               themeKeywords.includes('rival') ? 'rivalry-clash' : 'broadcast-clean';
+
+      const fallbackPreset = TEXT_STYLE_PRESETS.find(p => p.id === fallbackPresetId) || TEXT_STYLE_PRESETS[0];
+
       const aiOverlay: TextOverlay = {
         id: `ai-${Date.now()}`,
-        text: currentImage.themeName || 'GAME DAY',
-        position: { x: 50, y: 85 },
-        style: { ...suggestedPreset.style },
+        text: currentImage.themeName?.toUpperCase() || 'GAME DAY',
+        position: { x: 50, y: 20 },
+        style: { ...fallbackPreset.style, fontSize: 96 },
         aiGenerated: true,
-        presetId: suggestedPreset.id,
+        presetId: fallbackPreset.id,
       };
 
       pushHistory();

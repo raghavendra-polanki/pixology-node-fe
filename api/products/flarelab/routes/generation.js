@@ -10,6 +10,7 @@
 
 import express from 'express';
 import AIAdaptorResolver from '../../../core/services/AIAdaptorResolver.js';
+import PromptManager from '../../../core/services/PromptManager.cjs';
 import { uploadBase64ImageToGCS } from '../../../core/services/gcsService.js';
 import ThemeStreamingService from '../services/ThemeStreamingService.cjs';
 import PlayerRecommendationService from '../services/PlayerRecommendationService.cjs';
@@ -684,8 +685,11 @@ router.post('/animations-stream', async (req, res) => {
  * POST /api/flarelab/generation/text-suggestions
  *
  * Stage 5 Text Studio: Get AI-powered text overlay suggestions
- * Analyzes the image and theme context to suggest appropriate text content
- * and style presets that match the visual mood.
+ * Uses vision/multimodal AI to analyze the actual image and suggest:
+ * - Text content (headlines, subtext, calls-to-action)
+ * - Optimal positions based on image composition
+ * - Font sizes based on visual hierarchy
+ * - Style presets matched to the image mood
  *
  * Request Body:
  * {
@@ -722,105 +726,132 @@ router.post('/text-suggestions', async (req, res) => {
     }
 
     console.log('[FlareLab Text Suggestions] Getting suggestions for:', themeName);
+    console.log('[FlareLab Text Suggestions] Analyzing image:', imageUrl.substring(0, 80) + '...');
 
-    // Get the text generation AI adaptor
-    const textAdaptor = await AIAdaptorResolver.getAdaptor('text-generation');
-    if (!textAdaptor) {
+    // Get the prompt template from database using PromptManager
+    const promptTemplate = await PromptManager.getPromptByCapability(
+      'stage_5_text',
+      'textGeneration',
+      projectId,
+      db
+    );
+
+    console.log('[FlareLab Text Suggestions] Loaded prompt template:', promptTemplate?.id || 'default');
+
+    // Get text generation adaptor with model config from prompt
+    const textAdaptor = await AIAdaptorResolver.resolveAdaptor(
+      projectId,
+      'stage_5_text',
+      'textGeneration',
+      db,
+      promptTemplate.modelConfig
+    );
+
+    if (!textAdaptor || !textAdaptor.adaptor) {
       throw new Error('Text generation adaptor not available');
     }
 
+    console.log(`[FlareLab Text Suggestions] Using adaptor: ${textAdaptor.adaptorId}/${textAdaptor.modelId}`);
+
     // Build context for AI
-    const playerNames = players.map(p => p.name).join(', ');
+    const playerNames = players.map(p => `${p.name} (#${p.number})`).join(', ');
     const contextPills = contextBrief.contextPills || [];
 
     // Determine mood/theme keywords for style matching
     const themeKeywords = extractThemeKeywords(themeName, themeDescription, themeCategory, contextPills);
 
-    const prompt = `You are a broadcast graphics designer creating text overlays for sports promotional images.
+    // Build prompt variables for template resolution
+    const variables = {
+      themeName: themeName || 'Sports Theme',
+      themeDescription: themeDescription || '',
+      themeCategory: themeCategory || 'general',
+      sportType: contextBrief.sportType || 'Hockey',
+      homeTeam: contextBrief.homeTeam?.name || contextBrief.homeTeam || 'Home Team',
+      awayTeam: contextBrief.awayTeam?.name || contextBrief.awayTeam || 'Away Team',
+      playerNames: playerNames || 'Team players',
+      contextPills: contextPills.join(', ') || 'Game day excitement',
+      campaignGoal: contextBrief.campaignGoal || 'Social Hype',
+    };
 
-IMAGE CONTEXT:
-- Theme Name: ${themeName}
-- Theme Description: ${themeDescription || 'Not provided'}
-- Category: ${themeCategory}
-- Sport: ${contextBrief.sportType || 'Hockey'}
-- Teams: ${contextBrief.homeTeam || 'Home Team'} vs ${contextBrief.awayTeam || 'Away Team'}
-- Players Featured: ${playerNames || 'Unknown'}
-- Context/Mood: ${contextPills.join(', ') || 'General sports'}
-- Campaign Goal: ${contextBrief.campaignGoal || 'Social Hype'}
+    // Resolve the prompt template with variables
+    const resolvedPrompt = PromptManager.resolvePrompt(promptTemplate, variables);
+    const fullPrompt = promptTemplate.systemPrompt
+      ? `${resolvedPrompt.systemPrompt}\n\n${resolvedPrompt.userPrompt}`
+      : resolvedPrompt.userPrompt;
 
-Based on this context, suggest 3 text overlay options. Each should include:
-1. The text content (short, impactful, uppercase preferred)
-2. A recommended style preset from this list based on the visual mood:
-   - "frozen-ice" or "arctic-blast" (for icy, cold, winter themes)
-   - "fire-intensity" or "inferno" (for hot, intense, fiery themes)
-   - "metallic-gold" (for championship, winning, premium themes)
-   - "chrome-steel" (for modern, tech, sleek themes)
-   - "bronze-glory" (for classic, heritage themes)
-   - "neon-electric" or "cyber-blue" or "toxic-green" (for energetic, nightlife themes)
-   - "broadcast-clean" or "sports-bold" or "headline-impact" (for professional broadcast look)
-   - "team-primary" (for team-focused messaging)
-   - "rivalry-clash" (for versus/rivalry matchups)
-   - "epic-cinematic" or "dark-knight" (for dramatic, movie-style looks)
+    console.log('[FlareLab Text Suggestions] Prompt resolved, sending with image for analysis...');
 
-3. Why this text and style works for the image
-
-Respond in JSON format:
-{
-  "suggestions": [
-    {
-      "id": "suggestion-1",
-      "text": "THE TEXT CONTENT",
-      "presetId": "preset-id-from-list",
-      "position": { "x": 50, "y": 85 },
-      "reasoning": "Why this works"
-    }
-  ],
-  "imageAnalysis": "Brief analysis of the image mood and visual elements"
-}`;
-
-    const response = await textAdaptor.generateText({
-      prompt,
-      temperature: 0.7,
-      maxTokens: 1000,
+    // Send the prompt WITH the image for visual analysis
+    const response = await textAdaptor.adaptor.generateText(fullPrompt, {
+      referenceImageUrl: imageUrl,
       responseFormat: 'json',
     });
 
+    console.log('[FlareLab Text Suggestions] Raw response received');
+
     // Parse the response
-    let suggestions;
+    let result;
     try {
-      // Handle both string and object responses
       const responseText = typeof response === 'string' ? response : response.text || JSON.stringify(response);
-      // Extract JSON from response
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        suggestions = JSON.parse(jsonMatch[0]);
+      // Extract JSON from response (handle markdown code blocks)
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)```/) ||
+                        responseText.match(/```\s*([\s\S]*?)```/) ||
+                        [null, responseText];
+      const jsonText = jsonMatch[1] || responseText;
+      const cleanJson = jsonText.match(/\{[\s\S]*\}/);
+      if (cleanJson) {
+        result = JSON.parse(cleanJson[0]);
       } else {
         throw new Error('No JSON found in response');
       }
     } catch (parseError) {
       console.error('[FlareLab Text Suggestions] Parse error:', parseError);
-      // Return default suggestions if parsing fails
-      suggestions = {
+      console.error('[FlareLab Text Suggestions] Raw response:', response);
+
+      // Create intelligent fallback based on theme
+      const fallbackPreset = themeKeywords.includes('ice') || themeKeywords.includes('cold') ? 'frozen-ice' :
+                            themeKeywords.includes('fire') || themeKeywords.includes('heat') ? 'fire-intensity' :
+                            themeKeywords.includes('rivalry') ? 'rivalry-clash' :
+                            themeKeywords.includes('playoff') ? 'metallic-gold' : 'broadcast-clean';
+
+      result = {
+        imageAnalysis: {
+          composition: 'Unable to analyze - using context-based suggestions',
+          colorPalette: 'Unknown',
+          mood: contextPills.join(', ') || 'Sports excitement',
+          bestTextAreas: 'Bottom third recommended'
+        },
         suggestions: [
           {
-            id: 'suggestion-1',
-            text: themeName?.toUpperCase() || 'GAME DAY',
-            presetId: 'broadcast-clean',
+            id: 'headline',
+            purpose: 'Primary headline',
+            text: themeName?.toUpperCase() || 'GAME ON',
+            presetId: fallbackPreset,
+            position: { x: 50, y: 20 },
+            fontSize: 96,
+            reasoning: 'Fallback: Using theme name as headline with style matched to context',
+          },
+          {
+            id: 'subtext',
+            purpose: 'Supporting text',
+            text: `${contextBrief.homeTeam?.name || 'HOME'} VS ${contextBrief.awayTeam?.name || 'AWAY'}`.toUpperCase(),
+            presetId: 'sports-bold',
             position: { x: 50, y: 85 },
-            reasoning: 'Default suggestion based on theme name',
+            fontSize: 48,
+            reasoning: 'Fallback: Team matchup in lower third',
           },
         ],
-        imageAnalysis: 'Unable to analyze image',
       };
     }
 
-    console.log('[FlareLab Text Suggestions] Generated suggestions:', suggestions.suggestions?.length || 0);
+    console.log('[FlareLab Text Suggestions] Generated', result.suggestions?.length || 0, 'suggestions');
+    console.log('[FlareLab Text Suggestions] Image analysis:', result.imageAnalysis?.mood || 'N/A');
 
     return res.json({
       success: true,
       data: {
-        suggestions: suggestions.suggestions || [],
-        imageAnalysis: suggestions.imageAnalysis || '',
+        suggestions: result.suggestions || [],
+        imageAnalysis: result.imageAnalysis || {},
         themeKeywords,
       },
     });
