@@ -3,12 +3,14 @@ import { OAuth2Client } from 'google-auth-library';
 import {
   saveProject,
   getUserProjects,
+  getAllProjects,
   getProject,
   deleteProject,
   getProjectMembers,
   addProjectMember,
   removeProjectMember,
   updateProjectMember,
+  getUser,
 } from '../../../core/utils/firestoreUtils.js';
 
 const router = express.Router();
@@ -93,14 +95,39 @@ const verifyToken = async (req, res, next) => {
 router.get('/', verifyToken, async (req, res) => {
   try {
     const db = req.db; // From productContext middleware
-    const projects = await getUserProjects(req.userId, db);
 
-    // Include member info for each project and serialize dates
+    // Check if user is a Super User
+    const currentUser = await getUser(req.userId); // Uses StoryLab db where users are stored
+    const isSuperUser = currentUser?.role === 'Super User';
+
+    // Fetch projects based on user role
+    const projects = isSuperUser
+      ? await getAllProjects(db)
+      : await getUserProjects(req.userId, db);
+
+    // Fetch owner names for all unique owner IDs
+    const ownerIds = [...new Set(projects.map(p => p.ownerId).filter(Boolean))];
+    const ownerMap = {};
+    await Promise.all(
+      ownerIds.map(async (ownerId) => {
+        try {
+          const user = await getUser(ownerId); // Uses StoryLab db where users are stored
+          if (user) {
+            ownerMap[ownerId] = user.name || user.email || 'Unknown';
+          }
+        } catch (err) {
+          console.warn(`[FlareLab] Failed to fetch owner ${ownerId}:`, err.message);
+        }
+      })
+    );
+
+    // Include member info, owner name for each project and serialize dates
     const projectsWithMemberInfo = projects.map((project) =>
       serializeFirestoreDates({
         ...project,
         userRole: project.members?.[req.userId] || 'viewer',
         isOwner: project.ownerId === req.userId,
+        ownerName: ownerMap[project.ownerId] || null,
       })
     );
 
@@ -110,7 +137,7 @@ router.get('/', verifyToken, async (req, res) => {
       projects: projectsWithMemberInfo,
     });
   } catch (error) {
-    console.error('[GameLab] Error fetching projects:', error);
+    console.error('[FlareLab] Error fetching projects:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch projects',
@@ -136,8 +163,13 @@ router.get('/:projectId', verifyToken, async (req, res) => {
       });
     }
 
-    // Check if user has access
+    // Check if user is a Super User
+    const currentUser = await getUser(req.userId);
+    const isSuperUser = currentUser?.role === 'Super User';
+
+    // Check if user has access (Super Users can access any project)
     const hasAccess =
+      isSuperUser ||
       project.ownerId === req.userId ||
       (project.members && project.members[req.userId]);
 
@@ -148,9 +180,27 @@ router.get('/:projectId', verifyToken, async (req, res) => {
       });
     }
 
+    // Fetch owner name
+    let ownerName = null;
+    if (project.ownerId) {
+      try {
+        const owner = await getUser(project.ownerId);
+        if (owner) {
+          ownerName = owner.name || owner.email || 'Unknown';
+        }
+      } catch (err) {
+        console.warn(`[FlareLab] Failed to fetch owner ${project.ownerId}:`, err.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      project: serializeFirestoreDates(project),
+      project: serializeFirestoreDates({
+        ...project,
+        userRole: isSuperUser ? 'super_user' : project.members?.[req.userId] || 'viewer',
+        isSuperUser,
+        ownerName,
+      }),
     });
   } catch (error) {
     console.error('[GameLab] Error fetching project:', error);

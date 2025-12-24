@@ -70,5 +70,6 @@ export interface Project {
   status: 'draft' | 'complete' | 'generating';
   currentStage: number;
   createdAt: string;
+  ownerName?: string;
   data: WorkflowData;
 }

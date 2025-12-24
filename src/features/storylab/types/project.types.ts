@@ -329,6 +329,7 @@ export interface StoryLabProject {
   name: string;
   description?: string;
   ownerId: string;
+  ownerName?: string;
   members?: Record<string, 'owner' | 'editor' | 'viewer'>;
   createdAt: Date;
   updatedAt: Date;

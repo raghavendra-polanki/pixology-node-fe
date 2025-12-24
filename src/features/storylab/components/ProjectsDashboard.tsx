@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut } from 'lucide-react';
+import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut, User } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -166,9 +166,15 @@ export function ProjectsDashboard({
                         <h3 className="text-white mb-2 group-hover:text-blue-400 transition-colors">
                           {project.name}
                         </h3>
-                        <p className="text-gray-500">
+                        <p className="text-gray-500 text-sm">
                           Created {new Date(project.createdAt).toLocaleDateString()}
                         </p>
+                        {project.ownerName && (
+                          <p className="text-gray-500 text-sm flex items-center gap-1 mt-1">
+                            <User className="w-3 h-3" />
+                            {project.ownerName}
+                          </p>
+                        )}
                       </div>
                       {/* Menu Button */}
                       <div className="relative ml-4">

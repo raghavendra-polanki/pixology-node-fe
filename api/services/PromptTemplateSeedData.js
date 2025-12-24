@@ -12,11 +12,11 @@ import {
   STAGE_6_VIDEO_TEMPLATE,
 } from '../products/storylab/prompts/seedData.js';
 
-// Import GameLab prompts
+// Import FlareLab prompts
 import {
   STAGE_2_THEME_GENERATION_TEMPLATE,
   STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
-} from '../products/gamelab/prompts/seedData.js';
+} from '../products/flarelab/prompts/seedData.js';
 
 // Combine all prompt templates
 export const ALL_PROMPT_TEMPLATES = [

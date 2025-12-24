@@ -123,6 +123,29 @@ export const saveProject = async (projectData, database, projectId) => {
 };
 
 /**
+ * Get all projects (for super users)
+ * @param {object} [database] - Optional database instance (defaults to global db)
+ * @returns {Promise<array>} Array of all projects
+ */
+export const getAllProjects = async (database) => {
+  try {
+    const dbInstance = database || db;
+    const snapshot = await dbInstance
+      .collection('projects')
+      .orderBy('updatedAt', 'desc')
+      .get();
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Error fetching all projects:', error);
+    throw error;
+  }
+};
+
+/**
  * Get all projects accessible to a user (owned or member of)
  * Note: Uses client-side filtering due to Firestore limitations with nested field queries
  * In production, consider using a separate members collection or array structure

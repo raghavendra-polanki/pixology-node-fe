@@ -3,15 +3,49 @@ import { OAuth2Client } from 'google-auth-library';
 import {
   saveProject,
   getUserProjects,
+  getAllProjects,
   getProject,
   deleteProject,
   getProjectMembers,
   addProjectMember,
   removeProjectMember,
   updateProjectMember,
+  getUser,
 } from '../../../core/utils/firestoreUtils.js';
 
 const router = express.Router();
+
+/**
+ * Helper function to convert Firestore Timestamps to ISO strings
+ * Recursively processes objects and arrays
+ */
+const serializeFirestoreDates = (obj) => {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => serializeFirestoreDates(item));
+  }
+
+  // Handle Firestore Timestamp objects
+  if (obj._seconds !== undefined && obj._nanoseconds !== undefined) {
+    return new Date(obj._seconds * 1000 + obj._nanoseconds / 1000000).toISOString();
+  }
+
+  // Handle Date objects
+  if (obj instanceof Date || obj.toDate) {
+    return obj.toDate ? obj.toDate().toISOString() : obj.toISOString();
+  }
+
+  // Recursively process object properties
+  const serialized = {};
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      serialized[key] = serializeFirestoreDates(obj[key]);
+    }
+  }
+  return serialized;
+};
 
 // Initialize Google OAuth2 Client
 const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
@@ -60,14 +94,40 @@ const verifyToken = async (req, res, next) => {
  */
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const projects = await getUserProjects(req.userId);
+    // Check if user is a Super User
+    const currentUser = await getUser(req.userId);
+    const isSuperUser = currentUser?.role === 'Super User';
 
-    // Include member info for each project
-    const projectsWithMemberInfo = projects.map((project) => ({
-      ...project,
-      userRole: project.members?.[req.userId] || 'viewer',
-      isOwner: project.ownerId === req.userId,
-    }));
+    // Fetch projects based on user role
+    const projects = isSuperUser
+      ? await getAllProjects()
+      : await getUserProjects(req.userId);
+
+    // Fetch owner names for all unique owner IDs
+    const ownerIds = [...new Set(projects.map(p => p.ownerId).filter(Boolean))];
+    const ownerMap = {};
+    await Promise.all(
+      ownerIds.map(async (ownerId) => {
+        try {
+          const user = await getUser(ownerId);
+          if (user) {
+            ownerMap[ownerId] = user.name || user.email || 'Unknown';
+          }
+        } catch (err) {
+          console.warn(`[StoryLab] Failed to fetch owner ${ownerId}:`, err.message);
+        }
+      })
+    );
+
+    // Include member info and owner name for each project, serialize dates
+    const projectsWithMemberInfo = projects.map((project) =>
+      serializeFirestoreDates({
+        ...project,
+        userRole: project.members?.[req.userId] || 'viewer',
+        isOwner: project.ownerId === req.userId,
+        ownerName: ownerMap[project.ownerId] || null,
+      })
+    );
 
     return res.status(200).json({
       success: true,
@@ -100,20 +160,40 @@ router.get('/:projectId', verifyToken, async (req, res) => {
       });
     }
 
-    // Check if user has access to this project
-    if (!project.members || !project.members[req.userId]) {
+    // Check if user is a Super User
+    const currentUser = await getUser(req.userId);
+    const isSuperUser = currentUser?.role === 'Super User';
+
+    // Check if user has access to this project (Super Users can access any project)
+    const hasAccess = isSuperUser || (project.members && project.members[req.userId]);
+    if (!hasAccess) {
       return res.status(403).json({
         success: false,
         error: 'You do not have access to this project',
       });
     }
 
-    // Include member info
-    const projectWithMemberInfo = {
+    // Fetch owner name
+    let ownerName = null;
+    if (project.ownerId) {
+      try {
+        const owner = await getUser(project.ownerId);
+        if (owner) {
+          ownerName = owner.name || owner.email || 'Unknown';
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch owner ${project.ownerId}:`, err.message);
+      }
+    }
+
+    // Include member info and owner name, serialize dates
+    const projectWithMemberInfo = serializeFirestoreDates({
       ...project,
-      userRole: project.members[req.userId],
+      userRole: isSuperUser ? 'super_user' : project.members?.[req.userId] || 'viewer',
       isOwner: project.ownerId === req.userId,
-    };
+      isSuperUser,
+      ownerName,
+    });
 
     return res.status(200).json({
       success: true,
@@ -228,12 +308,12 @@ router.post('/', verifyToken, async (req, res) => {
       success: true,
       message: 'Project created successfully',
       projectId,
-      project: {
+      project: serializeFirestoreDates({
         id: projectId,
         ...projectData,
         createdAt: new Date(),
         updatedAt: new Date(),
-      },
+      }),
     });
   } catch (error) {
     console.error('Error creating project:', error);
@@ -349,7 +429,7 @@ router.put('/:projectId', verifyToken, async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Project updated successfully',
-      project: updatedProjectData,
+      project: serializeFirestoreDates(updatedProjectData),
     });
   } catch (error) {
     console.error('Error updating project:', error);

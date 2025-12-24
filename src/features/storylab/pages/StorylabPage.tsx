@@ -83,6 +83,7 @@ export const StorylabPage = () => {
           // currentStageIndex is 0-based, so add 1 for display (Stage 1-6)
           currentStage: (apiProject.currentStageIndex || 0) + 1,
           createdAt: createdAtStr,
+          ownerName: apiProject.ownerName,
           data: {
             campaignDetails: apiProject.campaignDetails,
             personas: [],

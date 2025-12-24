@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Folder, Clock, Trash2, LogOut, RefreshCw, MoreVertical, Zap } from 'lucide-react';
+import { Plus, Folder, Clock, Trash2, LogOut, RefreshCw, MoreVertical, Zap, User } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import {
@@ -122,9 +122,15 @@ export const ProjectsDashboard = ({
                       <h3 className="text-white mb-2 group-hover:text-orange-400 transition-colors">
                         {project.name}
                       </h3>
-                      <p className="text-gray-500">
+                      <p className="text-gray-500 text-sm">
                         Created {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
                       </p>
+                      {project.ownerName && (
+                        <p className="text-gray-500 text-sm flex items-center gap-1 mt-1">
+                          <User className="w-3 h-3" />
+                          {project.ownerName}
+                        </p>
+                      )}
                     </div>
                     {/* Menu Button */}
                     <div className="relative ml-4">
