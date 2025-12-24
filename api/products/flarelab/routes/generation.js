@@ -679,4 +679,202 @@ router.post('/animations-stream', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/flarelab/generation/text-suggestions
+ *
+ * Stage 5 Text Studio: Get AI-powered text overlay suggestions
+ * Analyzes the image and theme context to suggest appropriate text content
+ * and style presets that match the visual mood.
+ *
+ * Request Body:
+ * {
+ *   projectId: string,
+ *   imageUrl: string,
+ *   themeId: string,
+ *   themeName: string,
+ *   themeDescription: string,
+ *   themeCategory: string,
+ *   players: Array<{ name, number, position }>,
+ *   contextBrief: { sportType, homeTeam, awayTeam, contextPills, campaignGoal }
+ * }
+ */
+router.post('/text-suggestions', async (req, res) => {
+  const {
+    projectId,
+    imageUrl,
+    themeId,
+    themeName,
+    themeDescription,
+    themeCategory,
+    players = [],
+    contextBrief = {},
+  } = req.body;
+
+  try {
+    const db = req.db;
+    if (!db) {
+      return res.status(500).json({ error: 'Database configuration error' });
+    }
+
+    if (!projectId || !imageUrl) {
+      return res.status(400).json({ error: 'Project ID and image URL are required' });
+    }
+
+    console.log('[FlareLab Text Suggestions] Getting suggestions for:', themeName);
+
+    // Get the text generation AI adaptor
+    const textAdaptor = await AIAdaptorResolver.getAdaptor('text-generation');
+    if (!textAdaptor) {
+      throw new Error('Text generation adaptor not available');
+    }
+
+    // Build context for AI
+    const playerNames = players.map(p => p.name).join(', ');
+    const contextPills = contextBrief.contextPills || [];
+
+    // Determine mood/theme keywords for style matching
+    const themeKeywords = extractThemeKeywords(themeName, themeDescription, themeCategory, contextPills);
+
+    const prompt = `You are a broadcast graphics designer creating text overlays for sports promotional images.
+
+IMAGE CONTEXT:
+- Theme Name: ${themeName}
+- Theme Description: ${themeDescription || 'Not provided'}
+- Category: ${themeCategory}
+- Sport: ${contextBrief.sportType || 'Hockey'}
+- Teams: ${contextBrief.homeTeam || 'Home Team'} vs ${contextBrief.awayTeam || 'Away Team'}
+- Players Featured: ${playerNames || 'Unknown'}
+- Context/Mood: ${contextPills.join(', ') || 'General sports'}
+- Campaign Goal: ${contextBrief.campaignGoal || 'Social Hype'}
+
+Based on this context, suggest 3 text overlay options. Each should include:
+1. The text content (short, impactful, uppercase preferred)
+2. A recommended style preset from this list based on the visual mood:
+   - "frozen-ice" or "arctic-blast" (for icy, cold, winter themes)
+   - "fire-intensity" or "inferno" (for hot, intense, fiery themes)
+   - "metallic-gold" (for championship, winning, premium themes)
+   - "chrome-steel" (for modern, tech, sleek themes)
+   - "bronze-glory" (for classic, heritage themes)
+   - "neon-electric" or "cyber-blue" or "toxic-green" (for energetic, nightlife themes)
+   - "broadcast-clean" or "sports-bold" or "headline-impact" (for professional broadcast look)
+   - "team-primary" (for team-focused messaging)
+   - "rivalry-clash" (for versus/rivalry matchups)
+   - "epic-cinematic" or "dark-knight" (for dramatic, movie-style looks)
+
+3. Why this text and style works for the image
+
+Respond in JSON format:
+{
+  "suggestions": [
+    {
+      "id": "suggestion-1",
+      "text": "THE TEXT CONTENT",
+      "presetId": "preset-id-from-list",
+      "position": { "x": 50, "y": 85 },
+      "reasoning": "Why this works"
+    }
+  ],
+  "imageAnalysis": "Brief analysis of the image mood and visual elements"
+}`;
+
+    const response = await textAdaptor.generateText({
+      prompt,
+      temperature: 0.7,
+      maxTokens: 1000,
+      responseFormat: 'json',
+    });
+
+    // Parse the response
+    let suggestions;
+    try {
+      // Handle both string and object responses
+      const responseText = typeof response === 'string' ? response : response.text || JSON.stringify(response);
+      // Extract JSON from response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        suggestions = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found in response');
+      }
+    } catch (parseError) {
+      console.error('[FlareLab Text Suggestions] Parse error:', parseError);
+      // Return default suggestions if parsing fails
+      suggestions = {
+        suggestions: [
+          {
+            id: 'suggestion-1',
+            text: themeName?.toUpperCase() || 'GAME DAY',
+            presetId: 'broadcast-clean',
+            position: { x: 50, y: 85 },
+            reasoning: 'Default suggestion based on theme name',
+          },
+        ],
+        imageAnalysis: 'Unable to analyze image',
+      };
+    }
+
+    console.log('[FlareLab Text Suggestions] Generated suggestions:', suggestions.suggestions?.length || 0);
+
+    return res.json({
+      success: true,
+      data: {
+        suggestions: suggestions.suggestions || [],
+        imageAnalysis: suggestions.imageAnalysis || '',
+        themeKeywords,
+      },
+    });
+  } catch (error) {
+    console.error('[FlareLab Text Suggestions] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to get text suggestions',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * Helper: Extract keywords from theme for style matching
+ */
+function extractThemeKeywords(themeName, description, category, contextPills) {
+  const keywords = new Set();
+
+  // Extract from theme name
+  const nameWords = (themeName || '').toLowerCase().split(/[\s-_]+/);
+  nameWords.forEach(word => {
+    if (word.length > 2) keywords.add(word);
+  });
+
+  // Extract from description
+  const descWords = (description || '').toLowerCase().split(/[\s-_]+/);
+  descWords.forEach(word => {
+    if (word.length > 3) keywords.add(word);
+  });
+
+  // Add category
+  if (category) keywords.add(category.toLowerCase());
+
+  // Add context pills
+  contextPills.forEach(pill => {
+    keywords.add(pill.toLowerCase());
+  });
+
+  // Common theme mappings
+  const themeMap = {
+    ice: ['frozen', 'cold', 'winter', 'arctic', 'frost', 'avalanche', 'chill'],
+    fire: ['hot', 'flame', 'blaze', 'heat', 'inferno', 'burn', 'intensity'],
+    rivalry: ['versus', 'vs', 'clash', 'battle', 'showdown', 'matchup'],
+    championship: ['winner', 'champion', 'gold', 'trophy', 'victory'],
+    playoff: ['elimination', 'finals', 'intense', 'crucial'],
+  };
+
+  // Add related keywords based on matches
+  Object.entries(themeMap).forEach(([theme, related]) => {
+    if (related.some(r => keywords.has(r))) {
+      keywords.add(theme);
+    }
+  });
+
+  return Array.from(keywords);
+}
+
 export default router;

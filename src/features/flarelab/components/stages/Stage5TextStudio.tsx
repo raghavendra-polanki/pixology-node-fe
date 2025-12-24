@@ -522,13 +522,105 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
     setIsLoadingAISuggestions(true);
     try {
-      // TODO: Call backend API for AI suggestions
       console.log('[Stage5] Getting AI suggestions for image:', currentThemeId);
 
-      // For now, add a placeholder AI-generated text
+      // Get theme description from Stage 2 concept gallery
+      const selectedTheme = project.conceptGallery?.selectedThemes?.find(
+        (t: any) => t.id === currentThemeId
+      );
+      const themeDescription = selectedTheme?.description || '';
+
+      // Call backend API for AI suggestions
+      const response = await fetch('/api/flarelab/generation/text-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          imageUrl: currentImage.url,
+          themeId: currentThemeId,
+          themeName: currentImage.themeName,
+          themeDescription,
+          themeCategory: currentImage.themeCategory,
+          players: currentImage.players || [],
+          contextBrief: {
+            sportType: project.contextBrief?.sportType || 'Hockey',
+            homeTeam: project.contextBrief?.homeTeam,
+            awayTeam: project.contextBrief?.awayTeam,
+            contextPills: project.contextBrief?.contextPills || [],
+            campaignGoal: project.contextBrief?.campaignGoal || 'Social Hype',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI suggestions');
+      }
+
+      const result = await response.json();
+      const suggestions = result.data?.suggestions || [];
+
+      if (suggestions.length === 0) {
+        console.log('[Stage5] No AI suggestions returned, using fallback');
+        // Fallback to default suggestion
+        const suggestedPreset = TEXT_STYLE_PRESETS[0];
+        const aiOverlay: TextOverlay = {
+          id: `ai-${Date.now()}`,
+          text: currentImage.themeName || 'GAME DAY',
+          position: { x: 50, y: 85 },
+          style: { ...suggestedPreset.style },
+          aiGenerated: true,
+          presetId: suggestedPreset.id,
+        };
+
+        pushHistory();
+        if (currentThemeId) {
+          setImageOverlays(prev => ({
+            ...prev,
+            [currentThemeId]: {
+              ...prev[currentThemeId],
+              overlays: [...(prev[currentThemeId]?.overlays || []), aiOverlay],
+            },
+          }));
+          setSelectedOverlayId(aiOverlay.id);
+        }
+        return;
+      }
+
+      // Add AI-suggested text overlays
       pushHistory();
 
-      const suggestedPreset = TEXT_STYLE_PRESETS[0]; // Use first preset as default
+      const newOverlays: TextOverlay[] = suggestions.map((suggestion: any, index: number) => {
+        // Find matching preset
+        const preset = TEXT_STYLE_PRESETS.find(p => p.id === suggestion.presetId) || TEXT_STYLE_PRESETS[0];
+
+        return {
+          id: `ai-${Date.now()}-${index}`,
+          text: suggestion.text || 'GAME DAY',
+          position: suggestion.position || { x: 50, y: 85 - (index * 10) },
+          style: { ...preset.style },
+          aiGenerated: true,
+          presetId: preset.id,
+        };
+      });
+
+      if (currentThemeId) {
+        // Add only the first suggestion (user can request more)
+        const firstOverlay = newOverlays[0];
+        setImageOverlays(prev => ({
+          ...prev,
+          [currentThemeId]: {
+            ...prev[currentThemeId],
+            overlays: [...(prev[currentThemeId]?.overlays || []), firstOverlay],
+          },
+        }));
+        setSelectedOverlayId(firstOverlay.id);
+      }
+
+      console.log('[Stage5] AI suggestions applied:', newOverlays.length);
+    } catch (error) {
+      console.error('[Stage5] Failed to get AI suggestions:', error);
+      // Fallback on error
+      const suggestedPreset = TEXT_STYLE_PRESETS[0];
       const aiOverlay: TextOverlay = {
         id: `ai-${Date.now()}`,
         text: currentImage.themeName || 'GAME DAY',
@@ -538,6 +630,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         presetId: suggestedPreset.id,
       };
 
+      pushHistory();
       if (currentThemeId) {
         setImageOverlays(prev => ({
           ...prev,
@@ -548,8 +641,6 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         }));
         setSelectedOverlayId(aiOverlay.id);
       }
-    } catch (error) {
-      console.error('[Stage5] Failed to get AI suggestions:', error);
     } finally {
       setIsLoadingAISuggestions(false);
     }
