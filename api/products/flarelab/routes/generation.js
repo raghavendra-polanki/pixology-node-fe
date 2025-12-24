@@ -10,6 +10,7 @@
 
 import express from 'express';
 import AIAdaptorResolver from '../../../core/services/AIAdaptorResolver.js';
+import { uploadBase64ImageToGCS } from '../../../core/services/gcsService.js';
 import ThemeStreamingService from '../services/ThemeStreamingService.cjs';
 import PlayerRecommendationService from '../services/PlayerRecommendationService.cjs';
 import PlayerImageGenerationService from '../services/PlayerImageGenerationService.cjs';
@@ -827,6 +828,51 @@ Respond in JSON format:
     console.error('[FlareLab Text Suggestions] Error:', error);
     return res.status(500).json({
       error: 'Failed to get text suggestions',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/flarelab/generation/upload-composited
+ *
+ * Stage 5 Text Studio: Upload a client-side composited image (with text overlays)
+ *
+ * Request Body:
+ * {
+ *   projectId: string,
+ *   themeId: string,
+ *   imageData: string (base64 data URL)
+ * }
+ */
+router.post('/upload-composited', async (req, res) => {
+  const { projectId, themeId, imageData } = req.body;
+
+  try {
+    if (!projectId || !themeId || !imageData) {
+      return res.status(400).json({
+        error: 'Missing required parameters: projectId, themeId, imageData',
+      });
+    }
+
+    console.log('[FlareLab Composited Upload] Uploading for theme:', themeId);
+
+    // Upload the base64 image to GCS
+    const publicUrl = await uploadBase64ImageToGCS(imageData, projectId, themeId, 'composited');
+
+    console.log('[FlareLab Composited Upload] Uploaded:', publicUrl);
+
+    return res.json({
+      success: true,
+      data: {
+        url: publicUrl,
+        themeId,
+      },
+    });
+  } catch (error) {
+    console.error('[FlareLab Composited Upload] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to upload composited image',
       message: error.message,
     });
   }

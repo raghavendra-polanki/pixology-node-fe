@@ -407,3 +407,54 @@ export async function uploadTeamPlayerAsset(imageBuffer, assetType, entityId, fi
     throw new Error(`Failed to upload ${assetType} to GCS: ${error.message}`);
   }
 }
+
+/**
+ * Upload a base64 data URL image to GCS
+ * Used for client-side composited images from Text Studio
+ */
+export async function uploadBase64ImageToGCS(base64DataUrl, projectId, themeId, assetType = 'composited') {
+  try {
+    // Validate inputs
+    if (!base64DataUrl || !projectId || !themeId) {
+      throw new Error('Missing required parameters: base64DataUrl, projectId, themeId');
+    }
+
+    // Extract the base64 data from the data URL
+    const matches = base64DataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error('Invalid base64 data URL format');
+    }
+
+    const imageFormat = matches[1]; // png, jpeg, etc.
+    const base64Data = matches[2];
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+
+    const bucket = storage.bucket(bucketName);
+
+    // Create unique filename
+    const timestamp = Date.now();
+    const uniqueId = uuidv4().substring(0, 8);
+    const filename = `flarelab/${projectId}/${assetType}/${themeId}-${timestamp}-${uniqueId}.${imageFormat}`;
+
+    // Create file object
+    const file = bucket.file(filename);
+
+    // Upload the image
+    await file.save(imageBuffer, {
+      metadata: {
+        contentType: `image/${imageFormat}`,
+        cacheControl: 'public, max-age=86400', // Cache for 24 hours
+      },
+    });
+
+    // Generate the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
+
+    console.log(`Successfully uploaded ${assetType} image to GCS: ${publicUrl}`);
+
+    return publicUrl;
+  } catch (error) {
+    console.error(`Error uploading ${assetType} image to GCS:`, error);
+    throw new Error(`Failed to upload ${assetType} image to GCS: ${error.message}`);
+  }
+}

@@ -36,17 +36,29 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
     const selectedImageIds = project.textStudio?.selectedForExport || project.highFidelityCapture?.selectedForExport || [];
     const allImages = project.highFidelityCapture?.generatedImages || [];
 
+    // Get composited images from Text Studio (images with text overlays baked in)
+    const compositedImages = project.textStudio?.compositedImages || [];
+    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
+
     selectedImageIds.forEach(themeId => {
       const image = allImages.find((img: GeneratedImage) => img.themeId === themeId);
       if (image) {
+        // Use composited URL if available
+        const compositedUrl = compositedMap.get(themeId);
+        const finalUrl = compositedUrl || image.url;
+
         items.push({
           id: `image-${themeId}`,
           type: 'image',
           name: image.themeName || 'Image',
-          url: image.url,
+          url: finalUrl,
           thumbnailUrl: image.thumbnailUrl || image.url,
           themeCategory: image.themeCategory,
         });
+
+        if (compositedUrl) {
+          console.log(`[Stage7] Using composited image for export: ${themeId}`);
+        }
       }
     });
 

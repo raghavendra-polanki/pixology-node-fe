@@ -239,9 +239,21 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
     const selectedForAnimation = project.textStudio?.selectedForAnimation || project.highFidelityCapture?.selectedForAnimation || [];
     const allImages = project.highFidelityCapture?.generatedImages || [];
 
-    const animationImages = allImages.filter((img: GeneratedImage) =>
-      selectedForAnimation.includes(img.themeId || '')
-    );
+    // Get composited images from Text Studio (images with text overlays baked in)
+    const compositedImages = project.textStudio?.compositedImages || [];
+    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
+
+    // Filter and map images, using composited URL if available
+    const animationImages = allImages
+      .filter((img: GeneratedImage) => selectedForAnimation.includes(img.themeId || ''))
+      .map((img: GeneratedImage) => {
+        const compositedUrl = compositedMap.get(img.themeId);
+        if (compositedUrl && compositedUrl !== img.url) {
+          console.log(`[Stage6] Using composited image for theme ${img.themeId}`);
+          return { ...img, url: compositedUrl, originalUrl: img.url };
+        }
+        return img;
+      });
 
     setImagesToAnimate(animationImages);
 

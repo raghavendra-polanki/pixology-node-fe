@@ -700,16 +700,168 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }
   };
 
+  // Rasterize image with text overlays
+  const rasterizeImage = async (
+    image: GeneratedImage,
+    overlays: TextOverlay[]
+  ): Promise<string | null> => {
+    if (!overlays || overlays.length === 0) {
+      // No overlays, return original image
+      return image.url;
+    }
+
+    try {
+      // Create offscreen canvas for compositing
+      const offscreenCanvas = document.createElement('canvas');
+      const ctx = offscreenCanvas.getContext('2d');
+      if (!ctx) return image.url;
+
+      // Load the original image
+      const imgElement = new Image();
+      imgElement.crossOrigin = 'anonymous';
+
+      await new Promise<void>((resolve, reject) => {
+        imgElement.onload = () => resolve();
+        imgElement.onerror = () => reject(new Error('Failed to load image'));
+        imgElement.src = image.url;
+      });
+
+      // Set canvas to image dimensions
+      offscreenCanvas.width = imgElement.naturalWidth;
+      offscreenCanvas.height = imgElement.naturalHeight;
+
+      // Draw the background image
+      ctx.drawImage(imgElement, 0, 0);
+
+      // Draw each text overlay
+      for (const overlay of overlays) {
+        const style = overlay.style;
+
+        // Calculate position based on percentage
+        const x = (overlay.position.x / 100) * offscreenCanvas.width;
+        const y = (overlay.position.y / 100) * offscreenCanvas.height;
+
+        // Scale font size proportionally to image size (base 1920px width)
+        const scaleFactor = offscreenCanvas.width / 1920;
+        const scaledFontSize = style.fontSize * scaleFactor;
+
+        // Set text properties
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (style.rotation) {
+          ctx.rotate((style.rotation * Math.PI) / 180);
+        }
+
+        // Font setup
+        const fontWeight = style.fontWeight || 700;
+        ctx.font = `${fontWeight} ${scaledFontSize}px "${style.fontFamily}"`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Apply text transform
+        let text = overlay.text;
+        if (style.textTransform === 'uppercase') text = text.toUpperCase();
+        else if (style.textTransform === 'lowercase') text = text.toLowerCase();
+
+        // Shadow/glow
+        if (style.shadowColor || style.glowColor) {
+          ctx.shadowColor = style.glowColor || style.shadowColor || 'rgba(0,0,0,0.5)';
+          ctx.shadowBlur = (style.glowBlur || style.shadowBlur || 10) * scaleFactor;
+          ctx.shadowOffsetX = (style.shadowOffsetX || 0) * scaleFactor;
+          ctx.shadowOffsetY = (style.shadowOffsetY || 0) * scaleFactor;
+        }
+
+        // Stroke
+        if (style.strokeColor && style.strokeWidth) {
+          ctx.strokeStyle = style.strokeColor;
+          ctx.lineWidth = style.strokeWidth * scaleFactor;
+          ctx.strokeText(text, 0, 0);
+        }
+
+        // Fill - handle gradient or solid
+        if (style.fillType === 'gradient' && style.gradient) {
+          const gradient = ctx.createLinearGradient(
+            0, -scaledFontSize / 2,
+            0, scaledFontSize / 2
+          );
+          style.gradient.stops.forEach(stop => {
+            gradient.addColorStop(stop.offset, stop.color);
+          });
+          ctx.fillStyle = gradient;
+        } else {
+          ctx.fillStyle = style.fillColor || '#FFFFFF';
+        }
+
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+      }
+
+      // Export as data URL
+      const dataUrl = offscreenCanvas.toDataURL('image/png', 1.0);
+
+      // Upload to backend
+      const response = await fetch('/api/flarelab/generation/upload-composited', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project?.id,
+          themeId: image.themeId,
+          imageData: dataUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('[Stage5] Failed to upload composited image');
+        return image.url; // Fall back to original
+      }
+
+      const result = await response.json();
+      return result.data?.url || image.url;
+    } catch (error) {
+      console.error('[Stage5] Rasterization failed:', error);
+      return image.url; // Fall back to original
+    }
+  };
+
   // Save and continue
   const handleContinue = async () => {
     if (selectedForExport.size === 0 && selectedForAnimation.size === 0) return;
 
     setIsSaving(true);
     try {
+      // Rasterize images that have text overlays
+      const compositedImages: Array<{
+        themeId: string;
+        originalUrl: string;
+        compositedUrl: string;
+      }> = [];
+
+      const allSelectedThemeIds = new Set([...selectedForExport, ...selectedForAnimation]);
+
+      for (const themeId of allSelectedThemeIds) {
+        const image = images.find(img => img.themeId === themeId);
+        const overlays = imageOverlays[themeId]?.overlays || [];
+
+        if (image) {
+          const compositedUrl = await rasterizeImage(image, overlays);
+          if (compositedUrl) {
+            compositedImages.push({
+              themeId,
+              originalUrl: image.url,
+              compositedUrl,
+            });
+          }
+        }
+      }
+
+      console.log('[Stage5] Composited images:', compositedImages.length);
+
       const textStudioData = {
         imageOverlays,
         selectedForExport: Array.from(selectedForExport),
         selectedForAnimation: Array.from(selectedForAnimation),
+        compositedImages,
         updatedAt: new Date(),
       };
 
