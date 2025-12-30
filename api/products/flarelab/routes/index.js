@@ -5,6 +5,7 @@ import teamsRouter from './teams.js';
 import downloadRouter from './download.js';
 import promptsRouter from './prompts.js';
 import imageEditRouter from './imageEdit.js';
+import textStylesRouter from './textStyles.js';
 
 const router = express.Router();
 
@@ -15,5 +16,6 @@ router.use('/teams', teamsRouter);
 router.use('/download', downloadRouter);
 router.use('/prompts', promptsRouter);
 router.use('/image-edit', imageEditRouter);
+router.use('/text-styles', textStylesRouter);
 
 export default router;
