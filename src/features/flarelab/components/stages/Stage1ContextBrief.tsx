@@ -172,14 +172,25 @@ export const Stage1ContextBrief = ({
     <div className="max-w-6xl mx-auto p-6 lg:p-8">
       {/* Header */}
       <div className="mb-5">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-orange-500" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-lg text-white">Setup Project</h2>
+              <p className="text-sm text-gray-400">Define the match-up and game context</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg text-white">Setup Project</h2>
-            <p className="text-sm text-gray-400">Define the match-up and game context</p>
-          </div>
+          <Button
+            onClick={handleContinue}
+            disabled={!projectName.trim() || isSaving}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+            size="lg"
+          >
+            {isSaving ? 'Saving...' : 'Continue to Themes'}
+            {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+          </Button>
         </div>
       </div>
 
@@ -375,18 +386,6 @@ export const Stage1ContextBrief = ({
         </div>
       </div>
 
-      {/* Continue Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleContinue}
-          disabled={!projectName.trim() || isSaving}
-          className="bg-gradient-to-r from-orange-500 to-orange-500 hover:from-orange-600 hover:to-orange-500 text-white rounded-xl"
-          size="lg"
-        >
-          {isSaving ? 'Saving...' : 'Continue to Themes'}
-          {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-        </Button>
-      </div>
     </div>
   );
 };

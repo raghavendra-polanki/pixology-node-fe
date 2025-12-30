@@ -654,15 +654,28 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
               <p className="text-gray-400">Generate broadcast-ready images with your selected players</p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowPromptEditor(true)}
-            variant="outline"
-            size="sm"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Prompts
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setShowPromptEditor(true)}
+              variant="outline"
+              size="sm"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Prompts
+            </Button>
+            {hasGeneratedImages && (
+              <Button
+                onClick={handleContinue}
+                disabled={isSaving}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+                size="lg"
+              >
+                {isSaving ? 'Saving...' : 'Continue to Text Studio'}
+                {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -895,25 +908,6 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
         </>
       )}
 
-      {/* Continue Button */}
-      {hasGeneratedImages && (
-        <div className="mt-6 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-400">
-              <span className="font-medium text-white">{generatedImages.length}</span> images ready for text overlays
-            </div>
-            <Button
-              onClick={handleContinue}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-              size="lg"
-            >
-              {isSaving ? 'Saving...' : 'Continue to Text Studio'}
-              {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* AI Image Editor */}
       {aiEditingImage && aiEditingImage.image.url && (

@@ -494,7 +494,7 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
               <p className="text-gray-400">Choose players for each theme based on AI recommendations</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Button
               onClick={() => setShowPromptEditor(true)}
               variant="outline"
@@ -504,20 +504,43 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
               <Edit2 className="w-4 h-4 mr-2" />
               Edit Prompts
             </Button>
-            {hasLoadedRecommendations && !isLoadingRecommendations && (
+            {allThemesComplete() && (
               <Button
-                onClick={regenerateRecommendations}
-                variant="outline"
-                size="sm"
-                className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+                onClick={handleContinue}
+                disabled={isSaving}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+                size="lg"
               >
+                {isSaving ? 'Saving...' : 'Continue to Create Images'}
+                {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* AI Recommendations Action Bar */}
+      {hasLoadedRecommendations && !isLoadingRecommendations && !isLoadingPlayers && (
+        <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-orange-400" />
+              <div>
+                <p className="text-white font-medium">AI Player Recommendations</p>
+                <p className="text-sm text-gray-400">Players suggested based on theme requirements</p>
+              </div>
+            </div>
+            <Button
+              onClick={regenerateRecommendations}
+              variant="outline"
+              className="border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+            >
               <RefreshCw className="w-4 h-4 mr-2" />
               Regenerate AI
             </Button>
-          )}
+          </div>
         </div>
-      </div>
-      </div>
+      )}
 
       {/* Loading State */}
       {(isLoadingPlayers || isLoadingRecommendations || (selectedThemes.length > 0 && Object.keys(themePlayerStates).length === 0)) && (
@@ -669,30 +692,6 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
         </div>
       )}
 
-      {/* Continue Button - Outside grid */}
-      {!isLoadingPlayers && !isLoadingRecommendations && selectedThemes.length > 0 && Object.keys(themePlayerStates).length > 0 && (
-        <div className="flex items-center justify-between mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-xl">
-            <div className="text-sm text-gray-400">
-              {allThemesComplete() ? (
-                <span className="text-orange-400 font-medium">
-                  <Check className="w-4 h-4 inline mr-1" />
-                  All themes have players selected
-                </span>
-              ) : (
-                <span>Complete player selection for all themes to continue</span>
-              )}
-            </div>
-            <Button
-              onClick={handleContinue}
-              disabled={!allThemesComplete() || isSaving}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-              size="lg"
-            >
-              {isSaving ? 'Saving...' : 'Continue to Create Images'}
-              {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-            </Button>
-        </div>
-      )}
 
       {/* Player Selection Modal */}
       {activeTheme && (

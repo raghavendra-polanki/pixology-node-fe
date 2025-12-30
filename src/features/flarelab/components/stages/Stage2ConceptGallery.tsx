@@ -533,15 +533,28 @@ export const Stage2ConceptGallery = ({
               <p className="text-gray-400">Generate broadcast-ready themes organized by category</p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowPromptEditor(true)}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-            size="sm"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Prompts
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setShowPromptEditor(true)}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+              size="sm"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Prompts
+            </Button>
+            {canContinue && (
+              <Button
+                onClick={handleContinue}
+                disabled={isSaving}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+                size="lg"
+              >
+                {isSaving ? 'Saving...' : 'Continue to Select Players'}
+                {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+              </Button>
+            )}
+          </div>
         </div>
         {selectedThemes.length > 0 && (
           <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
@@ -779,26 +792,6 @@ export const Stage2ConceptGallery = ({
         })}
       </div>
 
-      {/* Continue Button at Bottom */}
-      {canContinue && (
-        <div className="mt-8 p-4 bg-gray-800/30 border border-gray-700 rounded-lg flex items-center justify-between">
-          <div className="text-sm text-gray-400">
-            <span className="text-orange-400 font-medium">
-              <Check className="w-4 h-4 inline mr-1" />
-              {selectedThemes.length} theme{selectedThemes.length !== 1 ? 's' : ''} ready
-            </span>
-          </div>
-          <Button
-            onClick={handleContinue}
-            disabled={isSaving}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-            size="lg"
-          >
-            {isSaving ? 'Saving...' : 'Continue to Select Players'}
-            {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-          </Button>
-        </div>
-      )}
 
       {/* AI Image Editor */}
       {aiEditingTheme && aiEditingTheme.image?.url && (
