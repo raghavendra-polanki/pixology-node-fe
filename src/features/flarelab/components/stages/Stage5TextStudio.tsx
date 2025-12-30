@@ -1420,8 +1420,8 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       // Rasterize images that have text overlays
       const compositedImages: Array<{
         themeId: string;
-        originalUrl: string;
-        compositedUrl: string;
+        originalImageUrl: string;
+        compositedImageUrl: string;
       }> = [];
       const failedImages: string[] = [];
 
@@ -1455,12 +1455,12 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
         if (image) {
           try {
-            const compositedUrl = await rasterizeImage(image, overlays);
-            if (compositedUrl) {
+            const compositedImageUrl = await rasterizeImage(image, overlays);
+            if (compositedImageUrl) {
               compositedImages.push({
                 themeId,
-                originalUrl: image.url,
-                compositedUrl,
+                originalImageUrl: image.url,
+                compositedImageUrl,
               });
             }
           } catch (error) {

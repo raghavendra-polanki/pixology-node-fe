@@ -240,8 +240,9 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
     const allImages = project.highFidelityCapture?.generatedImages || [];
 
     // Get composited images from Text Studio (images with text overlays baked in)
+    // Support both new field name (compositedImageUrl) and legacy field name (compositedUrl)
     const compositedImages = project.textStudio?.compositedImages || [];
-    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
+    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedImageUrl || c.compositedUrl]));
 
     console.log('[Stage6] Loading data from project:', {
       hasTextStudio: !!project.textStudio,
@@ -627,15 +628,28 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
                 <p className="text-sm text-gray-400">Generate 4-second animated videos</p>
               </div>
             </div>
-            <Button
-              onClick={() => setShowPromptEditor(true)}
-              variant="outline"
-              size="sm"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Prompts
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setShowPromptEditor(true)}
+                variant="outline"
+                size="sm"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Prompts
+              </Button>
+              {successfulAnimations.length > 0 && (
+                <Button
+                  onClick={handleContinue}
+                  disabled={isSaving}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl"
+                  size="lg"
+                >
+                  {isSaving ? 'Saving...' : 'Continue to Export'}
+                  {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1036,50 +1050,6 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
           </div>
         )}
 
-        {/* Summary & Continue */}
-        {successfulAnimations.length > 0 && (
-          <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-gray-300">
-                    <span className="font-medium text-green-400">{successfulAnimations.length}</span> videos ready
-                  </span>
-                </div>
-                {animationsArray.filter(a => a.error).length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm text-gray-300">
-                      <span className="font-medium text-red-400">{animationsArray.filter(a => a.error).length}</span> failed
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  {selectedForExport.size > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-amber-400" />
-                  ) : (
-                    <Square className="w-4 h-4 text-gray-600" />
-                  )}
-                  <span className="text-sm text-gray-300">
-                    <span className={`font-medium ${selectedForExport.size > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
-                      {selectedForExport.size}
-                    </span> selected for export
-                  </span>
-                </div>
-              </div>
-              <Button
-                onClick={handleContinue}
-                disabled={isSaving}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl"
-                size="lg"
-              >
-                {isSaving ? 'Saving...' : 'Continue to Export'}
-                {!isSaving && <ArrowRight className="w-5 h-5 ml-2" />}
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

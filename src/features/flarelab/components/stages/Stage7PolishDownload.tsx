@@ -46,25 +46,43 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
     });
 
     // Get images selected for export from Stage 5 (Text Studio)
-    // Fall back to Stage 4 for backwards compatibility
-    const selectedImageIds = project.textStudio?.selectedForExport || project.highFidelityCapture?.selectedForExport || [];
+    // Note: We prioritize textStudio.selectedForExport (new workflow with Text Studio stage)
+    // The highFidelityCapture.selectedForExport fallback is for legacy projects only
+    const textStudioExportIds = project.textStudio?.selectedForExport;
+    const legacyExportIds = project.highFidelityCapture?.selectedForExport;
+    const selectedImageIds = textStudioExportIds || legacyExportIds || [];
     const allImages = project.highFidelityCapture?.generatedImages || [];
 
     // Get composited images from Text Studio (images with text overlays baked in)
+    // Support both new field name (compositedImageUrl) and legacy field name (compositedUrl)
     const compositedImages = project.textStudio?.compositedImages || [];
-    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
+    const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedImageUrl || c.compositedUrl]));
+
+    // Determine data source for debugging
+    const imageDataSource = textStudioExportIds
+      ? 'textStudio'
+      : legacyExportIds
+        ? 'highFidelityCapture (legacy)'
+        : 'none';
 
     console.log('[Stage7] Loading data from project:', {
       hasTextStudio: !!project.textStudio,
-      textStudioSelectedForExport: project.textStudio?.selectedForExport,
-      textStudioCompositedImages: project.textStudio?.compositedImages?.length,
+      textStudioSelectedForExport: textStudioExportIds,
+      legacySelectedForExport: legacyExportIds,
+      imageDataSource,
       selectedImageIds,
+      textStudioCompositedImages: project.textStudio?.compositedImages?.length,
       allImagesCount: allImages.length,
       compositedImagesCount: compositedImages.length,
       hasKineticActivation: !!project.kineticActivation,
       kineticSelectedForExport: project.kineticActivation?.selectedForExport,
       kineticAnimationsCount: project.kineticActivation?.animations?.length,
     });
+
+    // Warn if using legacy fallback
+    if (!textStudioExportIds && legacyExportIds) {
+      console.warn('[Stage7] Using legacy highFidelityCapture.selectedForExport - Text Studio selections not found');
+    }
 
     selectedImageIds.forEach(themeId => {
       const image = allImages.find((img: GeneratedImage) => img.themeId === themeId);
@@ -220,14 +238,36 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
     <div className="max-w-6xl mx-auto p-8 lg:p-12">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
-            <Download className="w-6 h-6 text-orange-500" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
+              <Download className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Export & Download</h2>
+              <p className="text-gray-400">Download your images and videos</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Export & Download</h2>
-            <p className="text-gray-400">Download your images and videos</p>
-          </div>
+          {hasItems && (
+            <Button
+              onClick={handleFinishProject}
+              disabled={isSaving}
+              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
+              size="lg"
+            >
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  Finish Project
+                </>
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Summary */}
@@ -289,7 +329,7 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
               >
                 <div className="aspect-video relative bg-gray-900">
                   <img
-                    src={item.thumbnailUrl || item.url}
+                    src={item.url}
                     alt={item.name}
                     className="w-full h-full object-cover"
                   />
@@ -392,50 +432,6 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
         </div>
       )}
 
-      {/* Finish Project Button */}
-      {hasItems && (
-        <div className="mt-8 p-4 bg-gray-800/50 border border-gray-700 rounded-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {allDownloaded ? (
-                <>
-                  <CheckCircle2 className="w-6 h-6 text-orange-400" />
-                  <div>
-                    <p className="text-white font-medium">All items downloaded!</p>
-                    <p className="text-sm text-gray-400">You can now finish the project</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Download className="w-6 h-6 text-gray-400" />
-                  <div>
-                    <p className="text-white font-medium">{downloadedItems.size} of {exportItems.length} downloaded</p>
-                    <p className="text-sm text-gray-400">Download items before finishing</p>
-                  </div>
-                </>
-              )}
-            </div>
-            <Button
-              onClick={handleFinishProject}
-              disabled={isSaving}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl"
-              size="lg"
-            >
-              {isSaving ? (
-                <>
-                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-5 h-5 mr-2" />
-                  Finish Project
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
