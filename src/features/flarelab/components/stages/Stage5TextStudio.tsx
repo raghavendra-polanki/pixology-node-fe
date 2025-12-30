@@ -1832,32 +1832,34 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             </div>
 
             {/* Canvas Footer */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-800/50 bg-[#0a0a0a] flex-shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800/50 bg-[#0a0a0a] flex-shrink-0">
               <div className="flex items-center gap-3">
                 <h3 className="text-sm font-medium text-white">{currentImage?.themeName}</h3>
                 <span className="text-xs text-gray-500">{currentOverlays.length} layer{currentOverlays.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="flex items-center gap-2">
+              {/* Export/Animate Selection - Made more prominent */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 mr-1">Output:</span>
                 <button
                   onClick={() => currentThemeId && toggleExportSelection(currentThemeId)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                     currentThemeId && selectedForExport.has(currentThemeId)
-                      ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30'
-                      : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/25'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 hover:border-orange-500/50'
                   }`}
                 >
-                  {currentThemeId && selectedForExport.has(currentThemeId) ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {currentThemeId && selectedForExport.has(currentThemeId) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                   Export
                 </button>
                 <button
                   onClick={() => currentThemeId && toggleAnimationSelection(currentThemeId)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                     currentThemeId && selectedForAnimation.has(currentThemeId)
-                      ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30'
-                      : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/25'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 hover:border-purple-500/50'
                   }`}
                 >
-                  {currentThemeId && selectedForAnimation.has(currentThemeId) ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  {currentThemeId && selectedForAnimation.has(currentThemeId) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                   Animate
                 </button>
               </div>
@@ -1915,21 +1917,25 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                   );
                 })}
               </div>
-              {/* Selection summary - pill style */}
-              <div className="flex items-center gap-2 pl-4 border-l border-gray-700/50 flex-shrink-0">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all ${
-                  selectedForExport.size > 0 ? 'bg-orange-500/15 ring-1 ring-orange-500/30' : 'bg-gray-800/30'
+              {/* Selection summary - larger pill style */}
+              <div className="flex items-center gap-3 pl-4 border-l border-gray-700/50 flex-shrink-0">
+                <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  selectedForExport.size > 0
+                    ? 'bg-gradient-to-r from-orange-500/20 to-orange-600/10 ring-1 ring-orange-500/40 shadow-sm shadow-orange-500/10'
+                    : 'bg-gray-800/50 ring-1 ring-gray-700/50'
                 }`}>
-                  <div className={`w-2 h-2 rounded-full ${selectedForExport.size > 0 ? 'bg-orange-500' : 'bg-gray-600'}`} />
-                  <span className={`font-semibold tabular-nums ${selectedForExport.size > 0 ? 'text-orange-400' : 'text-gray-600'}`}>{selectedForExport.size}</span>
-                  <span className="text-gray-500">export</span>
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedForExport.size > 0 ? 'bg-orange-500 shadow-sm shadow-orange-500/50' : 'bg-gray-600'}`} />
+                  <span className={`font-bold tabular-nums ${selectedForExport.size > 0 ? 'text-orange-400' : 'text-gray-500'}`}>{selectedForExport.size}</span>
+                  <span className={selectedForExport.size > 0 ? 'text-orange-300/70' : 'text-gray-500'}>export</span>
                 </div>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all ${
-                  selectedForAnimation.size > 0 ? 'bg-amber-500/15 ring-1 ring-amber-500/30' : 'bg-gray-800/30'
+                <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  selectedForAnimation.size > 0
+                    ? 'bg-gradient-to-r from-purple-500/20 to-purple-600/10 ring-1 ring-purple-500/40 shadow-sm shadow-purple-500/10'
+                    : 'bg-gray-800/50 ring-1 ring-gray-700/50'
                 }`}>
-                  <div className={`w-2 h-2 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-400' : 'bg-gray-600'}`} />
-                  <span className={`font-semibold tabular-nums ${selectedForAnimation.size > 0 ? 'text-amber-400' : 'text-gray-600'}`}>{selectedForAnimation.size}</span>
-                  <span className="text-gray-500">animate</span>
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedForAnimation.size > 0 ? 'bg-purple-500 shadow-sm shadow-purple-500/50' : 'bg-gray-600'}`} />
+                  <span className={`font-bold tabular-nums ${selectedForAnimation.size > 0 ? 'text-purple-400' : 'text-gray-500'}`}>{selectedForAnimation.size}</span>
+                  <span className={selectedForAnimation.size > 0 ? 'text-purple-300/70' : 'text-gray-500'}>animate</span>
                 </div>
               </div>
             </div>
