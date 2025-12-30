@@ -1855,8 +1855,8 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                   onClick={() => currentThemeId && toggleAnimationSelection(currentThemeId)}
                   className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                     currentThemeId && selectedForAnimation.has(currentThemeId)
-                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/25'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 hover:border-purple-500/50'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 hover:border-amber-500/50'
                   }`}
                 >
                   {currentThemeId && selectedForAnimation.has(currentThemeId) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
@@ -1930,12 +1930,12 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                 </div>
                 <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   selectedForAnimation.size > 0
-                    ? 'bg-gradient-to-r from-purple-500/20 to-purple-600/10 ring-1 ring-purple-500/40 shadow-sm shadow-purple-500/10'
+                    ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/10 ring-1 ring-amber-500/40 shadow-sm shadow-amber-500/10'
                     : 'bg-gray-800/50 ring-1 ring-gray-700/50'
                 }`}>
-                  <div className={`w-2.5 h-2.5 rounded-full ${selectedForAnimation.size > 0 ? 'bg-purple-500 shadow-sm shadow-purple-500/50' : 'bg-gray-600'}`} />
-                  <span className={`font-bold tabular-nums ${selectedForAnimation.size > 0 ? 'text-purple-400' : 'text-gray-500'}`}>{selectedForAnimation.size}</span>
-                  <span className={selectedForAnimation.size > 0 ? 'text-purple-300/70' : 'text-gray-500'}>animate</span>
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedForAnimation.size > 0 ? 'bg-amber-500 shadow-sm shadow-amber-500/50' : 'bg-gray-600'}`} />
+                  <span className={`font-bold tabular-nums ${selectedForAnimation.size > 0 ? 'text-amber-400' : 'text-gray-500'}`}>{selectedForAnimation.size}</span>
+                  <span className={selectedForAnimation.size > 0 ? 'text-amber-300/70' : 'text-gray-500'}>animate</span>
                 </div>
               </div>
             </div>
