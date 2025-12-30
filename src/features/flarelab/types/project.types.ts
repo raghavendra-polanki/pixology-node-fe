@@ -296,6 +296,7 @@ export interface TextOverlay {
   locked?: boolean;
   presetId?: string; // Reference to basic style preset used
   cssPresetId?: string; // Reference to CSS preset for broadcast-quality rendering
+  libraryStyleId?: string; // Reference to library style from Style Library
 }
 
 export interface TextStyle {
@@ -580,3 +581,142 @@ export const DEFAULT_WORKFLOW_STAGES: WorkflowStage[] = [
  * Stage name mapping (for easy access)
  */
 export const STAGE_NAMES = DEFAULT_WORKFLOW_STAGES.map(stage => stage.name);
+
+// ========== Style Library Types ==========
+
+/**
+ * Text Style Categories
+ */
+export type TextStyleCategory = 'headlines' | 'lower-thirds' | 'scores' | 'promo' | 'custom';
+
+export const TEXT_STYLE_CATEGORIES: Record<TextStyleCategory, { name: string; description: string }> = {
+  'headlines': { name: 'Headlines', description: 'Bold, impactful styles for main titles' },
+  'lower-thirds': { name: 'Lower Thirds', description: 'TV-ready name plates and info bars' },
+  'scores': { name: 'Scores', description: 'Scoreboard and stats display styles' },
+  'promo': { name: 'Promo', description: 'Promotional and marketing graphics' },
+  'custom': { name: 'Custom', description: 'User-created custom styles' },
+};
+
+/**
+ * Gradient definition for text fills
+ */
+export interface GradientDefinition {
+  type: 'linear' | 'radial';
+  angle: number; // For linear gradients (0-360)
+  stops: Array<{ color: string; position: number }>; // position: 0-100
+}
+
+/**
+ * Shadow definition (multiple allowed per style)
+ */
+export interface ShadowDefinition {
+  color: string;
+  opacity: number; // 0-100
+  offsetX: number; // px
+  offsetY: number; // px
+  blur: number; // px
+  spread?: number; // px (optional)
+}
+
+/**
+ * Glow effect definition
+ */
+export interface GlowDefinition {
+  enabled: boolean;
+  color: string;
+  opacity: number; // 0-100
+  blur: number; // px
+}
+
+/**
+ * Stroke/outline definition
+ */
+export interface StrokeDefinition {
+  color: string;
+  width: number; // px
+  position: 'outside' | 'center' | 'inside';
+}
+
+/**
+ * Text Style Preset - Full definition for Style Library
+ * Supports inheritance via parentId
+ */
+export interface LibraryTextStyle {
+  id: string;
+  name: string;
+  category: TextStyleCategory;
+  description?: string;
+
+  // Inheritance
+  parentId?: string; // If set, inherits properties from parent style
+  isSystem: boolean; // System styles are read-only (can only duplicate)
+
+  // User preferences
+  isFavorite: boolean;
+
+  // Timestamps
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  createdBy?: string; // User ID (empty for system styles)
+
+  // Typography
+  fontFamily: string;
+  fontWeight: number; // 100-900
+  fontSize: number; // Default font size (px)
+  letterSpacing: number; // em units (-0.1 to 0.5)
+  textTransform: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+
+  // Fill
+  fill: {
+    type: 'solid' | 'gradient';
+    color?: string; // For solid fills
+    gradient?: GradientDefinition; // For gradient fills
+  };
+
+  // Stroke (optional)
+  stroke?: StrokeDefinition;
+
+  // Shadows (multiple allowed)
+  shadows: ShadowDefinition[];
+
+  // Glow (optional)
+  glow?: GlowDefinition;
+
+  // Additional properties
+  opacity?: number; // 0-100, default 100
+}
+
+/**
+ * Input for creating a new text style
+ */
+export interface CreateTextStyleInput {
+  name: string;
+  category: TextStyleCategory;
+  description?: string;
+  parentId?: string;
+  fontFamily: string;
+  fontWeight: number;
+  fontSize: number;
+  letterSpacing: number;
+  textTransform: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  fill: LibraryTextStyle['fill'];
+  stroke?: StrokeDefinition;
+  shadows: ShadowDefinition[];
+  glow?: GlowDefinition;
+  opacity?: number;
+}
+
+/**
+ * Input for updating a text style
+ */
+export interface UpdateTextStyleInput extends Partial<CreateTextStyleInput> {
+  isFavorite?: boolean;
+}
+
+/**
+ * Response for list of text styles
+ */
+export interface TextStyleListResponse {
+  styles: LibraryTextStyle[];
+  total: number;
+}

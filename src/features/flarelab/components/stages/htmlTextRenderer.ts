@@ -8,7 +8,7 @@
  * - Then captures as image for canvas placement
  */
 
-import type { TextStyle, TextStylePreset } from '../../types/project.types';
+import type { TextStyle, TextStylePreset, LibraryTextStyle } from '../../types/project.types';
 
 /**
  * CSS-based preset styles for broadcast-quality text
@@ -469,4 +469,126 @@ export function getPresetPreviewStyles(presetId: string, fontSize: number = 32):
     filter: preset.css.filter,
     lineHeight: 1.2,
   };
+}
+
+/**
+ * Convert LibraryTextStyle to CSSTextPreset for rendering
+ */
+export function libraryStyleToCSSPreset(style: LibraryTextStyle): CSSTextPreset {
+  // Build gradient or solid fill
+  let background: string;
+  if (style.fill.type === 'gradient' && style.fill.gradient) {
+    const stops = style.fill.gradient.stops
+      .map(s => `${s.color} ${s.position}%`)
+      .join(', ');
+    background = `linear-gradient(${style.fill.gradient.angle}deg, ${stops})`;
+  } else {
+    background = style.fill.color || '#FFFFFF';
+  }
+
+  // Build text-shadow from shadows array
+  const shadowParts: string[] = [];
+  if (style.shadows && style.shadows.length > 0) {
+    style.shadows.forEach(s => {
+      const r = parseInt(s.color.slice(1, 3), 16) || 0;
+      const g = parseInt(s.color.slice(3, 5), 16) || 0;
+      const b = parseInt(s.color.slice(5, 7), 16) || 0;
+      shadowParts.push(
+        `${s.offsetX}px ${s.offsetY}px ${s.blur}px rgba(${r}, ${g}, ${b}, ${s.opacity / 100})`
+      );
+    });
+  }
+
+  // Add glow as an additional shadow
+  if (style.glow?.enabled) {
+    const r = parseInt(style.glow.color.slice(1, 3), 16) || 255;
+    const g = parseInt(style.glow.color.slice(3, 5), 16) || 255;
+    const b = parseInt(style.glow.color.slice(5, 7), 16) || 255;
+    shadowParts.push(
+      `0 0 ${style.glow.blur}px rgba(${r}, ${g}, ${b}, ${style.glow.opacity / 100})`
+    );
+  }
+
+  // Build stroke
+  let stroke = 'none';
+  if (style.stroke) {
+    stroke = `${style.stroke.width}px ${style.stroke.color}`;
+  }
+
+  // Build glow filter
+  let filter = '';
+  if (style.glow?.enabled) {
+    const r = parseInt(style.glow.color.slice(1, 3), 16) || 255;
+    const g = parseInt(style.glow.color.slice(3, 5), 16) || 255;
+    const b = parseInt(style.glow.color.slice(5, 7), 16) || 255;
+    filter = `drop-shadow(0 0 ${style.glow.blur / 2}px rgba(${r}, ${g}, ${b}, ${style.glow.opacity / 100}))`;
+  }
+
+  return {
+    id: `library-${style.id}`,
+    name: style.name,
+    category: style.category,
+    description: style.description || '',
+    css: {
+      fontFamily: `"${style.fontFamily}", sans-serif`,
+      fontWeight: style.fontWeight,
+      letterSpacing: `${style.letterSpacing}em`,
+      textTransform: style.textTransform,
+      background,
+      WebkitBackgroundClip: style.fill.type === 'gradient' ? 'text' : 'initial',
+      WebkitTextFillColor: style.fill.type === 'gradient' ? 'transparent' : (style.fill.color || '#FFFFFF'),
+      backgroundClip: style.fill.type === 'gradient' ? 'text' : 'initial',
+      WebkitTextStroke: stroke,
+      textShadow: shadowParts.join(', ') || 'none',
+      filter: filter || undefined,
+    },
+  };
+}
+
+/**
+ * Get preview styles for a LibraryTextStyle
+ */
+export function getLibraryStylePreviewStyles(style: LibraryTextStyle, fontSize: number = 32): React.CSSProperties {
+  const cssPreset = libraryStyleToCSSPreset(style);
+  return {
+    fontFamily: cssPreset.css.fontFamily,
+    fontWeight: cssPreset.css.fontWeight,
+    fontSize: `${fontSize}px`,
+    letterSpacing: cssPreset.css.letterSpacing,
+    textTransform: cssPreset.css.textTransform as any,
+    background: cssPreset.css.background,
+    WebkitBackgroundClip: cssPreset.css.WebkitBackgroundClip as any,
+    WebkitTextFillColor: cssPreset.css.WebkitTextFillColor,
+    backgroundClip: cssPreset.css.backgroundClip as any,
+    WebkitTextStroke: cssPreset.css.WebkitTextStroke,
+    textShadow: cssPreset.css.textShadow,
+    filter: cssPreset.css.filter,
+    lineHeight: 1.2,
+  };
+}
+
+/**
+ * Render text using a LibraryTextStyle
+ * Uses the same canvas-based approach as renderTextAsImage for consistency
+ */
+export async function renderTextWithLibraryStyle(
+  text: string,
+  style: LibraryTextStyle,
+  fontSize: number = 96,
+  maxWidth: number = 1200
+): Promise<string> {
+  // Convert library style to CSS preset format and use existing renderer
+  const cssPreset = libraryStyleToCSSPreset(style);
+
+  // Temporarily add to presets array so renderTextAsImage can find it
+  const tempId = `library-${style.id}`;
+  const existingIndex = CSS_TEXT_PRESETS.findIndex(p => p.id === tempId);
+  if (existingIndex === -1) {
+    CSS_TEXT_PRESETS.push(cssPreset);
+  } else {
+    CSS_TEXT_PRESETS[existingIndex] = cssPreset;
+  }
+
+  // Use existing canvas-based renderer
+  return renderTextAsImage(text, tempId, fontSize, maxWidth, style.fontFamily);
 }

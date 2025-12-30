@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Folder, Users, LogOut, Zap } from 'lucide-react';
+import { Folder, Users, LogOut, Zap, Palette } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { TeamManagement } from './team-management/TeamManagement';
+import { StyleLibrary } from './style-library/StyleLibrary';
 import type { FlareLabProject } from '../types/project.types';
 
 interface FlareLabHomeProps {
@@ -19,7 +20,7 @@ interface FlareLabHomeProps {
   currentUserId?: string;
 }
 
-type NavSection = 'projects' | 'teams';
+type NavSection = 'projects' | 'teams' | 'style-library';
 
 export const FlareLabHome = ({
   projects,
@@ -47,6 +48,12 @@ export const FlareLabHome = ({
       label: 'Team Management',
       icon: Users,
       description: 'Manage teams and players',
+    },
+    {
+      id: 'style-library' as NavSection,
+      label: 'Style Library',
+      icon: Palette,
+      description: 'Manage text styles and presets',
     },
   ];
 
@@ -137,6 +144,12 @@ export const FlareLabHome = ({
         {activeSection === 'teams' && (
           <div className="px-8 py-8">
             <TeamManagement />
+          </div>
+        )}
+
+        {activeSection === 'style-library' && (
+          <div className="px-8 py-8">
+            <StyleLibrary />
           </div>
         )}
       </main>

@@ -458,3 +458,41 @@ export async function uploadBase64ImageToGCS(base64DataUrl, projectId, themeId, 
     throw new Error(`Failed to upload ${assetType} image to GCS: ${error.message}`);
   }
 }
+
+/**
+ * Download image from GCS as buffer
+ * Works with both GCS URLs and signed URLs
+ */
+export async function downloadImageFromGCS(imageUrl) {
+  try {
+    // Check if it's a GCS URL from our bucket
+    if (imageUrl.includes(`storage.googleapis.com/${bucketName}`)) {
+      // Extract filename from public URL
+      const url = new URL(imageUrl);
+      const pathname = url.pathname;
+      const pathParts = pathname.split('/').filter(p => p);
+      // Skip the bucket name (first part) and get the rest
+      const filename = pathParts.slice(1).join('/');
+
+      const bucket = storage.bucket(bucketName);
+      const file = bucket.file(filename);
+
+      const [buffer] = await file.download();
+      console.log(`Successfully downloaded image from GCS: ${imageUrl} (${buffer.length} bytes)`);
+      return buffer;
+    } else {
+      // For external URLs, use fetch
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      console.log(`Successfully downloaded image from URL: ${imageUrl} (${buffer.length} bytes)`);
+      return buffer;
+    }
+  } catch (error) {
+    console.error('Error downloading image:', error);
+    throw new Error(`Failed to download image: ${error.message}`);
+  }
+}
