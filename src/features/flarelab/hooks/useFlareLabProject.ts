@@ -362,7 +362,23 @@ export function useFlareLabProject(options: UseFlareLabProjectOptions = {}): Use
           ...(shouldUpdateStageIndex && { currentStageIndex: nextStageIndex }),
         };
 
+        console.log(`[useFlareLabProject] markStageCompleted(${stageName}) - sending updates:`, {
+          hasTextStudio: 'textStudio' in updates,
+          hasKineticActivation: 'kineticActivation' in updates,
+          updateKeys: Object.keys(updates),
+        });
+
         const updatedProject = await projectService.current.updateProject(project.id, updates);
+
+        console.log(`[useFlareLabProject] markStageCompleted(${stageName}) - received updated project:`, {
+          hasTextStudio: !!updatedProject.textStudio,
+          textStudioKeys: updatedProject.textStudio ? Object.keys(updatedProject.textStudio) : [],
+          hasKineticActivation: !!updatedProject.kineticActivation,
+          kineticActivationKeys: updatedProject.kineticActivation ? Object.keys(updatedProject.kineticActivation) : [],
+          compositedImagesCount: updatedProject.textStudio?.compositedImages?.length,
+          selectedForExportCount: updatedProject.textStudio?.selectedForExport?.length,
+        });
+
         setProject(updatedProject);
         setHasUnsavedChanges(false);
 

@@ -243,6 +243,14 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
     const compositedImages = project.textStudio?.compositedImages || [];
     const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
 
+    console.log('[Stage6] Loading data from project:', {
+      hasTextStudio: !!project.textStudio,
+      selectedForAnimation,
+      allImagesCount: allImages.length,
+      compositedImagesCount: compositedImages.length,
+      compositedImages: compositedImages,
+    });
+
     // Filter and map images, using composited URL if available
     const animationImages = allImages
       .filter((img: GeneratedImage) => selectedForAnimation.includes(img.themeId || ''))

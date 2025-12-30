@@ -288,9 +288,28 @@ router.put('/:projectId', verifyToken, async (req, res) => {
       updatedAt: new Date(),
     };
 
-    await saveProject({ ...existingProject, ...updates }, db, projectId);
+    // Log data flow for debugging
+    console.log(`[FlareLab] PUT /projects/${projectId} - incoming update keys:`, Object.keys(req.body));
+    console.log(`[FlareLab] PUT /projects/${projectId} - existing textStudio:`, !!existingProject.textStudio);
+    console.log(`[FlareLab] PUT /projects/${projectId} - existing kineticActivation:`, !!existingProject.kineticActivation);
+    if (existingProject.textStudio) {
+      console.log(`[FlareLab] PUT /projects/${projectId} - existing textStudio.compositedImages count:`, existingProject.textStudio.compositedImages?.length);
+      console.log(`[FlareLab] PUT /projects/${projectId} - existing textStudio.selectedForExport:`, existingProject.textStudio.selectedForExport);
+    }
+
+    const mergedProject = { ...existingProject, ...updates };
+    console.log(`[FlareLab] PUT /projects/${projectId} - merged textStudio:`, !!mergedProject.textStudio);
+    console.log(`[FlareLab] PUT /projects/${projectId} - merged kineticActivation:`, !!mergedProject.kineticActivation);
+
+    await saveProject(mergedProject, db, projectId);
 
     const updatedProject = await getProject(projectId, db);
+
+    console.log(`[FlareLab] PUT /projects/${projectId} - final textStudio:`, !!updatedProject.textStudio);
+    console.log(`[FlareLab] PUT /projects/${projectId} - final kineticActivation:`, !!updatedProject.kineticActivation);
+    if (updatedProject.textStudio) {
+      console.log(`[FlareLab] PUT /projects/${projectId} - final textStudio.compositedImages count:`, updatedProject.textStudio?.compositedImages?.length);
+    }
 
     return res.status(200).json({
       success: true,

@@ -29,7 +29,21 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
 
   // Load selected items from Stage 5 (Text Studio - images) and Stage 6 (Animation - videos)
   useEffect(() => {
+    // Guard against null/undefined project
+    if (!project) {
+      console.warn('[Stage7] Project is null/undefined, cannot load export items');
+      return;
+    }
+
     const items: ExportItem[] = [];
+
+    // Detailed logging to debug data flow
+    console.log('[Stage7] Project received:', {
+      projectId: project?.id,
+      hasProject: !!project,
+      textStudioKeys: project?.textStudio ? Object.keys(project.textStudio) : 'undefined',
+      kineticActivationKeys: project?.kineticActivation ? Object.keys(project.kineticActivation) : 'undefined',
+    });
 
     // Get images selected for export from Stage 5 (Text Studio)
     // Fall back to Stage 4 for backwards compatibility
@@ -39,6 +53,18 @@ export const Stage7PolishDownload = ({ project, markStageCompleted }: Stage7Prop
     // Get composited images from Text Studio (images with text overlays baked in)
     const compositedImages = project.textStudio?.compositedImages || [];
     const compositedMap = new Map(compositedImages.map((c: any) => [c.themeId, c.compositedUrl]));
+
+    console.log('[Stage7] Loading data from project:', {
+      hasTextStudio: !!project.textStudio,
+      textStudioSelectedForExport: project.textStudio?.selectedForExport,
+      textStudioCompositedImages: project.textStudio?.compositedImages?.length,
+      selectedImageIds,
+      allImagesCount: allImages.length,
+      compositedImagesCount: compositedImages.length,
+      hasKineticActivation: !!project.kineticActivation,
+      kineticSelectedForExport: project.kineticActivation?.selectedForExport,
+      kineticAnimationsCount: project.kineticActivation?.animations?.length,
+    });
 
     selectedImageIds.forEach(themeId => {
       const image = allImages.find((img: GeneratedImage) => img.themeId === themeId);
