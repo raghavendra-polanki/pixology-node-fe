@@ -13,6 +13,7 @@ interface Stage3Props {
   createProject: (input: CreateProjectInput) => Promise<FlareLabProject | null>;
   loadProject: (projectId: string) => Promise<FlareLabProject | null>;
   markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
+  updateCastingCall?: (data: any) => Promise<FlareLabProject | null>;
 }
 
 const teamsService = new TeamsService();
@@ -54,7 +55,7 @@ const transformPlayersForUI = (
   }));
 };
 
-export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage }: Stage3Props) => {
+export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage, updateCastingCall }: Stage3Props) => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(true);
   const [themePlayerStates, setThemePlayerStates] = useState<Record<string, ThemePlayerState>>({});
@@ -233,9 +234,14 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
 
   const saveRecommendationsToProject = async (recs: Record<string, any>) => {
     try {
-      await markStageCompleted('casting-call', undefined, {
-        castingCall: { aiRecommendations: recs, recommendationsGeneratedAt: new Date() },
-      });
+      // Use updateCastingCall to save recommendations WITHOUT marking stage as completed
+      // This prevents auto-navigation to the next stage
+      if (updateCastingCall) {
+        await updateCastingCall({
+          aiRecommendations: recs,
+          recommendationsGeneratedAt: new Date(),
+        });
+      }
     } catch (error) {
       console.error('[Stage3] Failed to save recommendations:', error);
     }
