@@ -59,8 +59,19 @@ export const ProjectsDashboard = ({
     onCreateProject();
   };
 
-  const getStageLabel = (stage: number) => {
+  const getStageLabel = (stage: number, isLegacy: boolean = false) => {
+    // 7-stage workflow (with Text Studio)
     const stages = [
+      'Context Brief',
+      'Concept Gallery',
+      'Casting Call',
+      'High-Fidelity Capture',
+      'Text Studio',
+      'Kinetic Activation',
+      'Export'
+    ];
+    // Legacy 6-stage workflow (without Text Studio)
+    const legacyStages = [
       'Context Brief',
       'Concept Gallery',
       'Casting Call',
@@ -68,7 +79,52 @@ export const ProjectsDashboard = ({
       'Kinetic Activation',
       'Polish & Download'
     ];
-    return stages[stage - 1] || 'Unknown';
+    const stageList = isLegacy ? legacyStages : stages;
+    return stageList[stage - 1] || 'Unknown';
+  };
+
+  /**
+   * Detect if a project is using the legacy 6-stage workflow (without Text Studio)
+   * Legacy projects were created before Text Studio was added and don't have
+   * 'text-studio' in their stageExecutions.
+   */
+  const isLegacyProject = (project: FlareLabProject): boolean => {
+    // If project has textStudio data, it's definitely a new project
+    if (project.textStudio) return false;
+
+    // If project has text-studio in stageExecutions, it's a new project
+    if (project.stageExecutions?.['text-studio']) return false;
+
+    // If project has completed stages beyond stage 4 in the old workflow,
+    // it's likely a legacy project
+    const hasKineticActivation = project.stageExecutions?.['kinetic-activation'];
+    const hasPolishDownload = project.stageExecutions?.['polish-download'];
+
+    // If they have kinetic-activation or polish-download completed without text-studio,
+    // it's a legacy project
+    if ((hasKineticActivation?.status === 'completed' || hasPolishDownload?.status === 'completed')) {
+      return true;
+    }
+
+    // For projects still in early stages (1-4), treat as new workflow
+    // They will use the 7-stage workflow going forward
+    return false;
+  };
+
+  /**
+   * Get the total number of stages for a project
+   */
+  const getTotalStages = (project: FlareLabProject): number => {
+    return isLegacyProject(project) ? 6 : 7;
+  };
+
+  /**
+   * Calculate progress percentage for a project
+   */
+  const getProgressPercentage = (project: FlareLabProject): number => {
+    const totalStages = getTotalStages(project);
+    const currentStage = (project.currentStageIndex || 0) + 1;
+    return Math.round((currentStage / totalStages) * 100);
   };
 
   return (
@@ -204,13 +260,13 @@ export const ProjectsDashboard = ({
                   {/* Progress */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-gray-400">
-                      <span>Stage {(project.currentStageIndex || 0) + 1} of 6</span>
-                      <span>{Math.round(((project.currentStageIndex || 0) + 1) / 6 * 100)}%</span>
+                      <span>Stage {(project.currentStageIndex || 0) + 1} of {getTotalStages(project)}</span>
+                      <span>{getProgressPercentage(project)}%</span>
                     </div>
                     <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-orange-500 rounded-full transition-all"
-                        style={{ width: `${Math.round(((project.currentStageIndex || 0) + 1) / 6 * 100)}%` }}
+                        style={{ width: `${getProgressPercentage(project)}%` }}
                       />
                     </div>
                   </div>
