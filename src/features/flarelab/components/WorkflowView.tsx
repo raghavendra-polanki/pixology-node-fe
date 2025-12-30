@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Check, Zap, AlertTriangle, Share2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, Check, Zap, AlertTriangle, Share2, AlertCircle, Save } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ShareProjectDialog } from '@/shared/components/ShareProjectDialog';
 import { useFlareLabProject } from '../hooks/useFlareLabProject';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { DEFAULT_WORKFLOW_STAGES, STAGE_NAMES } from '../types/project.types';
+
+// Type for unsaved changes callback from stage components
+type UnsavedChangesCallback = (hasChanges: boolean, saveHandler?: () => Promise<void>) => void;
 
 // Import stages
 import { Stage1ContextBrief } from './stages/Stage1ContextBrief';
@@ -55,9 +58,38 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
   const [currentStage, setCurrentStage] = useState(1);
   const [showShareDialog, setShowShareDialog] = useState(false);
 
+  // Unsaved changes tracking for stage components
+  const [stageUnsavedChanges, setStageUnsavedChanges] = useState<Record<number, boolean>>({});
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{ type: 'stage' | 'back'; target?: number } | null>(null);
+  const stageSaveHandlerRef = useRef<(() => Promise<void>) | null>(null);
+
   // Track backend's currentStageIndex to avoid override on navigation
   const lastBackendStageIndexRef = useRef<number | null>(null);
   const hasInitializedRef = useRef(false);
+
+  // Debug: Log project changes
+  useEffect(() => {
+    console.log('[WorkflowView] Project state updated:', {
+      projectId: project?.id,
+      currentStage,
+      hasTextStudio: !!project?.textStudio,
+      textStudioCompositedCount: project?.textStudio?.compositedImages?.length,
+      textStudioSelectedForExport: project?.textStudio?.selectedForExport,
+      hasKineticActivation: !!project?.kineticActivation,
+      kineticAnimationsCount: project?.kineticActivation?.animations?.length,
+      kineticSelectedForExport: project?.kineticActivation?.selectedForExport,
+    });
+  }, [project, currentStage]);
+
+  // Callback for stages to report their unsaved changes state
+  const onUnsavedChangesChange = useCallback<UnsavedChangesCallback>((hasChanges, saveHandler) => {
+    setStageUnsavedChanges(prev => ({ ...prev, [currentStage]: hasChanges }));
+    stageSaveHandlerRef.current = saveHandler || null;
+  }, [currentStage]);
+
+  // Check if current stage has unsaved changes
+  const currentStageHasUnsavedChanges = stageUnsavedChanges[currentStage] || false;
 
   // Sync frontend currentStage to backend's last completed stage (on initial load)
   useEffect(() => {
@@ -82,18 +114,75 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
     }
   }, [project?.currentStageIndex]);
 
-  // Handle stage navigation (local only, no backend call)
+  // Handle stage navigation with unsaved changes check
   const handleStageNavigation = (stageId: number) => {
-    if (isStageAccessible(stageId)) {
-      setCurrentStage(stageId);
-      console.log(`WorkflowView: Navigating to stage ${stageId} (local only)`);
+    if (!isStageAccessible(stageId)) return;
+
+    // Check for unsaved changes before navigating
+    if (currentStageHasUnsavedChanges && stageId !== currentStage) {
+      setPendingNavigation({ type: 'stage', target: stageId });
+      setShowUnsavedWarning(true);
+      return;
     }
+
+    setCurrentStage(stageId);
+    console.log(`WorkflowView: Navigating to stage ${stageId} (local only)`);
   };
 
-  // Navigation function to pass to stage components
+  // Handle back to projects with unsaved changes check
+  const handleBackWithWarning = useCallback(() => {
+    if (currentStageHasUnsavedChanges) {
+      setPendingNavigation({ type: 'back' });
+      setShowUnsavedWarning(true);
+      return;
+    }
+    onBack();
+  }, [currentStageHasUnsavedChanges, onBack]);
+
+  // Navigation function to pass to stage components (bypasses unsaved check since stage handles it)
   const navigateToStage = (stageId: number) => {
-    handleStageNavigation(stageId);
+    // When called from a stage's Save & Continue, the stage has already handled saving
+    // Clear the unsaved state for current stage before navigating
+    setStageUnsavedChanges(prev => ({ ...prev, [currentStage]: false }));
+    setCurrentStage(stageId);
+    console.log(`WorkflowView: Stage-initiated navigation to stage ${stageId}`);
   };
+
+  // Confirm discard and proceed with navigation
+  const confirmDiscardAndNavigate = useCallback(() => {
+    setShowUnsavedWarning(false);
+    setStageUnsavedChanges(prev => ({ ...prev, [currentStage]: false }));
+
+    if (pendingNavigation?.type === 'back') {
+      onBack();
+    } else if (pendingNavigation?.type === 'stage' && pendingNavigation.target) {
+      setCurrentStage(pendingNavigation.target);
+    }
+    setPendingNavigation(null);
+  }, [pendingNavigation, currentStage, onBack]);
+
+  // Save and then navigate
+  const saveAndNavigate = useCallback(async () => {
+    setShowUnsavedWarning(false);
+
+    if (stageSaveHandlerRef.current) {
+      try {
+        await stageSaveHandlerRef.current();
+        // After save, the stage's handleContinue will call navigateToStage
+        // So we don't need to navigate here
+      } catch (error) {
+        console.error('Failed to save:', error);
+        // Re-show warning or show error
+      }
+    }
+    setPendingNavigation(null);
+  }, []);
+
+  // Cancel navigation
+  const cancelNavigation = useCallback(() => {
+    setShowUnsavedWarning(false);
+    setPendingNavigation(null);
+  }, []);
 
   // Check if a stage is accessible
   const isStageAccessible = (stageIndex: number) => {
@@ -182,7 +271,7 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
           {/* Back Button */}
           <Button
             variant="ghost"
-            onClick={onBack}
+            onClick={handleBackWithWarning}
             className="mb-4 text-gray-400 hover:text-white rounded-lg -ml-2"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -275,6 +364,56 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
         </div>
       </div>
 
+      {/* Unsaved Changes Warning Modal */}
+      {showUnsavedWarning && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-[#1a1a1a] border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-yellow-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Unsaved Changes</h3>
+                <p className="text-sm text-gray-400">You have unsaved changes that will be lost.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-6">
+              {pendingNavigation?.type === 'back'
+                ? 'Would you like to save your changes before leaving the project?'
+                : 'Would you like to save your changes before switching stages?'}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                onClick={cancelNavigation}
+                variant="outline"
+                size="sm"
+                className="border-gray-600 text-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDiscardAndNavigate}
+                variant="outline"
+                size="sm"
+                className="border-red-600/50 text-red-400 hover:bg-red-500/10"
+              >
+                Discard Changes
+              </Button>
+              {stageSaveHandlerRef.current && (
+                <Button
+                  onClick={saveAndNavigate}
+                  size="sm"
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save First
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto">
         {CurrentStageComponent && (
@@ -294,6 +433,8 @@ export const WorkflowView = ({ projectId, onBack }: WorkflowViewProps) => {
             updateTextStudio={updateTextStudio}
             updateKineticActivation={updateKineticActivation}
             updatePolishDownload={updatePolishDownload}
+            // Unsaved changes callback for stages that support it
+            onUnsavedChangesChange={onUnsavedChangesChange}
           />
         )}
       </div>

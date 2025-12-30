@@ -1,7 +1,18 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy, RefreshCw, ChevronDown, Layers, PenTool, Droplet, Sun } from 'lucide-react';
+import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy, RefreshCw, ChevronDown, Layers, PenTool, Droplet, Sun, Library, Star, StarOff, AlertCircle, Loader2, X, Save } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import * as fabric from 'fabric';
+
+// Save progress state type
+interface SaveProgress {
+  status: 'idle' | 'saving' | 'success' | 'error';
+  currentStep: 'compositing' | 'uploading' | 'saving-to-db' | '';
+  currentImageIndex: number;
+  totalImages: number;
+  currentThemeName?: string;
+  error?: string;
+  failedImages?: string[];
+}
 import type {
   FlareLabProject,
   GeneratedImage,
@@ -9,9 +20,13 @@ import type {
   TextOverlay,
   ImageTextOverlays,
   TextStyle,
+  LibraryTextStyle,
 } from '../../types/project.types';
 import { TEXT_STYLE_PRESETS } from './textStylePresets';
-import { CSS_TEXT_PRESETS, renderTextAsImage, mapToCSSSPreset, getPresetPreviewStyles } from './htmlTextRenderer';
+import { CSS_TEXT_PRESETS, renderTextAsImage, mapToCSSSPreset, getPresetPreviewStyles, getLibraryStylePreviewStyles, renderTextWithLibraryStyle, libraryStyleToCSSPreset } from './htmlTextRenderer';
+import TextStylesService from '@/shared/services/textStylesService';
+
+const textStylesService = new TextStylesService();
 
 interface Stage5Props {
   project: FlareLabProject;
@@ -20,6 +35,8 @@ interface Stage5Props {
   loadProject: (projectId: string) => Promise<FlareLabProject | null>;
   markStageCompleted: (stageName: string, data?: any, additionalUpdates?: any) => Promise<FlareLabProject | null>;
   updateTextStudio?: (data: any) => Promise<FlareLabProject | null>;
+  // Callback to report unsaved changes to parent (WorkflowView)
+  onUnsavedChangesChange?: (hasChanges: boolean, saveHandler?: () => Promise<void>) => void;
 }
 
 // History state for undo/redo
@@ -28,7 +45,7 @@ interface HistoryEntry {
   timestamp: number;
 }
 
-export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage, loadProject, updateTextStudio }: Stage5Props) => {
+export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage, loadProject, updateTextStudio, onUnsavedChangesChange }: Stage5Props) => {
   // Images from Stage 4
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -50,6 +67,22 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   const [useHTMLRendering, setUseHTMLRendering] = useState(true); // Use HTML/CSS rendering by default
   const [isRenderingText, setIsRenderingText] = useState(false);
 
+  // Unsaved changes and save progress tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveProgress, setSaveProgress] = useState<SaveProgress>({
+    status: 'idle',
+    currentStep: '',
+    currentImageIndex: 0,
+    totalImages: 0,
+  });
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<number | null>(null); // Stage to navigate to after warning
+
+  // Library styles state
+  const [libraryStyles, setLibraryStyles] = useState<LibraryTextStyle[]>([]);
+  const [isLoadingLibraryStyles, setIsLoadingLibraryStyles] = useState(false);
+  const [styleSource, setStyleSource] = useState<'built-in' | 'library'>('built-in');
+
   // Cache for rendered text images (to avoid re-rendering on every change)
   const renderedTextCache = useRef<Map<string, string>>(new Map());
 
@@ -58,6 +91,11 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   // Debounce timer for canvas updates
   const canvasUpdateTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce timer for auto-save
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoad = useRef(true);
+  const lastSavedData = useRef<string>('');
 
   // Track which overlay changed to do targeted updates
   const pendingOverlayUpdate = useRef<string | null>(null);
@@ -104,6 +142,29 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         setContainerElement(node);
       });
     }
+  }, []);
+
+  // Fetch library styles on mount
+  useEffect(() => {
+    const fetchLibraryStyles = async () => {
+      setIsLoadingLibraryStyles(true);
+      try {
+        // Fetch all styles (avoid favorites filter which requires Firestore index)
+        const response = await textStylesService.getTextStyles({ limit: 30 });
+        // Sort favorites to top
+        const sortedStyles = response.styles.sort((a, b) => {
+          if (a.isFavorite && !b.isFavorite) return -1;
+          if (!a.isFavorite && b.isFavorite) return 1;
+          return 0;
+        });
+        setLibraryStyles(sortedStyles);
+      } catch (error) {
+        console.error('[Stage5] Failed to fetch library styles:', error);
+      } finally {
+        setIsLoadingLibraryStyles(false);
+      }
+    };
+    fetchLibraryStyles();
   }, []);
 
   // Load images from Stage 4
@@ -154,7 +215,134 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         setSelectedForAnimation(new Set(project.textStudio.selectedForAnimation));
       }
     }
+    // Mark initial load as complete after a short delay
+    // Also capture the initial state for change detection
+    setTimeout(() => {
+      isInitialLoad.current = false;
+      lastSavedData.current = JSON.stringify({
+        overlays: project?.textStudio?.imageOverlays || {},
+        export: project?.textStudio?.selectedForExport || [],
+        animation: project?.textStudio?.selectedForAnimation || [],
+      });
+    }, 500);
   }, [project?.highFidelityCapture?.generatedImages, project?.textStudio]);
+
+  // Track unsaved changes by comparing current state to last saved state
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+
+    const currentState = JSON.stringify({
+      overlays: imageOverlays,
+      export: Array.from(selectedForExport).sort(),
+      animation: Array.from(selectedForAnimation).sort(),
+    });
+
+    const hasChanges = currentState !== lastSavedData.current;
+    setHasUnsavedChanges(hasChanges);
+  }, [imageOverlays, selectedForExport, selectedForAnimation]);
+
+  // Browser beforeunload warning for unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Report unsaved changes to parent (WorkflowView) for workflow-level navigation warnings
+  // We use a ref for handleContinue to avoid dependency issues
+  const handleContinueRef = useRef<() => Promise<void>>();
+  useEffect(() => {
+    if (onUnsavedChangesChange) {
+      onUnsavedChangesChange(hasUnsavedChanges, handleContinueRef.current);
+    }
+  }, [hasUnsavedChanges, onUnsavedChangesChange]);
+
+  // Handle navigation with unsaved changes warning
+  const handleNavigateWithWarning = useCallback((stage: number) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(stage);
+      setShowUnsavedWarning(true);
+    } else {
+      navigateToStage(stage);
+    }
+  }, [hasUnsavedChanges, navigateToStage]);
+
+  // Confirm discard changes and navigate
+  const confirmDiscardAndNavigate = useCallback(() => {
+    if (pendingNavigation !== null) {
+      setShowUnsavedWarning(false);
+      setHasUnsavedChanges(false);
+      navigateToStage(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  }, [pendingNavigation, navigateToStage]);
+
+  // Cancel navigation warning
+  const cancelNavigation = useCallback(() => {
+    setShowUnsavedWarning(false);
+    setPendingNavigation(null);
+  }, []);
+
+  // Auto-save disabled for now - relying on Save & Continue button
+  // useEffect(() => {
+  //   // Skip initial load to avoid saving the data we just loaded
+  //   if (isInitialLoad.current) return;
+
+  //   // Skip if no overlays or no updateTextStudio function
+  //   if (!updateTextStudio || Object.keys(imageOverlays).length === 0) return;
+
+  //   // Create a hash of current data to compare
+  //   const currentDataHash = JSON.stringify({
+  //     overlays: imageOverlays,
+  //     export: Array.from(selectedForExport).sort(),
+  //     animation: Array.from(selectedForAnimation).sort(),
+  //   });
+
+  //   // Skip if data hasn't actually changed
+  //   if (currentDataHash === lastSavedData.current) {
+  //     return;
+  //   }
+
+  //   // Clear any pending auto-save
+  //   if (autoSaveTimer.current) {
+  //     clearTimeout(autoSaveTimer.current);
+  //   }
+
+  //   // Debounce auto-save (2 seconds after last change)
+  //   autoSaveTimer.current = setTimeout(async () => {
+  //     // Double-check data hasn't been saved already
+  //     if (currentDataHash === lastSavedData.current) {
+  //       return;
+  //     }
+
+  //     try {
+  //       console.log('[Stage5] Auto-saving text overlays...');
+  //       await updateTextStudio({
+  //         imageOverlays,
+  //         selectedForExport: Array.from(selectedForExport),
+  //         selectedForAnimation: Array.from(selectedForAnimation),
+  //         updatedAt: new Date(),
+  //       });
+  //       lastSavedData.current = currentDataHash;
+  //       console.log('[Stage5] Auto-save complete');
+  //     } catch (error) {
+  //       console.error('[Stage5] Auto-save failed:', error);
+  //     }
+  //   }, 2000);
+
+  //   return () => {
+  //     if (autoSaveTimer.current) {
+  //       clearTimeout(autoSaveTimer.current);
+  //     }
+  //   };
+  // }, [imageOverlays, selectedForExport, selectedForAnimation, updateTextStudio]);
 
   // Get current image and overlays
   const currentImage = images[currentImageIndex];
@@ -244,14 +432,18 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
       if (obj && obj.data?.overlayId && currentThemeId) {
         const overlayId = obj.data.overlayId;
 
-        // Calculate percentage position
-        const canvasWidth = canvas.width || 1;
-        const canvasHeight = canvas.height || 1;
-        const x = ((obj.left || 0) / canvasWidth) * 100;
-        const y = ((obj.top || 0) / canvasHeight) * 100;
+        // Calculate percentage position relative to IMAGE bounds (not canvas)
+        const bounds = imageBounds.current;
+        // Convert canvas position to image-relative percentage
+        const x = ((obj.left || 0) - bounds.left) / bounds.width * 100;
+        const y = ((obj.top || 0) - bounds.top) / bounds.height * 100;
+
+        // Clamp to 0-100 range
+        const clampedX = Math.max(0, Math.min(100, x));
+        const clampedY = Math.max(0, Math.min(100, y));
 
         // Update overlay position
-        updateOverlayPosition(overlayId, x, y, obj.angle || 0);
+        updateOverlayPosition(overlayId, clampedX, clampedY, obj.angle || 0);
       }
     });
 
@@ -310,6 +502,10 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   // Track last loaded image URL to avoid reloading background
   const lastLoadedImageUrl = useRef<string | null>(null);
+  // Store image bounds within canvas for accurate text positioning
+  const imageBounds = useRef<{ left: number; top: number; width: number; height: number }>({
+    left: 0, top: 0, width: 800, height: 450
+  });
 
   // Actual canvas loading logic (separated for debouncing)
   const loadCanvasContent = useCallback(async () => {
@@ -366,10 +562,23 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             canvasHeight / (img.height || 1)
           );
 
+          const scaledImgWidth = (img.width || 1) * scale;
+          const scaledImgHeight = (img.height || 1) * scale;
+          const imgLeft = (canvasWidth - scaledImgWidth) / 2;
+          const imgTop = (canvasHeight - scaledImgHeight) / 2;
+
+          // Store image bounds for text positioning
+          imageBounds.current = {
+            left: imgLeft,
+            top: imgTop,
+            width: scaledImgWidth,
+            height: scaledImgHeight,
+          };
+
           img.scale(scale);
           img.set({
-            left: (canvasWidth - (img.width || 0) * scale) / 2,
-            top: (canvasHeight - (img.height || 0) * scale) / 2,
+            left: imgLeft,
+            top: imgTop,
             selectable: false,
             evented: false,
           });
@@ -378,9 +587,10 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
           lastLoadedImageUrl.current = currentImage.url;
         }
 
-        // Add text overlays (async - need to await all)
+        // Add text overlays using image bounds (not canvas bounds)
+        const bounds = imageBounds.current;
         for (const overlay of currentOverlays) {
-          await addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+          await addTextToCanvas(overlay, canvas, bounds.width, bounds.height, bounds.left, bounds.top);
         }
         canvas.renderAll();
 
@@ -412,10 +622,23 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
               canvasHeight / (img.height || 1)
             );
 
+            const scaledImgWidth = (img.width || 1) * scale;
+            const scaledImgHeight = (img.height || 1) * scale;
+            const imgLeft = (canvasWidth - scaledImgWidth) / 2;
+            const imgTop = (canvasHeight - scaledImgHeight) / 2;
+
+            // Store image bounds for text positioning
+            imageBounds.current = {
+              left: imgLeft,
+              top: imgTop,
+              width: scaledImgWidth,
+              height: scaledImgHeight,
+            };
+
             img.scale(scale);
             img.set({
-              left: (canvasWidth - (img.width || 0) * scale) / 2,
-              top: (canvasHeight - (img.height || 0) * scale) / 2,
+              left: imgLeft,
+              top: imgTop,
               selectable: false,
               evented: false,
             });
@@ -423,9 +646,10 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             canvas.backgroundImage = img;
             lastLoadedImageUrl.current = currentImage.url;
 
-            // Add text overlays
+            // Add text overlays using image bounds
+            const bounds = imageBounds.current;
             for (const overlay of currentOverlays) {
-              await addTextToCanvas(overlay, canvas, canvasWidth, canvasHeight);
+              await addTextToCanvas(overlay, canvas, bounds.width, bounds.height, bounds.left, bounds.top);
             }
             canvas.renderAll();
 
@@ -451,19 +675,27 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
   }, [currentImage?.url, currentOverlays, selectedOverlayId, containerElement, useHTMLRendering]);
 
   // Add a text object to the canvas (using HTML/CSS rendering for broadcast quality)
-  const addTextToCanvas = async (overlay: TextOverlay, canvas: fabric.Canvas, canvasWidth: number, canvasHeight: number) => {
+  // imgOffsetX/Y are the offsets of the image within the canvas (for centering)
+  const addTextToCanvas = async (
+    overlay: TextOverlay,
+    canvas: fabric.Canvas,
+    imgWidth: number,
+    imgHeight: number,
+    imgOffsetX: number = 0,
+    imgOffsetY: number = 0
+  ) => {
     const style = overlay.style;
 
     // Check if we should use HTML rendering (for CSS presets with broadcast-quality effects)
     const cssPresetId = overlay.cssPresetId || (overlay.presetId ? mapToCSSSPreset(overlay.presetId) : null);
 
-    console.log('[Stage5] addTextToCanvas:', { text: overlay.text, cssPresetId, useHTMLRendering, canvasWidth, canvasHeight });
+    console.log('[Stage5] addTextToCanvas:', { text: overlay.text, cssPresetId, useHTMLRendering, imgWidth, imgHeight, imgOffsetX, imgOffsetY });
 
     if (useHTMLRendering && cssPresetId) {
       // Use HTML/CSS rendering for broadcast-quality text
       try {
-        // Scale font size for display canvas (base: 1920px width)
-        const displayScaleFactor = canvasWidth / 1920;
+        // Scale font size for display (base: 1920px width - using image width, not canvas)
+        const displayScaleFactor = imgWidth / 1920;
         const displayFontSize = Math.round((style.fontSize || 96) * displayScaleFactor);
 
         // Generate cache key with display size and font family
@@ -481,7 +713,7 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
           console.log('[Stage5] Rendering text as image:', { textToRender, cssPresetId, displayFontSize, fontFamily, originalFontSize: style.fontSize });
           // Pass custom font family to renderer
-          dataUrl = await renderTextAsImage(textToRender, cssPresetId, displayFontSize, canvasWidth, fontFamily);
+          dataUrl = await renderTextAsImage(textToRender, cssPresetId, displayFontSize, imgWidth, fontFamily);
           console.log('[Stage5] Rendered data URL length:', dataUrl?.length);
           renderedTextCache.current.set(cacheKey, dataUrl);
         }
@@ -490,10 +722,10 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         const img = await fabric.FabricImage.fromURL(dataUrl);
         console.log('[Stage5] Created fabric image:', { width: img.width, height: img.height });
 
-        // Position the image
+        // Position the image relative to image bounds (add offset for centering)
         img.set({
-          left: (overlay.position.x / 100) * canvasWidth,
-          top: (overlay.position.y / 100) * canvasHeight,
+          left: imgOffsetX + (overlay.position.x / 100) * imgWidth,
+          top: imgOffsetY + (overlay.position.y / 100) * imgHeight,
           originX: 'center',
           originY: 'center',
           angle: style.rotation || 0,
@@ -510,13 +742,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }
 
     // Fallback: Create text object using Fabric.js (basic styling)
+    // Position relative to image bounds
     const textOptions: fabric.TextboxProps = {
-      left: (overlay.position.x / 100) * canvasWidth,
-      top: (overlay.position.y / 100) * canvasHeight,
+      left: imgOffsetX + (overlay.position.x / 100) * imgWidth,
+      top: imgOffsetY + (overlay.position.y / 100) * imgHeight,
       fontFamily: style.fontFamily,
       fontSize: style.fontSize,
       fontWeight: style.fontWeight as any,
-      fill: style.fillType === 'solid' ? style.fillColor : createGradient(style, canvasHeight),
+      fill: style.fillType === 'solid' ? style.fillColor : createGradient(style, imgHeight),
       stroke: style.strokeColor,
       strokeWidth: style.strokeWidth || 0,
       textAlign: 'center',
@@ -847,10 +1080,58 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                 ...o,
                 cssPresetId,
                 presetId: undefined, // Clear basic preset
+                libraryStyleId: undefined, // Clear library style reference
                 style: {
                   ...o.style,
                   fontFamily: cssPreset.css.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
                   fontWeight: cssPreset.css.fontWeight,
+                },
+              }
+            : o
+        ) || [],
+      },
+    }));
+
+    setShowPresets(false);
+  };
+
+  // Apply library style for broadcast-quality text rendering
+  const applyLibraryStyle = (style: LibraryTextStyle) => {
+    if (!selectedOverlayId || !currentThemeId) return;
+
+    pushHistory();
+
+    // Clear rendered text cache to force re-render with new style
+    renderedTextCache.current.clear();
+
+    // Convert library style to CSS preset format for rendering
+    const cssPreset = libraryStyleToCSSPreset(style);
+    // Temporarily add to CSS_TEXT_PRESETS for the renderer
+    const tempId = `library-${style.id}`;
+    const existingIndex = CSS_TEXT_PRESETS.findIndex(p => p.id === tempId);
+    if (existingIndex === -1) {
+      CSS_TEXT_PRESETS.push(cssPreset);
+    } else {
+      CSS_TEXT_PRESETS[existingIndex] = cssPreset;
+    }
+
+    setImageOverlays(prev => ({
+      ...prev,
+      [currentThemeId]: {
+        ...prev[currentThemeId],
+        overlays: prev[currentThemeId]?.overlays.map(o =>
+          o.id === selectedOverlayId
+            ? {
+                ...o,
+                cssPresetId: tempId, // Use the temp ID for rendering
+                presetId: undefined, // Clear basic preset
+                libraryStyleId: style.id, // Track the source library style
+                style: {
+                  ...o.style,
+                  fontFamily: style.fontFamily,
+                  fontWeight: style.fontWeight,
+                  fontSize: style.fontSize || o.style.fontSize,
+                  letterSpacing: style.letterSpacing * 10, // Convert em to spacing units
                 },
               }
             : o
@@ -1038,164 +1319,79 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }
   };
 
-  // Rasterize image with text overlays
+  // Rasterize image with text overlays using backend to avoid CORS issues
   const rasterizeImage = async (
     image: GeneratedImage,
     overlays: TextOverlay[]
   ): Promise<string | null> => {
     if (!overlays || overlays.length === 0) {
       // No overlays, return original image
+      console.log('[Stage5] No overlays for image, returning original URL');
       return image.url;
     }
 
     try {
-      // Create offscreen canvas for compositing
-      const offscreenCanvas = document.createElement('canvas');
-      const ctx = offscreenCanvas.getContext('2d');
-      if (!ctx) return image.url;
+      console.log('[Stage5] Calling backend rasterization for', image.themeId, 'with', overlays.length, 'overlays');
 
-      // Load the original image
-      const imgElement = new Image();
-      imgElement.crossOrigin = 'anonymous';
-
-      await new Promise<void>((resolve, reject) => {
-        imgElement.onload = () => resolve();
-        imgElement.onerror = () => reject(new Error('Failed to load image'));
-        imgElement.src = image.url;
-      });
-
-      // Set canvas to image dimensions
-      offscreenCanvas.width = imgElement.naturalWidth;
-      offscreenCanvas.height = imgElement.naturalHeight;
-
-      // Draw the background image
-      ctx.drawImage(imgElement, 0, 0);
-
-      // Scale factor for font size (base 1920px width)
-      const scaleFactor = offscreenCanvas.width / 1920;
-
-      // Draw each text overlay
-      for (const overlay of overlays) {
-        const style = overlay.style;
-
-        // Calculate position based on percentage
-        const x = (overlay.position.x / 100) * offscreenCanvas.width;
-        const y = (overlay.position.y / 100) * offscreenCanvas.height;
-
-        // Scale font size proportionally to image size
-        const scaledFontSize = style.fontSize * scaleFactor;
-
-        // Apply text transform
-        let text = overlay.text;
-        if (style.textTransform === 'uppercase') text = text.toUpperCase();
-        else if (style.textTransform === 'lowercase') text = text.toLowerCase();
-
-        // Check if overlay uses CSS preset (broadcast-quality rendering)
-        const cssPresetId = overlay.cssPresetId || (overlay.presetId ? mapToCSSSPreset(overlay.presetId) : null);
-
-        if (useHTMLRendering && cssPresetId) {
-          // Use HTML/CSS rendering for broadcast-quality text
-          try {
-            const fontFamily = style.fontFamily || 'Bebas Neue';
-            const textDataUrl = await renderTextAsImage(text, cssPresetId, scaledFontSize, offscreenCanvas.width, fontFamily);
-
-            // Load the rendered text image
-            const textImg = new Image();
-            await new Promise<void>((resolve, reject) => {
-              textImg.onload = () => resolve();
-              textImg.onerror = () => reject(new Error('Failed to load text image'));
-              textImg.src = textDataUrl;
-            });
-
-            // Draw the text image centered at the position
-            ctx.save();
-            ctx.translate(x, y);
-
-            if (style.rotation) {
-              ctx.rotate((style.rotation * Math.PI) / 180);
-            }
-
-            // Draw centered
-            ctx.drawImage(
-              textImg,
-              -textImg.width / 2,
-              -textImg.height / 2
-            );
-            ctx.restore();
-            continue; // Skip to next overlay
-          } catch (error) {
-            console.error('[Stage5] HTML rasterization failed for overlay, using fallback:', error);
-            // Fall through to basic canvas rendering
-          }
-        }
-
-        // Fallback: Basic canvas text rendering
-        ctx.save();
-        ctx.translate(x, y);
-
-        if (style.rotation) {
-          ctx.rotate((style.rotation * Math.PI) / 180);
-        }
-
-        // Font setup
-        const fontWeight = style.fontWeight || 700;
-        ctx.font = `${fontWeight} ${scaledFontSize}px "${style.fontFamily}"`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Shadow/glow
-        if (style.shadowColor || style.glowColor) {
-          ctx.shadowColor = style.glowColor || style.shadowColor || 'rgba(0,0,0,0.5)';
-          ctx.shadowBlur = (style.glowBlur || style.shadowBlur || 10) * scaleFactor;
-          ctx.shadowOffsetX = (style.shadowOffsetX || 0) * scaleFactor;
-          ctx.shadowOffsetY = (style.shadowOffsetY || 0) * scaleFactor;
-        }
-
-        // Stroke
-        if (style.strokeColor && style.strokeWidth) {
-          ctx.strokeStyle = style.strokeColor;
-          ctx.lineWidth = style.strokeWidth * scaleFactor;
-          ctx.strokeText(text, 0, 0);
-        }
-
-        // Fill - handle gradient or solid
-        if (style.fillType === 'gradient' && style.gradient) {
-          const gradient = ctx.createLinearGradient(
-            0, -scaledFontSize / 2,
-            0, scaledFontSize / 2
-          );
-          style.gradient.stops.forEach(stop => {
-            gradient.addColorStop(stop.offset, stop.color);
-          });
-          ctx.fillStyle = gradient;
-        } else {
-          ctx.fillStyle = style.fillColor || '#FFFFFF';
-        }
-
-        ctx.fillText(text, 0, 0);
-        ctx.restore();
-      }
-
-      // Export as data URL
-      const dataUrl = offscreenCanvas.toDataURL('image/png', 1.0);
-
-      // Upload to backend
-      const response = await fetch('/api/flarelab/generation/upload-composited', {
+      // Call backend rasterization endpoint to avoid CORS issues
+      // Pass previewWidth so backend can scale text correctly
+      const previewWidth = imageBounds.current.width || 800;
+      const response = await fetch('/api/flarelab/generation/rasterize-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project?.id,
           themeId: image.themeId,
-          imageData: dataUrl,
+          imageUrl: image.url,
+          previewWidth, // Width used in Stage 5 preview for scaling
+          overlays: overlays.map(overlay => {
+            // Resolve cssPresetId using same logic as canvas preview
+            const resolvedCssPresetId = overlay.cssPresetId || (overlay.presetId ? mapToCSSSPreset(overlay.presetId) : null);
+            return {
+            id: overlay.id,
+            text: overlay.text,
+            position: overlay.position,
+            // Include CSS preset ID for broadcast-quality styling
+            cssPresetId: resolvedCssPresetId,
+            presetId: overlay.presetId,
+            style: {
+              // Typography
+              fontSize: overlay.style.fontSize,
+              fontFamily: overlay.style.fontFamily,
+              fontWeight: overlay.style.fontWeight,
+              letterSpacing: overlay.style.letterSpacing,
+              textTransform: overlay.style.textTransform,
+              opacity: overlay.style.opacity,
+              rotation: overlay.style.rotation,
+              // Fill (TextStyle uses fillType/fillColor/gradient)
+              fillType: overlay.style.fillType,
+              fillColor: overlay.style.fillColor,
+              gradient: overlay.style.gradient,
+              // Stroke
+              strokeColor: overlay.style.strokeColor,
+              strokeWidth: overlay.style.strokeWidth,
+              // Shadow
+              shadowColor: overlay.style.shadowColor,
+              shadowBlur: overlay.style.shadowBlur,
+              shadowOffsetX: overlay.style.shadowOffsetX,
+              shadowOffsetY: overlay.style.shadowOffsetY,
+              // Glow
+              glowColor: overlay.style.glowColor,
+              glowBlur: overlay.style.glowBlur,
+            },
+          };
+          }),
         }),
       });
 
       if (!response.ok) {
-        console.error('[Stage5] Failed to upload composited image');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[Stage5] Backend rasterization failed:', errorData);
         return image.url; // Fall back to original
       }
 
       const result = await response.json();
+      console.log('[Stage5] Backend rasterization successful:', result.data?.url);
       return result.data?.url || image.url;
     } catch (error) {
       console.error('[Stage5] Rasterization failed:', error);
@@ -1203,11 +1399,23 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
     }
   };
 
-  // Save and continue
+  // Save and continue with progress tracking
   const handleContinue = async () => {
     if (selectedForExport.size === 0 && selectedForAnimation.size === 0) return;
 
+    const allSelectedThemeIds = Array.from(new Set([...selectedForExport, ...selectedForAnimation]));
+    const totalImages = allSelectedThemeIds.length;
+
+    // Initialize save progress
+    setSaveProgress({
+      status: 'saving',
+      currentStep: 'compositing',
+      currentImageIndex: 0,
+      totalImages,
+      currentThemeName: '',
+    });
     setIsSaving(true);
+
     try {
       // Rasterize images that have text overlays
       const compositedImages: Array<{
@@ -1215,26 +1423,73 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         originalUrl: string;
         compositedUrl: string;
       }> = [];
+      const failedImages: string[] = [];
 
-      const allSelectedThemeIds = new Set([...selectedForExport, ...selectedForAnimation]);
+      // Cancel any pending auto-save to prevent it from overwriting our data
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
 
-      for (const themeId of allSelectedThemeIds) {
+      console.log('[Stage5] Selected for export:', Array.from(selectedForExport));
+      console.log('[Stage5] Selected for animation:', Array.from(selectedForAnimation));
+      console.log('[Stage5] All selected theme IDs:', allSelectedThemeIds);
+
+      for (let i = 0; i < allSelectedThemeIds.length; i++) {
+        const themeId = allSelectedThemeIds[i];
         const image = images.find(img => img.themeId === themeId);
         const overlays = imageOverlays[themeId]?.overlays || [];
 
+        // Update progress
+        const themeName = image?.themeId?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || `Image ${i + 1}`;
+        setSaveProgress(prev => ({
+          ...prev,
+          currentImageIndex: i + 1,
+          currentThemeName: themeName,
+        }));
+
+        console.log(`[Stage5] Processing theme ${themeId} (${i + 1}/${totalImages}):`, {
+          imageFound: !!image,
+          overlayCount: overlays.length,
+        });
+
         if (image) {
-          const compositedUrl = await rasterizeImage(image, overlays);
-          if (compositedUrl) {
-            compositedImages.push({
-              themeId,
-              originalUrl: image.url,
-              compositedUrl,
-            });
+          try {
+            const compositedUrl = await rasterizeImage(image, overlays);
+            if (compositedUrl) {
+              compositedImages.push({
+                themeId,
+                originalUrl: image.url,
+                compositedUrl,
+              });
+            }
+          } catch (error) {
+            console.error(`[Stage5] Failed to rasterize ${themeId}:`, error);
+            failedImages.push(themeId);
           }
         }
       }
 
-      console.log('[Stage5] Composited images:', compositedImages.length);
+      // Check for failures
+      if (failedImages.length > 0 && failedImages.length === totalImages) {
+        // All images failed
+        setSaveProgress(prev => ({
+          ...prev,
+          status: 'error',
+          error: 'Failed to process all images. Please try again.',
+          failedImages,
+        }));
+        return;
+      }
+
+      // Update progress to saving step
+      setSaveProgress(prev => ({
+        ...prev,
+        currentStep: 'saving-to-db',
+        currentThemeName: '',
+      }));
+
+      console.log('[Stage5] Final composited images:', compositedImages.length);
 
       const textStudioData = {
         imageOverlays,
@@ -1248,13 +1503,53 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
         textStudio: textStudioData,
       });
 
-      navigateToStage(6);
+      // Update lastSavedData to mark as saved
+      lastSavedData.current = JSON.stringify({
+        overlays: imageOverlays,
+        export: Array.from(selectedForExport).sort(),
+        animation: Array.from(selectedForAnimation).sort(),
+      });
+      setHasUnsavedChanges(false);
+
+      // Show success briefly, then navigate
+      setSaveProgress(prev => ({
+        ...prev,
+        status: 'success',
+        failedImages: failedImages.length > 0 ? failedImages : undefined,
+      }));
+
+      // Wait a moment to show success state, then navigate
+      setTimeout(() => {
+        setSaveProgress({ status: 'idle', currentStep: '', currentImageIndex: 0, totalImages: 0 });
+        console.log('[Stage5] Stage completed, navigating to Stage 6');
+        navigateToStage(6);
+      }, failedImages.length > 0 ? 2000 : 500);
+
     } catch (error) {
       console.error('[Stage5] Failed to save:', error);
+      setSaveProgress(prev => ({
+        ...prev,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
+      }));
     } finally {
       setIsSaving(false);
     }
   };
+
+  // Keep ref updated for parent-triggered saves
+  handleContinueRef.current = handleContinue;
+
+  // Retry save after error
+  const retrySave = useCallback(() => {
+    setSaveProgress({ status: 'idle', currentStep: '', currentImageIndex: 0, totalImages: 0 });
+    handleContinue();
+  }, []);
+
+  // Close error modal without retrying
+  const closeErrorModal = useCallback(() => {
+    setSaveProgress({ status: 'idle', currentStep: '', currentImageIndex: 0, totalImages: 0 });
+  }, []);
 
   // Get selected overlay
   const selectedOverlay = currentOverlays.find(o => o.id === selectedOverlayId);
@@ -1307,6 +1602,143 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col px-6 py-4 max-w-[1800px] mx-auto">
+      {/* Save Progress Modal */}
+      {saveProgress.status !== 'idle' && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-[#1a1a1a] border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            {saveProgress.status === 'saving' && (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {saveProgress.currentStep === 'compositing' ? 'Processing Images' : 'Saving Project'}
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      {saveProgress.currentStep === 'compositing'
+                        ? `Compositing ${saveProgress.currentImageIndex} of ${saveProgress.totalImages}`
+                        : 'Finalizing changes...'}
+                    </p>
+                  </div>
+                </div>
+                {saveProgress.currentStep === 'compositing' && (
+                  <>
+                    <div className="mb-2">
+                      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-300 ease-out"
+                          style={{ width: `${(saveProgress.currentImageIndex / saveProgress.totalImages) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    {saveProgress.currentThemeName && (
+                      <p className="text-xs text-gray-500 text-center">
+                        {saveProgress.currentThemeName}
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {saveProgress.status === 'success' && (
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-1">Saved Successfully</h3>
+                {saveProgress.failedImages && saveProgress.failedImages.length > 0 && (
+                  <p className="text-sm text-yellow-400">
+                    {saveProgress.failedImages.length} image(s) failed to process
+                  </p>
+                )}
+              </div>
+            )}
+
+            {saveProgress.status === 'error' && (
+              <div className="text-center py-2">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle className="w-6 h-6 text-red-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Save Failed</h3>
+                <p className="text-sm text-gray-400 mb-4">{saveProgress.error}</p>
+                <div className="flex gap-3 justify-center">
+                  <Button
+                    onClick={closeErrorModal}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600 text-gray-300"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={retrySave}
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved Changes Warning Modal */}
+      {showUnsavedWarning && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-[#1a1a1a] border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-yellow-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Unsaved Changes</h3>
+                <p className="text-sm text-gray-400">You have unsaved changes that will be lost.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-6">
+              Would you like to save your changes before leaving?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                onClick={cancelNavigation}
+                variant="outline"
+                size="sm"
+                className="border-gray-600 text-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDiscardAndNavigate}
+                variant="outline"
+                size="sm"
+                className="border-red-600/50 text-red-400 hover:bg-red-500/10"
+              >
+                Discard Changes
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowUnsavedWarning(false);
+                  handleContinue();
+                }}
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save & Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -1314,7 +1746,14 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
             <Type className="w-5 h-5 text-orange-500" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">Text Studio</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-white">Text Studio</h2>
+              {hasUnsavedChanges && (
+                <span className="px-2 py-0.5 text-[10px] font-medium bg-yellow-500/20 text-yellow-400 rounded-full">
+                  Unsaved
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">Add broadcast-quality text overlays</p>
           </div>
         </div>
@@ -1331,8 +1770,15 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
           <Button
             onClick={handleContinue}
             disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}
-            className="h-9 px-5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg disabled:opacity-40"
+            className={`h-9 px-5 font-medium rounded-lg disabled:opacity-40 relative ${
+              hasUnsavedChanges
+                ? 'bg-orange-500 hover:bg-orange-600 text-white ring-2 ring-orange-400/50 ring-offset-2 ring-offset-[#0a0a0a]'
+                : 'bg-orange-500 hover:bg-orange-600 text-white'
+            }`}
           >
+            {hasUnsavedChanges && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
+            )}
             {isSaving ? 'Saving...' : 'Save & Continue'}
             {!isSaving && <ArrowRight className="w-4 h-4 ml-2" />}
           </Button>
@@ -1510,7 +1956,11 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                 <div className="p-2 space-y-1.5">
                   {currentOverlays.map((overlay, index) => {
                     const isSelected = selectedOverlayId === overlay.id;
-                    const styleName = CSS_TEXT_PRESETS.find(p => p.id === overlay.cssPresetId)?.name;
+                    // Get style name - check library styles first, then built-in presets
+                    const styleName = overlay.libraryStyleId
+                      ? libraryStyles.find(s => s.id === overlay.libraryStyleId)?.name
+                      : CSS_TEXT_PRESETS.find(p => p.id === overlay.cssPresetId)?.name;
+                    const isLibraryStyle = !!overlay.libraryStyleId;
                     return (
                       <div
                         key={overlay.id}
@@ -1533,7 +1983,8 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
                             {overlay.text}
                           </div>
                           {styleName && (
-                            <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                            <div className="flex items-center gap-1 text-[10px] text-gray-500 truncate mt-0.5">
+                              {isLibraryStyle && <Library className="w-2.5 h-2.5" />}
                               {styleName} • {overlay.style.fontSize}px
                             </div>
                           )}
@@ -1595,40 +2046,135 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
 
                 {/* Style Preset */}
                 <AccordionSection id="style" title="Style Preset" icon={Palette}>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CSS_TEXT_PRESETS.map(preset => {
-                      const isActive = selectedOverlay.cssPresetId === preset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          onClick={() => applyCSSPreset(preset.id)}
-                          className={`group relative p-2 rounded-xl transition-all duration-200 ${
-                            isActive
-                              ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 ring-2 ring-orange-500/60 shadow-lg shadow-orange-500/10'
-                              : 'bg-[#0a0a0a] hover:bg-[#111111] ring-1 ring-gray-700/50 hover:ring-gray-600/50'
-                          }`}
-                        >
-                          {/* Preview */}
-                          <div
-                            className="h-9 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-1.5"
-                            style={getPresetPreviewStyles(preset.id, 14)}
-                          >
-                            Aa
-                          </div>
-                          {/* Name */}
-                          <div className={`text-[10px] font-medium truncate text-center px-0.5 ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
-                            {preset.name}
-                          </div>
-                          {/* Active checkmark */}
-                          {isActive && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
-                              <CheckSquare className="w-2.5 h-2.5 text-white" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                  {/* Source Toggle */}
+                  <div className="flex items-center gap-1 bg-gray-800/40 rounded-lg p-0.5 mb-3">
+                    <button
+                      onClick={() => setStyleSource('built-in')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        styleSource === 'built-in'
+                          ? 'bg-orange-500 text-white'
+                          : 'text-gray-400 hover:text-gray-300'
+                      }`}
+                    >
+                      <Palette className="w-3 h-3" />
+                      Built-in
+                    </button>
+                    <button
+                      onClick={() => setStyleSource('library')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        styleSource === 'library'
+                          ? 'bg-orange-500 text-white'
+                          : 'text-gray-400 hover:text-gray-300'
+                      }`}
+                    >
+                      <Library className="w-3 h-3" />
+                      Library
+                      {libraryStyles.length > 0 && (
+                        <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full">
+                          {libraryStyles.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
+
+                  {styleSource === 'built-in' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {CSS_TEXT_PRESETS.map(preset => {
+                        const isActive = selectedOverlay.cssPresetId === preset.id && !selectedOverlay.libraryStyleId;
+                        return (
+                          <button
+                            key={preset.id}
+                            onClick={() => applyCSSPreset(preset.id)}
+                            className={`group relative p-2 rounded-xl transition-all duration-200 ${
+                              isActive
+                                ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 ring-2 ring-orange-500/60 shadow-lg shadow-orange-500/10'
+                                : 'bg-[#0a0a0a] hover:bg-[#111111] ring-1 ring-gray-700/50 hover:ring-gray-600/50'
+                            }`}
+                          >
+                            {/* Preview */}
+                            <div
+                              className="h-9 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-1.5"
+                              style={getPresetPreviewStyles(preset.id, 14)}
+                            >
+                              Aa
+                            </div>
+                            {/* Name */}
+                            <div className={`text-[10px] font-medium truncate text-center px-0.5 ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                              {preset.name}
+                            </div>
+                            {/* Active checkmark */}
+                            {isActive && (
+                              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
+                                <CheckSquare className="w-2.5 h-2.5 text-white" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <>
+                      {isLoadingLibraryStyles ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" />
+                        </div>
+                      ) : libraryStyles.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {libraryStyles.map(style => {
+                            const isActive = selectedOverlay.libraryStyleId === style.id;
+                            return (
+                              <button
+                                key={style.id}
+                                onClick={() => applyLibraryStyle(style)}
+                                className={`group relative p-2 rounded-xl transition-all duration-200 ${
+                                  isActive
+                                    ? 'bg-gradient-to-b from-orange-500/25 to-orange-600/15 ring-2 ring-orange-500/60 shadow-lg shadow-orange-500/10'
+                                    : 'bg-[#0a0a0a] hover:bg-[#111111] ring-1 ring-gray-700/50 hover:ring-gray-600/50'
+                                }`}
+                              >
+                                {/* Preview */}
+                                <div
+                                  className="h-9 flex items-center justify-center rounded-lg bg-gradient-to-b from-black/40 to-black/60 overflow-hidden mb-1.5"
+                                  style={getLibraryStylePreviewStyles(style, 14)}
+                                >
+                                  Aa
+                                </div>
+                                {/* Name and favorite */}
+                                <div className="flex items-center gap-1 justify-center">
+                                  {style.isFavorite && (
+                                    <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+                                  )}
+                                  <div className={`text-[10px] font-medium truncate ${isActive ? 'text-orange-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                                    {style.name}
+                                  </div>
+                                </div>
+                                {/* Active checkmark */}
+                                {isActive && (
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center shadow-md">
+                                    <CheckSquare className="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                )}
+                                {/* System badge */}
+                                {style.isSystem && (
+                                  <div className="absolute top-1.5 left-1.5 text-[8px] text-gray-500 bg-gray-800/80 px-1 py-0.5 rounded">
+                                    SYS
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <Library className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                          <p className="text-xs text-gray-400 mb-2">No library styles yet</p>
+                          <p className="text-[10px] text-gray-500">
+                            Create styles in the Style Library
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </AccordionSection>
 
                 {/* Typography */}
