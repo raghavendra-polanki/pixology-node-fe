@@ -9,13 +9,15 @@
  */
 
 import express from 'express';
+import sharp from 'sharp';
 import AIAdaptorResolver from '../../../core/services/AIAdaptorResolver.js';
 import PromptManager from '../../../core/services/PromptManager.cjs';
-import { uploadBase64ImageToGCS } from '../../../core/services/gcsService.js';
+import { uploadBase64ImageToGCS, downloadImageFromGCS } from '../../../core/services/gcsService.js';
 import ThemeStreamingService from '../services/ThemeStreamingService.cjs';
 import PlayerRecommendationService from '../services/PlayerRecommendationService.cjs';
 import PlayerImageGenerationService from '../services/PlayerImageGenerationService.cjs';
 import AnimationGenerationService from '../services/AnimationGenerationService.cjs';
+import { renderTextOnImage } from '../services/CanvasTextRenderer.js';
 
 const router = express.Router();
 
@@ -908,6 +910,368 @@ router.post('/upload-composited', async (req, res) => {
     });
   }
 });
+
+/**
+ * POST /api/flarelab/generation/rasterize-text
+ *
+ * Stage 5 Text Studio: Server-side rasterization of text overlays onto images
+ * This avoids CORS issues with client-side canvas operations on GCS images
+ *
+ * Request Body:
+ * {
+ *   projectId: string,
+ *   themeId: string,
+ *   imageUrl: string (GCS URL of the base image),
+ *   overlays: Array<TextOverlay> (text overlays to render)
+ * }
+ */
+router.post('/rasterize-text', async (req, res) => {
+  const { projectId, themeId, imageUrl, overlays, previewWidth } = req.body;
+
+  try {
+    if (!projectId || !themeId || !imageUrl) {
+      return res.status(400).json({
+        error: 'Missing required parameters: projectId, themeId, imageUrl',
+      });
+    }
+
+    console.log('[FlareLab Rasterize] Starting rasterization for theme:', themeId);
+    console.log('[FlareLab Rasterize] Overlays to render:', overlays?.length || 0);
+    console.log('[FlareLab Rasterize] Preview width from frontend:', previewWidth);
+    console.log('[FlareLab Rasterize] Overlay data:', JSON.stringify(overlays, null, 2));
+
+    // If no overlays, just return the original image URL
+    if (!overlays || overlays.length === 0) {
+      console.log('[FlareLab Rasterize] No overlays, returning original image');
+      return res.json({
+        success: true,
+        data: {
+          url: imageUrl,
+          themeId,
+          hasOverlays: false,
+        },
+      });
+    }
+
+    // Download the base image
+    console.log('[FlareLab Rasterize] Downloading base image...');
+    const imageBuffer = await downloadImageFromGCS(imageUrl);
+    console.log('[FlareLab Rasterize] Downloaded image:', imageBuffer.length, 'bytes');
+
+    // Get image dimensions
+    const imageMetadata = await sharp(imageBuffer).metadata();
+    const { width, height } = imageMetadata;
+    console.log('[FlareLab Rasterize] Image dimensions:', width, 'x', height);
+
+    // Use Canvas 2D renderer for pixel-perfect text (same as frontend)
+    // Pass previewWidth so text is rendered at same size user saw in Stage 5
+    console.log('[FlareLab Rasterize] Rendering with Canvas 2D...');
+    const compositedBuffer = await renderTextOnImage(imageBuffer, overlays, width, height, previewWidth || 0);
+    console.log('[FlareLab Rasterize] Canvas rendered:', compositedBuffer.length, 'bytes');
+
+    // Convert to base64 data URL and upload to GCS
+    const base64Data = `data:image/png;base64,${compositedBuffer.toString('base64')}`;
+    const publicUrl = await uploadBase64ImageToGCS(base64Data, projectId, themeId, 'composited');
+
+    console.log('[FlareLab Rasterize] Uploaded composited image:', publicUrl);
+
+    return res.json({
+      success: true,
+      data: {
+        url: publicUrl,
+        themeId,
+        hasOverlays: true,
+        overlayCount: overlays.length,
+      },
+    });
+  } catch (error) {
+    console.error('[FlareLab Rasterize] Error:', error);
+    return res.status(500).json({
+      error: 'Failed to rasterize text overlays',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * CSS Text Presets - same as frontend htmlTextRenderer.ts
+ * Maps cssPresetId to gradient and style info for SVG generation
+ */
+const CSS_PRESET_GRADIENTS = {
+  'frozen-knightfall': {
+    gradient: 'linear-gradient(180deg, #ffffff 0%, #f0f0f0 20%, #c0c0c0 50%, #909090 80%, #606060 100%)',
+    stroke: { color: '#1a1a1a', width: 1 },
+  },
+  'ice-storm': {
+    gradient: 'linear-gradient(180deg, #ffffff 0%, #e0f7fa 20%, #80deea 50%, #26c6da 80%, #00838f 100%)',
+    stroke: { color: '#004d5a', width: 1 },
+  },
+  'championship-gold': {
+    gradient: 'linear-gradient(180deg, #fffbeb 0%, #fef3c7 15%, #fcd34d 40%, #f59e0b 60%, #d97706 80%, #b45309 100%)',
+    stroke: { color: '#78350f', width: 1 },
+  },
+  'fire-rivalry': {
+    gradient: 'linear-gradient(180deg, #fef08a 0%, #fde047 20%, #fb923c 50%, #ea580c 75%, #9a3412 100%)',
+    stroke: { color: '#7c2d12', width: 1 },
+  },
+  'electric-blue': {
+    gradient: 'linear-gradient(180deg, #ffffff 0%, #bfdbfe 20%, #60a5fa 50%, #2563eb 75%, #1e40af 100%)',
+    stroke: { color: '#1e3a8a', width: 1 },
+  },
+  'neon-green': {
+    gradient: 'linear-gradient(180deg, #ecfdf5 0%, #a7f3d0 20%, #34d399 50%, #059669 75%, #065f46 100%)',
+    stroke: { color: '#064e3b', width: 1 },
+  },
+  'broadcast-clean': {
+    gradient: null, // Solid white
+    fillColor: '#ffffff',
+    stroke: { color: '#000000', width: 2 },
+  },
+  'sports-bold': {
+    gradient: null,
+    fillColor: '#ffffff',
+    stroke: { color: '#1a1a1a', width: 3 },
+  },
+  'rivalry-clash': {
+    gradient: 'linear-gradient(180deg, #fee2e2 0%, #fca5a5 25%, #ef4444 50%, #b91c1c 75%, #7f1d1d 100%)',
+    stroke: { color: '#450a0a', width: 1 },
+  },
+  'metallic-gold': {
+    gradient: 'linear-gradient(180deg, #fef3c7 0%, #fcd34d 30%, #f59e0b 50%, #d97706 70%, #92400e 100%)',
+    stroke: { color: '#78350f', width: 1 },
+  },
+  'frozen-ice': {
+    gradient: 'linear-gradient(180deg, #f0f9ff 0%, #bae6fd 25%, #38bdf8 50%, #0284c7 75%, #075985 100%)',
+    stroke: { color: '#0c4a6e', width: 1 },
+  },
+  'fire-intensity': {
+    gradient: 'linear-gradient(180deg, #fef08a 0%, #facc15 25%, #f97316 50%, #dc2626 75%, #991b1b 100%)',
+    stroke: { color: '#7c2d12', width: 1 },
+  },
+};
+
+/**
+ * Parse CSS linear-gradient to SVG gradient stops
+ * Input: 'linear-gradient(180deg, #ffffff 0%, #c0c0c0 50%, #606060 100%)'
+ * Output: { angle: 180, stops: [{ color: '#ffffff', position: 0 }, ...] }
+ */
+function parseCSSGradient(cssGradient) {
+  if (!cssGradient) return null;
+
+  // Extract angle and color stops
+  const match = cssGradient.match(/linear-gradient\((\d+)deg,\s*(.+)\)/);
+  if (!match) return null;
+
+  const angle = parseInt(match[1], 10);
+  const stopsStr = match[2];
+
+  // Parse color stops: "#ffffff 0%, #c0c0c0 50%"
+  const stopRegex = /(#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3}|rgb\([^)]+\)|rgba\([^)]+\))\s*(\d+)%/g;
+  const stops = [];
+  let stopMatch;
+
+  while ((stopMatch = stopRegex.exec(stopsStr)) !== null) {
+    stops.push({
+      color: stopMatch[1],
+      position: parseInt(stopMatch[2], 10),
+    });
+  }
+
+  return { angle, stops };
+}
+
+/**
+ * Helper: Generate SVG content from text overlays
+ * Converts TextOverlay objects to SVG text elements with proper styling
+ *
+ * TextStyle properties:
+ * - fillType: 'solid' | 'gradient'
+ * - fillColor: string (for solid fills)
+ * - gradient: { type, angle, stops: [{ offset, color }] }
+ * - strokeColor, strokeWidth
+ * - shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY
+ * - glowColor, glowBlur
+ *
+ * Also supports cssPresetId for broadcast-quality presets
+ */
+function generateTextOverlaySVG(overlays, width, height) {
+  // Collect all defs (gradients, filters) separately
+  const allDefs = [];
+
+  // Build SVG text elements
+  const textElements = overlays.map(overlay => {
+    const { text, position, style } = overlay;
+    if (!text || !position) return '';
+
+    // Convert percentage position to absolute pixels
+    const x = (position.x / 100) * width;
+    const y = (position.y / 100) * height;
+
+    // Extract style properties
+    const fontSize = style?.fontSize || 48;
+    const fontFamily = style?.fontFamily || 'Arial, sans-serif';
+    const fontWeight = style?.fontWeight || 'bold';
+    const letterSpacing = style?.letterSpacing || 0;
+    const textTransform = style?.textTransform || 'none';
+    const opacity = (style?.opacity ?? 100) / 100;
+
+    // Apply text transform
+    let displayText = text;
+    if (textTransform === 'uppercase') {
+      displayText = text.toUpperCase();
+    } else if (textTransform === 'lowercase') {
+      displayText = text.toLowerCase();
+    }
+
+    // Escape special XML characters
+    displayText = escapeXml(displayText);
+
+    // Check for CSS preset first (broadcast-quality styling)
+    const cssPresetId = overlay.cssPresetId;
+    const cssPreset = cssPresetId ? CSS_PRESET_GRADIENTS[cssPresetId] : null;
+    if (cssPresetId) {
+      console.log(`[FlareLab Rasterize] Overlay ${overlay.id} uses cssPresetId: ${cssPresetId}, preset found: ${!!cssPreset}`);
+    }
+
+    // Build fill style
+    let fillStyle = '#FFFFFF';
+    const fillId = `fill-${overlay.id}`;
+
+    if (cssPreset && cssPreset.gradient) {
+      // Use CSS preset gradient
+      const parsed = parseCSSGradient(cssPreset.gradient);
+      if (parsed && parsed.stops.length > 0) {
+        const gradientStops = parsed.stops.map(stop =>
+          `<stop offset="${stop.position}%" stop-color="${stop.color}" />`
+        ).join('\n        ');
+
+        const angle = parsed.angle || 180;
+        // Convert angle to x1,y1,x2,y2 for SVG linearGradient
+        const angleRad = (angle - 90) * (Math.PI / 180);
+        const x1 = 50 - 50 * Math.cos(angleRad);
+        const y1 = 50 - 50 * Math.sin(angleRad);
+        const x2 = 50 + 50 * Math.cos(angleRad);
+        const y2 = 50 + 50 * Math.sin(angleRad);
+
+        allDefs.push(`<linearGradient id="${fillId}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">
+        ${gradientStops}
+      </linearGradient>`);
+        fillStyle = `url(#${fillId})`;
+      }
+    } else if (cssPreset && cssPreset.fillColor) {
+      // Use CSS preset solid color
+      fillStyle = cssPreset.fillColor;
+    } else if (style?.fillType === 'gradient' && style?.gradient) {
+      // Use TextStyle gradient
+      const { gradient } = style;
+      const gradientStops = gradient.stops.map(stop => {
+        const offsetPercent = (stop.offset !== undefined ? stop.offset * 100 : stop.position) || 0;
+        return `<stop offset="${offsetPercent}%" stop-color="${stop.color}" />`;
+      }).join('\n        ');
+
+      if (gradient.type === 'linear') {
+        const angle = gradient.angle || 0;
+        const angleRad = (angle - 90) * (Math.PI / 180);
+        const x1 = 50 - 50 * Math.cos(angleRad);
+        const y1 = 50 - 50 * Math.sin(angleRad);
+        const x2 = 50 + 50 * Math.cos(angleRad);
+        const y2 = 50 + 50 * Math.sin(angleRad);
+
+        allDefs.push(`<linearGradient id="${fillId}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">
+        ${gradientStops}
+      </linearGradient>`);
+      } else {
+        allDefs.push(`<radialGradient id="${fillId}">
+        ${gradientStops}
+      </radialGradient>`);
+      }
+      fillStyle = `url(#${fillId})`;
+    } else if (style?.fillColor) {
+      fillStyle = style.fillColor;
+    }
+
+    // Build stroke style - prefer CSS preset, fallback to TextStyle
+    let strokeAttr = '';
+    if (cssPreset && cssPreset.stroke && cssPreset.stroke.width > 0) {
+      strokeAttr = `stroke="${cssPreset.stroke.color}" stroke-width="${cssPreset.stroke.width}"`;
+    } else if (style?.strokeColor && style?.strokeWidth > 0) {
+      strokeAttr = `stroke="${style.strokeColor}" stroke-width="${style.strokeWidth}"`;
+    }
+
+    // Build shadow/glow filter (TextStyle uses shadowColor/shadowBlur/shadowOffsetX/shadowOffsetY and glowColor/glowBlur)
+    let filterRef = '';
+    const filterId = `filter-${overlay.id}`;
+    const filterEffects = [];
+
+    // Shadow effect
+    if (style?.shadowColor && style?.shadowBlur > 0) {
+      const offsetX = style.shadowOffsetX || 0;
+      const offsetY = style.shadowOffsetY || 0;
+      const blur = style.shadowBlur || 0;
+      filterEffects.push(`<feDropShadow dx="${offsetX}" dy="${offsetY}" stdDeviation="${blur / 2}" flood-color="${style.shadowColor}" />`);
+    }
+
+    // Glow effect
+    if (style?.glowColor && style?.glowBlur > 0) {
+      filterEffects.push(`<feGaussianBlur in="SourceGraphic" stdDeviation="${style.glowBlur}" result="blur" />
+        <feFlood flood-color="${style.glowColor}" result="color" />
+        <feComposite in="color" in2="blur" operator="in" result="glow" />
+        <feMerge>
+          <feMergeNode in="glow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>`);
+    }
+
+    if (filterEffects.length > 0) {
+      allDefs.push(`<filter id="${filterId}" x="-50%" y="-50%" width="200%" height="200%">
+        ${filterEffects.join('\n        ')}
+      </filter>`);
+      filterRef = `filter="url(#${filterId})"`;
+    }
+
+    // Rotation transform
+    let transformAttr = '';
+    if (style?.rotation) {
+      transformAttr = `transform="rotate(${style.rotation}, ${x}, ${y})"`;
+    }
+
+    return `<text
+      x="${x}"
+      y="${y}"
+      font-family="${fontFamily}"
+      font-size="${fontSize}"
+      font-weight="${fontWeight}"
+      letter-spacing="${letterSpacing}"
+      fill="${fillStyle}"
+      ${strokeAttr}
+      text-anchor="middle"
+      dominant-baseline="middle"
+      opacity="${opacity}"
+      ${filterRef}
+      ${transformAttr}
+    >${displayText}</text>`;
+  }).join('\n    ');
+
+  // Build complete SVG with all defs collected in one place
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <defs>
+      ${allDefs.join('\n      ')}
+    </defs>
+    ${textElements}
+  </svg>`;
+}
+
+/**
+ * Helper: Escape XML special characters
+ */
+function escapeXml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
 /**
  * Helper: Extract keywords from theme for style matching
