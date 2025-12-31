@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Seed GameLab Prompt Templates Script
- * Populates Firestore with GameLab prompt templates
- * Run: node scripts/seedGameLabPrompts.js
+ * Seed FlareLab Prompt Templates Script
+ * Populates Firestore with FlareLab prompt templates
+ * Run: node scripts/seedFlareLabPrompts.js
  */
 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import admin from 'firebase-admin';
-import { GAMELAB_PROMPT_TEMPLATES } from '../api/products/flarelab/prompts/seedData.js';
+import { FLARELAB_PROMPT_TEMPLATES } from '../api/products/flarelab/prompts/seedData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,8 +49,8 @@ async function seedFlareLabPrompts() {
   try {
     console.log('🔥 Starting FlareLab prompt template seeding...\n');
     console.log(`Database: ${flarelabDatabaseId}`);
-    console.log('This will create/update GameLab prompt templates');
-    console.log(`Total templates to process: ${GAMELAB_PROMPT_TEMPLATES.length}\n`);
+    console.log('This will create/update FlareLab prompt templates');
+    console.log(`Total templates to process: ${FLARELAB_PROMPT_TEMPLATES.length}\n`);
 
     const results = {
       created: [],
@@ -58,8 +58,8 @@ async function seedFlareLabPrompts() {
       failed: [],
     };
 
-    // Seed each GameLab template
-    for (const template of GAMELAB_PROMPT_TEMPLATES) {
+    // Seed each FlareLab template
+    for (const template of FLARELAB_PROMPT_TEMPLATES) {
       try {
         console.log(`\n${'='.repeat(60)}`);
         console.log(`Processing: ${template.stageType}`);
@@ -121,7 +121,7 @@ async function seedFlareLabPrompts() {
 
     // Summary
     console.log('\n' + '='.repeat(60));
-    console.log('📊 GAMELAB SEEDING SUMMARY');
+    console.log('📊 FLARELAB SEEDING SUMMARY');
     console.log('='.repeat(60));
 
     console.log(`\n✅ Created: ${results.created.length}`);
@@ -139,15 +139,15 @@ async function seedFlareLabPrompts() {
       results.failed.forEach((id) => console.log(`   - ${id}`));
     }
 
-    console.log('\n✨ GameLab prompt template seeding complete!\n');
+    console.log('\n✨ FlareLab prompt template seeding complete!\n');
 
-    // Additional verification - show all GameLab templates
-    console.log('🔍 Verification: Listing all GameLab prompt templates...\n');
+    // Additional verification - show all FlareLab templates
+    console.log('🔍 Verification: Listing all FlareLab prompt templates...\n');
     const allTemplates = await db.collection('prompt_templates').get();
-    const gamelabTemplates = allTemplates.docs.filter(doc => doc.id.startsWith('stage_') && !doc.id.includes('persona') && !doc.id.includes('narrative') && !doc.id.includes('storyboard') && !doc.id.includes('screenplay') && !doc.id.includes('video'));
+    const flarelabTemplates = allTemplates.docs.filter(doc => doc.id.startsWith('stage_') && !doc.id.includes('persona') && !doc.id.includes('narrative') && !doc.id.includes('storyboard') && !doc.id.includes('screenplay') && !doc.id.includes('video'));
 
-    console.log(`Total GameLab templates in database: ${GAMELAB_PROMPT_TEMPLATES.length}`);
-    GAMELAB_PROMPT_TEMPLATES.forEach(template => {
+    console.log(`Total FlareLab templates in database: ${FLARELAB_PROMPT_TEMPLATES.length}`);
+    FLARELAB_PROMPT_TEMPLATES.forEach(template => {
       console.log(`  - ${template.id}: ${template.prompts.length} prompts`);
     });
 

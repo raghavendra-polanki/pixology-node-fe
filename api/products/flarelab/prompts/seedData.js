@@ -1,7 +1,7 @@
 /**
- * GameLab Prompt Templates Seed Data
+ * FlareLab Prompt Templates Seed Data
  *
- * This file defines the prompt templates for all GameLab stages.
+ * This file defines the prompt templates for all FlareLab stages.
  * Follows the same pattern as StoryLab for consistency.
  */
 

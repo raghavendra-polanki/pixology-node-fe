@@ -1,5 +1,5 @@
 /**
- * GameLab Download Routes
+ * FlareLab Download Routes
  *
  * Provides a proxy endpoint to download files from GCS,
  * avoiding CORS issues when downloading from the frontend.
@@ -10,7 +10,7 @@ import express from 'express';
 const router = express.Router();
 
 /**
- * GET /api/gamelab/download/proxy
+ * GET /api/flarelab/download/proxy
  *
  * Proxy endpoint to download files from GCS
  * Avoids CORS issues by fetching server-side
@@ -27,7 +27,7 @@ router.get('/proxy', async (req, res) => {
   }
 
   try {
-    console.log('[GameLab Download] Proxying download:', url);
+    console.log('[FlareLab Download] Proxying download:', url);
 
     // Validate URL is from allowed domains
     const allowedDomains = [
@@ -82,10 +82,10 @@ router.get('/proxy', async (req, res) => {
 
     await pump();
 
-    console.log('[GameLab Download] Download complete:', downloadFilename);
+    console.log('[FlareLab Download] Download complete:', downloadFilename);
 
   } catch (error) {
-    console.error('[GameLab Download] Error:', error);
+    console.error('[FlareLab Download] Error:', error);
     res.status(500).json({
       error: 'Failed to download file',
       message: error.message,

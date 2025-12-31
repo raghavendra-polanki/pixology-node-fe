@@ -1,5 +1,5 @@
 /**
- * ThemeStreamingService - Handles progressive theme generation for GameLab Stage 2
+ * ThemeStreamingService - Handles progressive theme generation for FlareLab Stage 2
  *
  * Follows the same architecture as StoryLab's StoryboardStreamingService:
  * 1. Generate theme text with AI (titles + descriptions)

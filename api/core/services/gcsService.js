@@ -357,11 +357,11 @@ export async function uploadTeamPlayerAsset(imageBuffer, assetType, entityId, fi
     const bucket = storage.bucket(bucketName);
 
     // Create unique filename to avoid needing delete/overwrite permissions
-    // Format: gamelab/teams/{teamId}/logo-{timestamp}.png
+    // Format: flarelab/teams/{teamId}/logo-{timestamp}.png
     const folder = assetType.startsWith('team') ? 'teams' : 'players';
     const assetName = assetType.split('-')[1]; // Extract 'logo' or 'headshot'
     const timestamp = Date.now();
-    const filename = `gamelab/${folder}/${entityId}/${assetName}-${timestamp}.${fileExtension}`;
+    const filename = `flarelab/${folder}/${entityId}/${assetName}-${timestamp}.${fileExtension}`;
 
     // Try to delete old image (optional - won't fail if no permission)
     if (oldImageUrl && oldImageUrl.includes(bucketName)) {

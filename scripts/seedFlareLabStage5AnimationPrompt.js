@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * Seed GameLab Stage 5 Animation Prompt Templates
+ * Seed FlareLab Stage 5 Animation Prompt Templates
  * Seeds both the screenplay (textGeneration) and video (videoGeneration) prompts
- * Run: node scripts/seedGameLabStage5AnimationPrompt.js
+ * Run: node scripts/seedFlareLabStage5AnimationPrompt.js
  */
 
 import path from 'path';

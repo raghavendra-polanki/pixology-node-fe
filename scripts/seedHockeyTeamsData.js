@@ -1,5 +1,5 @@
 /**
- * Seed Hockey Teams Data to GameLab Database
+ * Seed Hockey Teams Data to FlareLab Database
  *
  * Structure: sports_teams -> hockey -> {team_id}
  *

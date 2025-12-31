@@ -1,5 +1,5 @@
 /**
- * AnimationGenerationService - GameLab Stage 5 Animation Generation
+ * AnimationGenerationService - FlareLab Stage 5 Animation Generation
  *
  * Two-step process:
  * 1. Analyze image with AI to generate animation screenplay/prompt

@@ -1,7 +1,7 @@
 /**
- * GameLab Generation Routes
+ * FlareLab Generation Routes
  *
- * Handles all AI generation endpoints for GameLab stages:
+ * Handles all AI generation endpoints for FlareLab stages:
  * - Theme generation (Stage 2)
  * - Player suggestion (Stage 3)
  * - Image generation (Stage 4)
@@ -22,7 +22,7 @@ import { renderTextOnImage } from '../services/CanvasTextRenderer.js';
 const router = express.Router();
 
 /**
- * POST /api/gamelab/generation/themes-stream
+ * POST /api/flarelab/generation/themes-stream
  *
  * Generate themes progressively with Server-Sent Events (SSE)
  * Follows the same streaming pattern as StoryLab storyboard generation
@@ -54,10 +54,10 @@ router.post('/themes-stream', async (req, res) => {
   } = req.body;
 
   try {
-    // Get GameLab database from middleware
+    // Get FlareLab database from middleware
     const db = req.db;
     if (!db) {
-      console.error('[GameLab Theme Generation] Database not found in request');
+      console.error('[FlareLab Theme Generation] Database not found in request');
       return res.status(500).json({ error: 'Database configuration error' });
     }
 
@@ -66,9 +66,9 @@ router.post('/themes-stream', async (req, res) => {
       return res.status(400).json({ error: 'Project ID is required' });
     }
 
-    console.log('[GameLab Theme Generation] Starting theme generation for project:', projectId);
-    console.log('[GameLab Theme Generation] Using database:', db._settings?.databaseId || 'default');
-    console.log('[GameLab Theme Generation] Input:', {
+    console.log('[FlareLab Theme Generation] Starting theme generation for project:', projectId);
+    console.log('[FlareLab Theme Generation] Using database:', db._settings?.databaseId || 'default');
+    console.log('[FlareLab Theme Generation] Input:', {
       sportType,
       homeTeam,
       awayTeam,
@@ -94,7 +94,7 @@ router.post('/themes-stream', async (req, res) => {
           res.flush();
         }
       } catch (error) {
-        console.error('[GameLab Theme Generation] Error sending SSE event:', error);
+        console.error('[FlareLab Theme Generation] Error sending SSE event:', error);
       }
     };
 
@@ -121,39 +121,39 @@ router.post('/themes-stream', async (req, res) => {
       {
         // Called when a theme's text is generated
         onThemeParsed: (data) => {
-          console.log(`[GameLab Theme Generation] Theme parsed: ${data.themeNumber}/${numberOfThemes}`);
+          console.log(`[FlareLab Theme Generation] Theme parsed: ${data.themeNumber}/${numberOfThemes}`);
           sendEvent('theme', data);
         },
 
         // Called when a theme's image is generated
         onImageGenerated: (data) => {
-          console.log(`[GameLab Theme Generation] Image generated: ${data.themeNumber}/${numberOfThemes}`);
+          console.log(`[FlareLab Theme Generation] Image generated: ${data.themeNumber}/${numberOfThemes}`);
           sendEvent('image', data);
         },
 
         // Called for progress updates
         onProgress: (data) => {
-          console.log(`[GameLab Theme Generation] Progress: ${data.stage} - ${data.message} (${data.progress}%)`);
+          console.log(`[FlareLab Theme Generation] Progress: ${data.stage} - ${data.message} (${data.progress}%)`);
           sendEvent('progress', data);
         },
 
         // Called when all themes are complete
         onComplete: (data) => {
-          console.log('[GameLab Theme Generation] Generation complete');
+          console.log('[FlareLab Theme Generation] Generation complete');
           sendEvent('complete', data);
           res.end();
         },
 
         // Called on error
         onError: (data) => {
-          console.error('[GameLab Theme Generation] Error:', data);
+          console.error('[FlareLab Theme Generation] Error:', data);
           sendEvent('error', data);
           res.end();
         },
       }
     );
   } catch (error) {
-    console.error('[GameLab Theme Generation] Unhandled error:', error);
+    console.error('[FlareLab Theme Generation] Unhandled error:', error);
 
     // Try to send error event if connection still open
     try {
@@ -167,7 +167,7 @@ router.post('/themes-stream', async (req, res) => {
         error: error.toString(),
       });
     } catch (sendError) {
-      console.error('[GameLab Theme Generation] Could not send error event:', sendError);
+      console.error('[FlareLab Theme Generation] Could not send error event:', sendError);
     }
 
     res.end();
@@ -175,7 +175,7 @@ router.post('/themes-stream', async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/generation/players-suggest
+ * POST /api/flarelab/generation/players-suggest
  *
  * Get AI-powered player recommendations for selected themes
  *
@@ -196,10 +196,10 @@ router.post('/players-suggest', async (req, res) => {
   } = req.body;
 
   try {
-    // Get GameLab database from middleware
+    // Get FlareLab database from middleware
     const db = req.db;
     if (!db) {
-      console.error('[GameLab Player Suggestions] Database not found in request');
+      console.error('[FlareLab Player Suggestions] Database not found in request');
       return res.status(500).json({ error: 'Database configuration error' });
     }
 
@@ -212,8 +212,8 @@ router.post('/players-suggest', async (req, res) => {
       return res.status(400).json({ error: 'At least one theme is required' });
     }
 
-    console.log('[GameLab Player Suggestions] Generating recommendations for', themes.length, 'themes');
-    console.log('[GameLab Player Suggestions] Project ID:', projectId);
+    console.log('[FlareLab Player Suggestions] Generating recommendations for', themes.length, 'themes');
+    console.log('[FlareLab Player Suggestions] Project ID:', projectId);
 
     // Generate recommendations for all themes
     const recommendations = await PlayerRecommendationService.recommendPlayersForMultipleThemes(
@@ -227,7 +227,7 @@ router.post('/players-suggest', async (req, res) => {
       AIAdaptorResolver
     );
 
-    console.log('[GameLab Player Suggestions] Recommendations generated successfully');
+    console.log('[FlareLab Player Suggestions] Recommendations generated successfully');
 
     return res.json({
       success: true,
@@ -235,7 +235,7 @@ router.post('/players-suggest', async (req, res) => {
       count: recommendations.length,
     });
   } catch (error) {
-    console.error('[GameLab Player Suggestions] Error:', error);
+    console.error('[FlareLab Player Suggestions] Error:', error);
     return res.status(500).json({
       error: 'Failed to generate player recommendations',
       message: error.message,
@@ -244,7 +244,7 @@ router.post('/players-suggest', async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/generation/images-stream
+ * POST /api/flarelab/generation/images-stream
  *
  * Generate composite player images for all selected themes with SSE streaming
  *
@@ -263,10 +263,10 @@ router.post('/images-stream', async (req, res) => {
   } = req.body;
 
   try {
-    // Get GameLab database from middleware
+    // Get FlareLab database from middleware
     const db = req.db;
     if (!db) {
-      console.error('[GameLab Image Generation] Database not found in request');
+      console.error('[FlareLab Image Generation] Database not found in request');
       return res.status(500).json({ error: 'Database configuration error' });
     }
 
@@ -280,8 +280,8 @@ router.post('/images-stream', async (req, res) => {
       return res.status(400).json({ error: 'At least one theme-player mapping is required' });
     }
 
-    console.log('[GameLab Image Generation] Starting image generation for project:', projectId);
-    console.log('[GameLab Image Generation] Themes to process:', themeCount);
+    console.log('[FlareLab Image Generation] Starting image generation for project:', projectId);
+    console.log('[FlareLab Image Generation] Themes to process:', themeCount);
 
     // Setup Server-Sent Events (SSE)
     res.setHeader('Content-Type', 'text/event-stream');
@@ -300,7 +300,7 @@ router.post('/images-stream', async (req, res) => {
           res.flush();
         }
       } catch (error) {
-        console.error('[GameLab Image Generation] Error sending SSE event:', error);
+        console.error('[FlareLab Image Generation] Error sending SSE event:', error);
       }
     };
 
@@ -319,26 +319,26 @@ router.post('/images-stream', async (req, res) => {
       {
         // Called for progress updates
         onProgress: (data) => {
-          console.log(`[GameLab Image Generation] Progress: ${data.message} (${data.progress}%)`);
+          console.log(`[FlareLab Image Generation] Progress: ${data.message} (${data.progress}%)`);
           sendEvent('progress', data);
         },
 
         // Called when an image is generated
         onImageGenerated: (data) => {
-          console.log(`[GameLab Image Generation] Image ${data.themeIndex}/${data.totalThemes} complete`);
+          console.log(`[FlareLab Image Generation] Image ${data.themeIndex}/${data.totalThemes} complete`);
           sendEvent('image', data);
         },
 
         // Called when all images are complete
         onComplete: (data) => {
-          console.log('[GameLab Image Generation] All images complete');
+          console.log('[FlareLab Image Generation] All images complete');
           sendEvent('complete', data);
           res.end();
         },
 
         // Called on error
         onError: (data) => {
-          console.error('[GameLab Image Generation] Error:', data);
+          console.error('[FlareLab Image Generation] Error:', data);
           sendEvent('error', data);
           if (data.fatal) {
             res.end();
@@ -347,7 +347,7 @@ router.post('/images-stream', async (req, res) => {
       }
     );
   } catch (error) {
-    console.error('[GameLab Image Generation] Unhandled error:', error);
+    console.error('[FlareLab Image Generation] Unhandled error:', error);
 
     // Try to send error event if connection still open
     try {
@@ -362,7 +362,7 @@ router.post('/images-stream', async (req, res) => {
         fatal: true,
       });
     } catch (sendError) {
-      console.error('[GameLab Image Generation] Could not send error event:', sendError);
+      console.error('[FlareLab Image Generation] Could not send error event:', sendError);
     }
 
     res.end();
@@ -439,7 +439,7 @@ router.post('/animation-recommendations', async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/generation/animation-screenplay
+ * POST /api/flarelab/generation/animation-screenplay
  *
  * Step 1 (Legacy): Analyze image and generate animation screenplay/prompt
  *
@@ -477,7 +477,7 @@ router.post('/animation-screenplay', async (req, res) => {
       return res.status(400).json({ error: 'Project ID and image URL are required' });
     }
 
-    console.log('[GameLab Animation Screenplay] Generating for:', themeName);
+    console.log('[FlareLab Animation Screenplay] Generating for:', themeName);
 
     const result = await AnimationGenerationService.generateScreenplay(
       projectId,
@@ -499,7 +499,7 @@ router.post('/animation-screenplay', async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('[GameLab Animation Screenplay] Error:', error);
+    console.error('[FlareLab Animation Screenplay] Error:', error);
     return res.status(500).json({
       error: 'Failed to generate animation screenplay',
       message: error.message,
@@ -508,7 +508,7 @@ router.post('/animation-screenplay', async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/generation/animation-video
+ * POST /api/flarelab/generation/animation-video
  *
  * Step 2: Generate video from screenplay
  *
@@ -542,7 +542,7 @@ router.post('/animation-video', async (req, res) => {
       return res.status(400).json({ error: 'Project ID, image URL, and screenplay are required' });
     }
 
-    console.log('[GameLab Animation Video] Generating for:', themeName);
+    console.log('[FlareLab Animation Video] Generating for:', themeName);
 
     const result = await AnimationGenerationService.generateVideo(
       projectId,
@@ -562,7 +562,7 @@ router.post('/animation-video', async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('[GameLab Animation Video] Error:', error);
+    console.error('[FlareLab Animation Video] Error:', error);
     return res.status(500).json({
       error: 'Failed to generate animation video',
       message: error.message,
@@ -571,7 +571,7 @@ router.post('/animation-video', async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/generation/animations-stream
+ * POST /api/flarelab/generation/animations-stream
  *
  * Generate animations for all selected images with SSE streaming
  *
@@ -592,7 +592,7 @@ router.post('/animations-stream', async (req, res) => {
   try {
     const db = req.db;
     if (!db) {
-      console.error('[GameLab Animation Generation] Database not found');
+      console.error('[FlareLab Animation Generation] Database not found');
       return res.status(500).json({ error: 'Database configuration error' });
     }
 
@@ -604,8 +604,8 @@ router.post('/animations-stream', async (req, res) => {
       return res.status(400).json({ error: 'At least one image is required' });
     }
 
-    console.log('[GameLab Animation Generation] Starting for project:', projectId);
-    console.log('[GameLab Animation Generation] Images to process:', images.length);
+    console.log('[FlareLab Animation Generation] Starting for project:', projectId);
+    console.log('[FlareLab Animation Generation] Images to process:', images.length);
 
     // Setup Server-Sent Events (SSE)
     res.setHeader('Content-Type', 'text/event-stream');
@@ -621,7 +621,7 @@ router.post('/animations-stream', async (req, res) => {
           res.flush();
         }
       } catch (error) {
-        console.error('[GameLab Animation Generation] Error sending SSE event:', error);
+        console.error('[FlareLab Animation Generation] Error sending SSE event:', error);
       }
     };
 
@@ -637,23 +637,23 @@ router.post('/animations-stream', async (req, res) => {
       AIAdaptorResolver,
       {
         onProgress: (data) => {
-          console.log(`[GameLab Animation Generation] Progress: ${data.message} (${data.progress}%)`);
+          console.log(`[FlareLab Animation Generation] Progress: ${data.message} (${data.progress}%)`);
           sendEvent('progress', data);
         },
 
         onAnimationComplete: (data) => {
-          console.log(`[GameLab Animation Generation] Animation ${data.imageIndex}/${data.totalImages} complete`);
+          console.log(`[FlareLab Animation Generation] Animation ${data.imageIndex}/${data.totalImages} complete`);
           sendEvent('animation', data);
         },
 
         onComplete: (data) => {
-          console.log('[GameLab Animation Generation] All animations complete');
+          console.log('[FlareLab Animation Generation] All animations complete');
           sendEvent('complete', data);
           res.end();
         },
 
         onError: (data) => {
-          console.error('[GameLab Animation Generation] Error:', data);
+          console.error('[FlareLab Animation Generation] Error:', data);
           sendEvent('error', data);
           if (data.fatal) {
             res.end();
@@ -662,7 +662,7 @@ router.post('/animations-stream', async (req, res) => {
       }
     );
   } catch (error) {
-    console.error('[GameLab Animation Generation] Unhandled error:', error);
+    console.error('[FlareLab Animation Generation] Unhandled error:', error);
 
     try {
       const sendEvent = (eventType, data) => {
@@ -676,7 +676,7 @@ router.post('/animations-stream', async (req, res) => {
         fatal: true,
       });
     } catch (sendError) {
-      console.error('[GameLab Animation Generation] Could not send error event:', sendError);
+      console.error('[FlareLab Animation Generation] Could not send error event:', sendError);
     }
 
     res.end();

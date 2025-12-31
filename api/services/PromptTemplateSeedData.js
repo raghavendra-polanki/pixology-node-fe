@@ -1,6 +1,6 @@
 /**
  * Unified Prompt Template Seed Data
- * Imports prompt templates from all products (StoryLab, GameLab, etc.)
+ * Imports prompt templates from all products (StoryLab, FlareLab, etc.)
  */
 
 // Import StoryLab prompts
@@ -27,7 +27,7 @@ export const ALL_PROMPT_TEMPLATES = [
   STAGE_5_SCREENPLAY_TEMPLATE,
   STAGE_6_VIDEO_TEMPLATE,
 
-  // GameLab templates
+  // FlareLab templates
   STAGE_2_THEME_GENERATION_TEMPLATE,
   STAGE_3_PLAYER_SUGGESTION_TEMPLATE,
 ];
