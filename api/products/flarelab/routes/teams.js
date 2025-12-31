@@ -5,47 +5,12 @@
 
 import express from 'express';
 import admin from 'firebase-admin';
-import { OAuth2Client } from 'google-auth-library';
 import multer from 'multer';
 import { uploadTeamPlayerAsset } from '../../../core/services/gcsService.js';
+import { verifyToken } from '../../../core/middleware/authMiddleware.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
-
-// Initialize Google OAuth2 Client
-const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
-const client = new OAuth2Client(googleClientId);
-
-/**
- * Middleware to verify JWT token
- */
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized - No token provided' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: googleClientId,
-    });
-
-    const payload = ticket.getPayload();
-    req.user = {
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-    };
-
-    next();
-  } catch (error) {
-    console.error('Token verification failed:', error.message);
-    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
-  }
-};
 
 /**
  * GET /api/teams/sports

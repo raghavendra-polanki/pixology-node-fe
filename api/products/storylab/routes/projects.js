@@ -1,5 +1,4 @@
 import express from 'express';
-import { OAuth2Client } from 'google-auth-library';
 import {
   saveProject,
   getUserProjects,
@@ -13,6 +12,7 @@ import {
   getUser,
 } from '../../../core/utils/firestoreUtils.js';
 import { deleteProjectResourcesFromGCS } from '../../../core/services/gcsService.js';
+import { verifyToken } from '../../../core/middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -46,47 +46,6 @@ const serializeFirestoreDates = (obj) => {
     }
   }
   return serialized;
-};
-
-// Initialize Google OAuth2 Client
-const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
-const client = new OAuth2Client(googleClientId);
-
-/**
- * Middleware to verify Google token from Authorization header
- * Extracts user ID from the verified token
- */
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing or invalid authorization header',
-      });
-    }
-
-    const token = authHeader.substring(7); // Remove "Bearer " prefix
-
-    // Verify the Google token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: googleClientId,
-    });
-
-    const payload = ticket.getPayload();
-    req.userId = payload.sub;
-    req.userEmail = payload.email;
-
-    next();
-  } catch (error) {
-    console.error('Token verification failed:', error.message);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid or expired token',
-    });
-  }
 };
 
 /**

@@ -1,47 +1,8 @@
 import express from 'express';
-import { OAuth2Client } from 'google-auth-library';
 import { searchUsers, getUser } from '../utils/firestoreUtils.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
-
-// Initialize Google OAuth2 Client
-const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
-const client = new OAuth2Client(googleClientId);
-
-/**
- * Middleware to verify Google token from Authorization header
- */
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing or invalid authorization header',
-      });
-    }
-
-    const token = authHeader.substring(7);
-
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: googleClientId,
-    });
-
-    const payload = ticket.getPayload();
-    req.userId = payload.sub;
-    req.userEmail = payload.email;
-
-    next();
-  } catch (error) {
-    console.error('Token verification failed:', error.message);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid or expired token',
-    });
-  }
-};
 
 /**
  * GET /api/users/search

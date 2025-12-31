@@ -1,5 +1,4 @@
 import express from 'express';
-import { OAuth2Client } from 'google-auth-library';
 import {
   saveProject,
   getUserProjects,
@@ -13,12 +12,9 @@ import {
   getUser,
 } from '../../../core/utils/firestoreUtils.js';
 import { deleteProjectResourcesFromGCS } from '../../../core/services/gcsService.js';
+import { verifyToken } from '../../../core/middleware/authMiddleware.js';
 
 const router = express.Router();
-
-// Initialize Google OAuth2 Client
-const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
-const client = new OAuth2Client(googleClientId);
 
 /**
  * Helper function to convert Firestore Timestamps to ISO strings
@@ -52,46 +48,10 @@ const serializeFirestoreDates = (obj) => {
   return serialized;
 };
 
-/**
- * Middleware to verify Google token from Authorization header
- * Extracts user ID from the verified token
- */
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing or invalid authorization header',
-      });
-    }
-
-    const token = authHeader.substring(7); // Remove "Bearer " prefix
-
-    // Verify the Google token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: googleClientId,
-    });
-
-    const payload = ticket.getPayload();
-    req.userId = payload.sub;
-    req.userEmail = payload.email;
-
-    next();
-  } catch (error) {
-    console.error('[GameLab] Token verification failed:', error.message);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid or expired token',
-    });
-  }
-};
 
 /**
- * GET /api/gamelab/projects
- * Get all GameLab projects accessible to the authenticated user
+ * GET /api/flarelab/projects
+ * Get all FlareLab projects accessible to the authenticated user
  */
 router.get('/', verifyToken, async (req, res) => {
   try {
@@ -147,8 +107,8 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/gamelab/projects/:projectId
- * Get a specific GameLab project
+ * GET /api/flarelab/projects/:projectId
+ * Get a specific FlareLab project
  */
 router.get('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -204,7 +164,7 @@ router.get('/:projectId', verifyToken, async (req, res) => {
       }),
     });
   } catch (error) {
-    console.error('[GameLab] Error fetching project:', error);
+    console.error('[FlareLab] Error fetching project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch project',
@@ -213,8 +173,8 @@ router.get('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/gamelab/projects
- * Create a new GameLab project
+ * POST /api/flarelab/projects
+ * Create a new FlareLab project
  */
 router.post('/', verifyToken, async (req, res) => {
   try {
@@ -241,7 +201,7 @@ router.post('/', verifyToken, async (req, res) => {
       }),
     });
   } catch (error) {
-    console.error('[GameLab] Error creating project:', error);
+    console.error('[FlareLab] Error creating project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to create project',
@@ -250,8 +210,8 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 /**
- * PUT /api/gamelab/projects/:projectId
- * Update a GameLab project
+ * PUT /api/flarelab/projects/:projectId
+ * Update a FlareLab project
  */
 router.put('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -317,7 +277,7 @@ router.put('/:projectId', verifyToken, async (req, res) => {
       project: serializeFirestoreDates(updatedProject),
     });
   } catch (error) {
-    console.error('[GameLab] Error updating project:', error);
+    console.error('[FlareLab] Error updating project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to update project',
@@ -326,7 +286,7 @@ router.put('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * PUT /api/gamelab/projects/:projectId/stages/:stageName
+ * PUT /api/flarelab/projects/:projectId/stages/:stageName
  * Update stage execution status
  */
 router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
@@ -381,7 +341,7 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
       project: serializeFirestoreDates(updatedProject),
     });
   } catch (error) {
-    console.error('[GameLab] Error updating stage execution:', error);
+    console.error('[FlareLab] Error updating stage execution:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to update stage execution',
@@ -390,8 +350,8 @@ router.put('/:projectId/stages/:stageName', verifyToken, async (req, res) => {
 });
 
 /**
- * DELETE /api/gamelab/projects/:projectId
- * Delete a GameLab project
+ * DELETE /api/flarelab/projects/:projectId
+ * Delete a FlareLab project
  */
 router.delete('/:projectId', verifyToken, async (req, res) => {
   try {
@@ -440,7 +400,7 @@ router.delete('/:projectId', verifyToken, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('[GameLab] Error deleting project:', error);
+    console.error('[FlareLab] Error deleting project:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to delete project',
@@ -449,7 +409,7 @@ router.delete('/:projectId', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/gamelab/projects/:projectId/members
+ * GET /api/flarelab/projects/:projectId/members
  * Get project members
  */
 router.get('/:projectId/members', verifyToken, async (req, res) => {
@@ -464,7 +424,7 @@ router.get('/:projectId/members', verifyToken, async (req, res) => {
       members,
     });
   } catch (error) {
-    console.error('[GameLab] Error fetching project members:', error);
+    console.error('[FlareLab] Error fetching project members:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch project members',
