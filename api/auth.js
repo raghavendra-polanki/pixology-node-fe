@@ -1,4 +1,5 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { saveUser, getUser, isUserAllowed } from './core/utils/firestoreUtils.js';
 
@@ -7,6 +8,10 @@ const router = express.Router();
 // Initialize Google OAuth2 Client
 const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(googleClientId);
+
+// JWT configuration - 24 hours session
+const JWT_SECRET = process.env.JWT_SECRET || 'pixology-secret-key-change-in-production';
+const SESSION_DURATION = 24 * 60 * 60; // 24 hours in seconds
 
 /**
  * POST /api/auth/google
@@ -74,18 +79,24 @@ router.post('/google', async (req, res) => {
       lastLogin: new Date(),
     });
 
-    // Create a session token (you can use JWT here)
-    // For now, we'll return the Google token itself
-    // In production, create your own JWT token
-    const authToken = token;
-    const expiresIn = 3600; // 1 hour
+    // Create our own JWT with 24-hour expiry
+    const authToken = jwt.sign(
+      {
+        sub: userId,
+        email,
+        name,
+        picture,
+      },
+      JWT_SECRET,
+      { expiresIn: SESSION_DURATION }
+    );
 
     // Set httpOnly cookie for added security (optional)
     res.cookie('authToken', authToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: 'strict',
-      maxAge: expiresIn * 1000, // Convert to milliseconds
+      maxAge: SESSION_DURATION * 1000, // Convert to milliseconds
     });
 
     return res.status(200).json({
@@ -97,7 +108,7 @@ router.post('/google', async (req, res) => {
         picture,
       },
       authToken,
-      expiresIn,
+      expiresIn: SESSION_DURATION,
     });
   } catch (error) {
     console.error('Google auth error:', error);
@@ -136,13 +147,8 @@ router.get('/verify', async (req, res) => {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verify the token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: googleClientId,
-    });
-
-    const payload = ticket.getPayload();
+    // Verify our own JWT token
+    const payload = jwt.verify(token, JWT_SECRET);
 
     return res.status(200).json({
       success: true,
