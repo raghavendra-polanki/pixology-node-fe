@@ -3,6 +3,7 @@ import { ArrowRight, Shield, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { MatchupSelector } from '../ui/MatchupSelector';
 import TeamsService, { Team } from '@/shared/services/teamsService';
 import type { FlareLabProject, ContextPill, CampaignGoal, CreateProjectInput } from '../../types/project.types';
 
@@ -49,23 +50,16 @@ export const Stage1ContextBrief = ({
         const teamsData = await teamsService.getTeams('hockey');
         setTeams(teamsData);
 
-        // Set default selections if available
-        if (teamsData.length >= 2) {
-          // Restore from project if exists, otherwise use first two teams
-          const existingHome = project?.contextBrief?.homeTeam?.teamId;
-          const existingAway = project?.contextBrief?.awayTeam?.teamId;
+        // Restore from project if exists (no default selection for new projects)
+        const existingHome = project?.contextBrief?.homeTeam?.teamId;
+        const existingAway = project?.contextBrief?.awayTeam?.teamId;
 
-          if (existingHome && teamsData.find(t => t.teamId === existingHome)) {
-            setHomeTeamId(existingHome);
-          } else {
-            setHomeTeamId(teamsData[0].teamId);
-          }
+        if (existingHome && teamsData.find(t => t.teamId === existingHome)) {
+          setHomeTeamId(existingHome);
+        }
 
-          if (existingAway && teamsData.find(t => t.teamId === existingAway)) {
-            setAwayTeamId(existingAway);
-          } else {
-            setAwayTeamId(teamsData[1].teamId);
-          }
+        if (existingAway && teamsData.find(t => t.teamId === existingAway)) {
+          setAwayTeamId(existingAway);
         }
       } catch (error) {
         console.error('[Stage1] Failed to load teams:', error);
@@ -222,127 +216,13 @@ export const Stage1ContextBrief = ({
             <p>No teams available. Please add teams in Team Management first.</p>
           </div>
         ) : (
-          <>
-            {/* Team Grid */}
-            <div className="grid grid-cols-2 gap-6 mb-5">
-              <div>
-                <div className="text-xs text-slate-500 uppercase mb-2">Home Team</div>
-                <div className="grid grid-cols-2 gap-3">
-                  {teams.map(team => {
-                    const isDisabled = team.teamId === awayTeamId;
-                    const isSelected = team.teamId === homeTeamId;
-                    return (
-                    <button
-                      key={`home-${team.teamId}`}
-                      onClick={() => !isDisabled && setHomeTeamId(team.teamId)}
-                      disabled={isDisabled}
-                      className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
-                        isSelected
-                          ? 'border-orange-500 ring-2 ring-orange-500'
-                          : isDisabled
-                          ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
-                          : 'border-gray-800 bg-[#151515] hover:border-gray-700'
-                      }`}
-                    >
-                      <div className="w-20 h-20 mx-auto mb-2 rounded-lg flex items-center justify-center bg-white p-2">
-                        {team.logo?.primary ? (
-                          <img src={team.logo.primary} alt={team.name} className="w-full h-full object-contain" />
-                        ) : (
-                          <Shield className="w-10 h-10 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="text-sm font-semibold text-white text-center">{team.city}</div>
-                      <div className="text-xs text-gray-400 text-center">{team.name}</div>
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 uppercase mb-2">Away Team</div>
-                <div className="grid grid-cols-2 gap-3">
-                  {teams.map(team => {
-                    const isDisabled = team.teamId === homeTeamId;
-                    const isSelected = team.teamId === awayTeamId;
-                    return (
-                    <button
-                      key={`away-${team.teamId}`}
-                      onClick={() => !isDisabled && setAwayTeamId(team.teamId)}
-                      disabled={isDisabled}
-                      className={`relative p-3 rounded-xl border-2 transition-all overflow-hidden ${
-                        isSelected
-                          ? 'border-orange-500 ring-2 ring-orange-500'
-                          : isDisabled
-                          ? 'border-gray-800 bg-[#151515] opacity-40 cursor-not-allowed'
-                          : 'border-gray-800 bg-[#151515] hover:border-gray-700'
-                      }`}
-                    >
-                      <div className="w-20 h-20 mx-auto mb-2 rounded-lg flex items-center justify-center bg-white p-2">
-                        {team.logo?.primary ? (
-                          <img src={team.logo.primary} alt={team.name} className="w-full h-full object-contain" />
-                        ) : (
-                          <Shield className="w-10 h-10 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="text-sm font-semibold text-white text-center">{team.city}</div>
-                      <div className="text-xs text-gray-400 text-center">{team.name}</div>
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Match-up Preview Card */}
-            {homeTeam && awayTeam && (
-              <div className="mt-4 p-5 rounded-xl border-2 border-slate-700 bg-slate-900/50">
-                <div className="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-3">Match-up Preview</div>
-                <div className="flex items-center justify-center gap-12">
-                  {/* Home Team */}
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-lg flex items-center justify-center bg-white p-2 mb-2">
-                      {homeTeam.logo?.primary ? (
-                        <img
-                          src={homeTeam.logo.primary}
-                          alt={homeTeam.name}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <Shield className="w-8 h-8 text-gray-400" />
-                      )}
-                    </div>
-                    <div className="text-white font-semibold text-center">
-                      {homeTeam.city} {homeTeam.name}
-                    </div>
-                    <div className="text-xs text-gray-400 uppercase mt-1">Home</div>
-                  </div>
-
-                  {/* VS */}
-                  <div className="text-2xl font-bold text-orange-500">VS</div>
-
-                  {/* Away Team */}
-                  <div className="flex-1 flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-lg flex items-center justify-center bg-white p-2 mb-2">
-                      {awayTeam.logo?.primary ? (
-                        <img
-                          src={awayTeam.logo.primary}
-                          alt={awayTeam.name}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <Shield className="w-8 h-8 text-gray-400" />
-                      )}
-                    </div>
-                    <div className="text-white font-semibold text-center">
-                      {awayTeam.city} {awayTeam.name}
-                    </div>
-                    <div className="text-xs text-gray-400 uppercase mt-1">Away</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          <MatchupSelector
+            teams={teams}
+            homeTeamId={homeTeamId}
+            awayTeamId={awayTeamId}
+            onHomeSelect={setHomeTeamId}
+            onAwaySelect={setAwayTeamId}
+          />
         )}
       </div>
 

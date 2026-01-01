@@ -21,17 +21,36 @@ router.get('/sports', verifyToken, async (req, res) => {
     // Use req.db provided by productContext middleware
     const db = req.db;
 
-    // For now, return hockey as the only sport
-    // In the future, this could query the sports_teams collection
+    // Get hockey metadata from Firestore
+    const hockeyRef = db.collection('sports_teams').doc('hockey');
+    const hockeyDoc = await hockeyRef.get();
+    const hockeyData = hockeyDoc.exists ? hockeyDoc.data() : null;
+
+    // Get actual team count and total players
+    let teamsCount = hockeyData?.teamsCount || 0;
+    let playersCount = 0;
+
+    // If we have the index, count players from there
+    if (hockeyData?.teams) {
+      // Get actual player counts from teams collection
+      const teamsSnapshot = await db.collection('sports_teams/hockey/teams').get();
+      teamsCount = teamsSnapshot.size;
+
+      teamsSnapshot.forEach((doc) => {
+        const teamData = doc.data();
+        playersCount += teamData.players?.length || 0;
+      });
+    }
+
     const sports = [
       {
         id: 'hockey',
         name: 'Hockey',
         icon: '🏒',
-        teamsCount: 4,
-        playersCount: 101,
-        league: 'NHL',
-        season: '2024-2025',
+        teamsCount,
+        playersCount,
+        league: hockeyData?.league || 'NHL',
+        season: hockeyData?.season || '2024-2025',
       },
     ];
 

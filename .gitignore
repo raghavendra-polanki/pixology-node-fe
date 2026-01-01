@@ -32,3 +32,6 @@ serviceAccountKeyVertexAI.json
 *.njsproj
 *.sln
 *.sw?
+
+# NHL assets (stored in GCS)
+data/nhl-assets/
