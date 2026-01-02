@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Folder, Users, LogOut, Zap, Palette } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Folder, Users, LogOut, Zap, Palette, Home } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ProjectsDashboard } from './ProjectsDashboard';
 import { TeamManagement } from './team-management/TeamManagement';
@@ -34,6 +35,7 @@ export const FlareLabHome = ({
   onRetry,
   currentUserId,
 }: FlareLabHomeProps) => {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<NavSection>('projects');
 
   const navItems = [
@@ -109,9 +111,16 @@ export const FlareLabHome = ({
           })}
         </nav>
 
-        {/* Footer with Logout */}
-        {onLogout && (
-          <div className="px-3 py-3 border-t border-gray-800">
+        {/* Footer with Home and Logout */}
+        <div className="px-3 py-3 border-t border-gray-800 space-y-1">
+          <button
+            onClick={() => navigate('/home')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 transition-colors text-sm"
+          >
+            <Home className="w-4 h-4" />
+            Back to Home
+          </button>
+          {onLogout && (
             <button
               onClick={onLogout}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 transition-colors text-sm"
@@ -119,8 +128,8 @@ export const FlareLabHome = ({
               <LogOut className="w-4 h-4" />
               Logout
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
       {/* Main Content Area */}

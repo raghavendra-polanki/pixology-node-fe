@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut, User, Share2, Copy } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Video, Clock, CheckCircle2, Sparkles, MoreVertical, Trash2, LogOut, User, Share2, Copy, Users, Folder, Home } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -42,9 +43,26 @@ export function ProjectsDashboard({
   onRetry,
   currentUserId,
 }: ProjectsDashboardProps) {
+  const navigate = useNavigate();
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [shareProject, setShareProject] = useState<Project | null>(null);
+  const [projectFilter, setProjectFilter] = useState<'mine' | 'others' | 'all'>('mine');
+
+  // Filter projects based on selected filter
+  const filteredProjects = useMemo(() => {
+    if (!currentUserId) return projects;
+
+    switch (projectFilter) {
+      case 'mine':
+        return projects.filter(p => p.ownerId === currentUserId);
+      case 'others':
+        return projects.filter(p => p.ownerId !== currentUserId);
+      case 'all':
+      default:
+        return projects;
+    }
+  }, [projects, projectFilter, currentUserId]);
 
   const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -84,7 +102,7 @@ export function ProjectsDashboard({
   return (
     <div className="min-h-screen bg-[#0a0a0a] px-6 md:px-8 lg:px-12 py-8">
       <div className="max-w-[1600px] mx-auto">
-        {/* Header with Logout */}
+        {/* Header with Home and Logout */}
         <div className="mb-12 flex items-start justify-between">
           <div className="flex-1">
             <Logo size="lg" showTagline className="mb-4" />
@@ -92,17 +110,28 @@ export function ProjectsDashboard({
               Create professional marketing videos with AI-powered workflows
             </p>
           </div>
-          {onLogout && (
+          <div className="flex items-center gap-2">
             <Button
-              onClick={onLogout}
+              onClick={() => navigate('/home')}
               variant="outline"
               className="gap-2 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800/50"
               size="sm"
             >
-              <LogOut className="w-4 h-4" />
-              Logout
+              <Home className="w-4 h-4" />
+              Home
             </Button>
-          )}
+            {onLogout && (
+              <Button
+                onClick={onLogout}
+                variant="outline"
+                className="gap-2 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-800/50"
+                size="sm"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Error State */}
@@ -122,16 +151,59 @@ export function ProjectsDashboard({
           </div>
         )}
 
-        {/* Create New Project Button */}
-        <Button
-          onClick={onCreateProject}
-          disabled={isLoading}
-          className="mb-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-          size="lg"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Create New Project
-        </Button>
+        {/* Projects Header with Create Button */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">Projects</h2>
+            <p className="text-gray-400 text-sm">Create and manage your video campaigns</p>
+          </div>
+          <Button
+            onClick={onCreateProject}
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+            size="lg"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Create New Project
+          </Button>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1 mb-6 p-1 bg-gray-900/50 rounded-lg w-fit">
+          <button
+            onClick={() => setProjectFilter('mine')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              projectFilter === 'mine'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <User className="w-3 h-3" />
+            My Projects
+          </button>
+          <button
+            onClick={() => setProjectFilter('others')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              projectFilter === 'others'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Users className="w-3 h-3" />
+            Shared with Me
+          </button>
+          <button
+            onClick={() => setProjectFilter('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              projectFilter === 'all'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Folder className="w-3 h-3" />
+            All
+          </button>
+        </div>
 
         {/* Loading State */}
         {isLoading && projects.length === 0 ? (
@@ -140,26 +212,32 @@ export function ProjectsDashboard({
               <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
             </div>
           </div>
-        ) : projects.length === 0 ? (
+        ) : filteredProjects.length === 0 ? (
           <div className="text-center py-16">
             <Video className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-            <h3 className="text-gray-400 mb-2">No projects yet</h3>
+            <h3 className="text-gray-400 mb-2">
+              {projectFilter === 'mine' ? 'No projects yet' :
+               projectFilter === 'others' ? 'No shared projects' : 'No projects found'}
+            </h3>
             <p className="text-gray-500 mb-6">
-              Create your first AI-powered marketing video campaign
+              {projectFilter === 'mine' ? 'Create your first AI-powered marketing video campaign' :
+               projectFilter === 'others' ? 'Projects shared with you will appear here' : 'No projects available'}
             </p>
-            <Button
-              onClick={onCreateProject}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Create Project
-            </Button>
+            {projectFilter === 'mine' && (
+              <Button
+                onClick={onCreateProject}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create Project
+              </Button>
+            )}
           </div>
         ) : (
           <>
             {/* Projects Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <Card
                   key={project.id}
                   className="bg-[#151515] border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all cursor-pointer group"
