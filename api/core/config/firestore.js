@@ -69,6 +69,7 @@ class FirestoreManager {
     return {
       storylab: process.env.STORYLAB_DATABASE_ID,
       flarelab: process.env.FLARELAB_DATABASE_ID,
+      auth: process.env.AUTH_DATABASE_ID,
     };
   }
 
@@ -99,13 +100,14 @@ class FirestoreManager {
     console.log('✓ Database configuration validated');
     console.log('  - StoryLab database:', databaseConfig.storylab);
     console.log('  - FlareLab database:', databaseConfig.flarelab);
+    console.log('  - Auth database:', databaseConfig.auth);
 
     this.validated = true;
   }
 
   /**
    * Get or create a Firestore database connection for a specific product
-   * @param {string} productId - Product identifier ('storylab' or 'flarelab')
+   * @param {string} productId - Product identifier ('storylab', 'flarelab', or 'auth')
    * @returns {FirebaseFirestore.Firestore} Firestore database instance
    */
   getDatabase(productId) {
@@ -113,8 +115,8 @@ class FirestoreManager {
     this.validateConfiguration();
 
     // Validate product ID
-    if (!['storylab', 'flarelab'].includes(productId)) {
-      throw new Error(`Invalid product ID: ${productId}. Must be 'storylab' or 'flarelab'`);
+    if (!['storylab', 'flarelab', 'auth'].includes(productId)) {
+      throw new Error(`Invalid product ID: ${productId}. Must be 'storylab', 'flarelab', or 'auth'`);
     }
 
     // Return cached connection if exists
@@ -196,5 +198,17 @@ export const db = new Proxy({}, {
       legacyDb = firestoreManager.getDatabase('storylab');
     }
     return legacyDb[prop];
+  }
+});
+
+// Export auth database for user and allowlist operations
+// This connects to the pixology-auth database
+let authDatabase = null;
+export const authDb = new Proxy({}, {
+  get(target, prop) {
+    if (!authDatabase) {
+      authDatabase = firestoreManager.getDatabase('auth');
+    }
+    return authDatabase[prop];
   }
 });

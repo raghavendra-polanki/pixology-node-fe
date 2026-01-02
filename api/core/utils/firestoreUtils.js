@@ -1,4 +1,4 @@
-import { db } from '../config/firestore.js';
+import { db, authDb } from '../config/firestore.js';
 
 /**
  * Save or update a user document in Firestore
@@ -8,7 +8,7 @@ import { db } from '../config/firestore.js';
  */
 export const saveUser = async (userId, userData) => {
   try {
-    await db.collection('users').doc(userId).set(
+    await authDb.collection('users').doc(userId).set(
       {
         ...userData,
         updatedAt: new Date(),
@@ -29,7 +29,7 @@ export const saveUser = async (userId, userData) => {
  */
 export const getUser = async (userId) => {
   try {
-    const doc = await db.collection('users').doc(userId).get();
+    const doc = await authDb.collection('users').doc(userId).get();
     if (doc.exists) {
       return doc.data();
     }
@@ -56,7 +56,7 @@ export const searchUsers = async (query, limit = 10) => {
 
     // Firestore doesn't support LIKE queries, so we fetch all users and filter
     // In production with many users, consider using a search service like Algolia
-    const snapshot = await db.collection('users').get();
+    const snapshot = await authDb.collection('users').get();
 
     const matchingUsers = snapshot.docs
       .map((doc) => ({
@@ -90,7 +90,7 @@ export const searchUsers = async (query, limit = 10) => {
  */
 export const getUserByEmail = async (email) => {
   try {
-    const snapshot = await db
+    const snapshot = await authDb
       .collection('users')
       .where('email', '==', email)
       .limit(1)
@@ -114,7 +114,7 @@ export const getUserByEmail = async (email) => {
  */
 export const deleteUser = async (userId) => {
   try {
-    await db.collection('users').doc(userId).delete();
+    await authDb.collection('users').doc(userId).delete();
     console.log(`User ${userId} deleted successfully`);
   } catch (error) {
     console.error(`Error deleting user ${userId}:`, error);
@@ -412,7 +412,7 @@ export const batchWrite = async (operations) => {
  */
 export const isUserAllowed = async (email) => {
   try {
-    const doc = await db.collection('allowlist').doc(email).get();
+    const doc = await authDb.collection('allowlist').doc(email).get();
     return doc.exists && doc.data().allowed === true;
   } catch (error) {
     console.error(`Error checking allowlist for ${email}:`, error);
@@ -428,7 +428,7 @@ export const isUserAllowed = async (email) => {
  */
 export const addToAllowlist = async (email, metadata = {}) => {
   try {
-    await db.collection('allowlist').doc(email).set({
+    await authDb.collection('allowlist').doc(email).set({
       email,
       allowed: true,
       addedAt: new Date(),
@@ -448,7 +448,7 @@ export const addToAllowlist = async (email, metadata = {}) => {
  */
 export const removeFromAllowlist = async (email) => {
   try {
-    await db.collection('allowlist').doc(email).delete();
+    await authDb.collection('allowlist').doc(email).delete();
     console.log(`User ${email} removed from allowlist`);
   } catch (error) {
     console.error(`Error removing ${email} from allowlist:`, error);
@@ -462,7 +462,7 @@ export const removeFromAllowlist = async (email) => {
  */
 export const getAllowlist = async () => {
   try {
-    const snapshot = await db
+    const snapshot = await authDb
       .collection('allowlist')
       .where('allowed', '==', true)
       .orderBy('addedAt', 'desc')
@@ -485,10 +485,10 @@ export const getAllowlist = async () => {
  */
 export const bulkAddToAllowlist = async (emails) => {
   try {
-    const batch = db.batch();
+    const batch = authDb.batch();
 
     for (const email of emails) {
-      const ref = db.collection('allowlist').doc(email);
+      const ref = authDb.collection('allowlist').doc(email);
       batch.set(ref, {
         email,
         allowed: true,
