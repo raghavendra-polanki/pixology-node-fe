@@ -84,7 +84,7 @@ Organized product-specific code into isolated modules:
 
 **Database Mapping:**
 ```bash
-STORYLAB_DATABASE_ID=pixology-v2           → StoryLab database
+STORYLAB_DATABASE_ID=pixology-storylab           → StoryLab database
 GAMELAB_DATABASE_ID=pixology-gamelab     → GameLab database
 ```
 
@@ -149,7 +149,7 @@ Systematically updated 40+ files to use new import paths:
 Added configuration sections:
 ```bash
 # Firestore Database IDs (REQUIRED for multi-product support)
-STORYLAB_DATABASE_ID=pixology-v2
+STORYLAB_DATABASE_ID=pixology-storylab
 GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Provider API Keys (for multi-adaptor support)
@@ -198,7 +198,7 @@ FIREBASE_PROJECT_ID=core-silicon-476114-i0
 GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKeyGoogle.json
 
 # Database IDs (REQUIRED)
-STORYLAB_DATABASE_ID=pixology-v2
+STORYLAB_DATABASE_ID=pixology-storylab
 GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Provider Keys
@@ -218,9 +218,9 @@ The server will validate database configuration:
 ✅ **Success:**
 ```
 ✓ Database configuration validated
-  - StoryLab database: pixology-v2
+  - StoryLab database: pixology-storylab
   - GameLab database: pixology-gamelab
-✓ Connected to storylab database: pixology-v2
+✓ Connected to storylab database: pixology-storylab
 ```
 
 ❌ **Missing Configuration:**
@@ -300,7 +300,7 @@ GET  http://localhost:3000/api/projects/:projectId
 ```bash
 # Create project in StoryLab
 POST /api/storylab/projects
-→ Writes to pixology-v2 database
+→ Writes to pixology-storylab database
 
 # Create project in GameLab (when implemented)
 POST /api/gamelab/projects

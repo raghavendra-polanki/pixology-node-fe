@@ -14,7 +14,7 @@ admin.initializeApp({
 const db = admin.firestore();
 db.settings({
   ignoreUndefinedProperties: true,
-  databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2',
+  databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-storylab',
 });
 
 async function verifyMigration() {

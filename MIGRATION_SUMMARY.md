@@ -1,7 +1,7 @@
 # Pixology-v2 Database Migration Summary
 
 ## Overview
-Successfully migrated all 4 projects in the `pixology-v2` database to the new AI adaptor architecture.
+Successfully migrated all 4 projects in the `pixology-storylab` database to the new AI adaptor architecture.
 
 ## Migration Details
 
@@ -42,7 +42,7 @@ Each project now has a `project_ai_config` document with:
 
 ## What's Ready Now
 
-✅ **Database**: pixology-v2 is now the active database
+✅ **Database**: pixology-storylab is now the active database
 ✅ **Projects**: 4 projects configured with default adaptors
 ✅ **API Endpoints**: All generation endpoints ready
   - `/api/generation/personas`
@@ -79,7 +79,7 @@ Projects can now use the new generation API endpoints. The generation services w
 - `MIGRATION_SUMMARY.md` - This document
 
 ## Technical Notes
-- firebase-admin v13.5.0 supports database selection via `db.settings({ databaseId: 'pixology-v2' })`
+- firebase-admin v13.5.0 supports database selection via `db.settings({ databaseId: 'pixology-storylab' })`
 - Service account has sufficient Cloud Datastore User role permissions
 - All projects maintain backward compatibility
 - Adaptor selection can be changed at any time through the API

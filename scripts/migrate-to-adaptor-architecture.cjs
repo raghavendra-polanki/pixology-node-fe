@@ -24,7 +24,7 @@ admin.initializeApp({
 });
 
 // Use default Firestore database
-// Note: To migrate pixology-v2 database specifically, ensure your service account
+// Note: To migrate pixology-storylab database specifically, ensure your service account
 // is configured to access that database as the default
 const db = admin.firestore();
 

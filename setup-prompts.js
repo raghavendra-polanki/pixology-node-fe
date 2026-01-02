@@ -13,7 +13,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2' });
+db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-storylab' });
 
 const prompts = {
   'stage_2_personas': {

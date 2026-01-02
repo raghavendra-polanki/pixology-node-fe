@@ -38,12 +38,12 @@ try {
 }
 
 const db = admin.firestore();
-db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-v2' });
+db.settings({ databaseId: process.env.FIRESTORE_DATABASE_ID || 'pixology-storylab' });
 
 async function seedPromptTemplates() {
   try {
     console.log('🌱 Starting prompt template seeding...\n');
-    console.log(`Database: ${process.env.FIRESTORE_DATABASE_ID || 'pixology-v2'}`);
+    console.log(`Database: ${process.env.FIRESTORE_DATABASE_ID || 'pixology-storylab'}`);
     console.log('This will create/update prompt templates for all stages');
     console.log('Document IDs will be stage names (e.g., "stage_2_personas")\n');
 

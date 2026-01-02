@@ -32,7 +32,7 @@ The Pixology backend supports multiple products (StoryLab and GameLab) from a si
 
 ```bash
 # StoryLab Database (existing)
-STORYLAB_DATABASE_ID=pixology-v2
+STORYLAB_DATABASE_ID=pixology-storylab
 
 # GameLab Database (new)
 GAMELAB_DATABASE_ID=pixology-gamelab
@@ -42,7 +42,7 @@ GAMELAB_DATABASE_ID=pixology-gamelab
 
 | Product   | Environment Variable    | Database ID          | Purpose                          |
 |-----------|------------------------|----------------------|----------------------------------|
-| StoryLab  | `STORYLAB_DATABASE_ID` | `pixology-v2`        | Existing StoryLab projects/data  |
+| StoryLab  | `STORYLAB_DATABASE_ID` | `pixology-storylab`        | Existing StoryLab projects/data  |
 | GameLab  | `GAMELAB_DATABASE_ID` | `pixology-gamelab`  | GameLab projects/data           |
 
 ### Firestore Manager
@@ -330,7 +330,7 @@ Both products use the same collection structure (in their respective databases):
 
 ### Collection Isolation
 
-| Collection           | StoryLab DB (pixology-v2) | GameLab DB (pixology-gamelab) |
+| Collection           | StoryLab DB (pixology-storylab) | GameLab DB (pixology-gamelab) |
 |---------------------|---------------------------|--------------------------------|
 | `projects`          | StoryLab projects         | GameLab projects              |
 | `users`             | Shared (replicated)       | Shared (replicated)            |
@@ -349,7 +349,7 @@ FIREBASE_PROJECT_ID=core-silicon-476114-i0
 GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json
 
 # Firestore Databases (REQUIRED)
-STORYLAB_DATABASE_ID=pixology-v2
+STORYLAB_DATABASE_ID=pixology-storylab
 GAMELAB_DATABASE_ID=pixology-gamelab
 
 # AI Providers
@@ -368,7 +368,7 @@ The `FirestoreManager` validates all database IDs on initialization:
 
 ```
 ✓ Database configuration validated
-  - StoryLab database: pixology-v2
+  - StoryLab database: pixology-storylab
   - GameLab database: pixology-gamelab
 ```
 
@@ -388,7 +388,7 @@ If any database ID is missing:
 
 1. Add to `.env`:
    ```bash
-   STORYLAB_DATABASE_ID=pixology-v2
+   STORYLAB_DATABASE_ID=pixology-storylab
    GAMELAB_DATABASE_ID=pixology-gamelab
    ```
 
@@ -420,7 +420,7 @@ Verify that operations on one product don't affect the other:
 
 ```javascript
 // Create project in StoryLab
-POST /api/storylab/projects → writes to pixology-v2
+POST /api/storylab/projects → writes to pixology-storylab
 
 // Create project in GameLab
 POST /api/gamelab/projects → writes to pixology-gamelab
@@ -440,7 +440,7 @@ GET /api/gamelab/projects → only GameLab projects
 
 **Solution:** Add to `.env`:
 ```bash
-STORYLAB_DATABASE_ID=pixology-v2
+STORYLAB_DATABASE_ID=pixology-storylab
 GAMELAB_DATABASE_ID=pixology-gamelab
 ```
 
