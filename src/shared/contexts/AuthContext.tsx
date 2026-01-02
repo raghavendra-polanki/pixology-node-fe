@@ -9,6 +9,7 @@ interface AuthContextType {
   loginWithGoogle: (token: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
+  canEditPrompts: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,7 +41,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           const isTokenValid = await authService.verifyToken();
 
           if (isTokenValid) {
-            setUser(storedUser);
+            // Fetch full user profile (including role) if not already present
+            if (!storedUser.role) {
+              const fullProfile = await authService.fetchUserProfile();
+              if (fullProfile) {
+                setUser(fullProfile);
+              } else {
+                setUser(storedUser);
+              }
+            } else {
+              setUser(storedUser);
+            }
             setIsAuthenticated(true);
           } else {
             // Token invalid, clear auth and redirect to login
@@ -117,6 +128,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
   };
 
+  // Check if user has permission to edit prompts (Sudo User or Super User)
+  const canEditPrompts = user?.role === 'Sudo User' || user?.role === 'Super User';
+
   return (
     <AuthContext.Provider
       value={{
@@ -127,6 +141,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         loginWithGoogle,
         logout,
         clearError,
+        canEditPrompts,
       }}
     >
       {children}

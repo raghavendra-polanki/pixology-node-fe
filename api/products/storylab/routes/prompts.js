@@ -446,4 +446,187 @@ router.put('/model-config', async (req, res) => {
   }
 });
 
+// ============================================
+// VERSION MANAGEMENT ROUTES
+// ============================================
+
+/**
+ * GET /api/prompts/templates/:stageType/:promptId/versions
+ * List all versions for a specific prompt
+ */
+router.get('/templates/:stageType/:promptId/versions', async (req, res) => {
+  try {
+    const { stageType, promptId } = req.params;
+
+    console.log(`[API] Getting versions for ${stageType}:${promptId}`);
+
+    const versions = await PromptTemplateService.getVersionHistory(stageType, promptId, db);
+
+    res.json({
+      success: true,
+      stageType,
+      promptId,
+      versions,
+    });
+  } catch (error) {
+    console.error('[API] Error getting version history:', error);
+    res.status(500).json({
+      error: 'Failed to get version history',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/prompts/templates/:stageType/:promptId/versions/:version
+ * Get a specific version
+ */
+router.get('/templates/:stageType/:promptId/versions/:version', async (req, res) => {
+  try {
+    const { stageType, promptId, version } = req.params;
+
+    const versionData = await PromptTemplateService.getVersion(
+      stageType,
+      promptId,
+      parseInt(version, 10),
+      db
+    );
+
+    if (!versionData) {
+      return res.status(404).json({
+        error: `Version ${version} not found`,
+      });
+    }
+
+    res.json({
+      success: true,
+      version: versionData,
+    });
+  } catch (error) {
+    console.error('[API] Error getting version:', error);
+    res.status(500).json({
+      error: 'Failed to get version',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/prompts/templates/:stageType/:promptId/versions
+ * Create a new version
+ */
+router.post('/templates/:stageType/:promptId/versions', async (req, res) => {
+  try {
+    const { stageType, promptId } = req.params;
+    const { promptData, versionNote, activateImmediately } = req.body;
+
+    if (!promptData) {
+      return res.status(400).json({
+        error: 'promptData is required',
+      });
+    }
+
+    console.log(`[API] Creating new version for ${stageType}:${promptId}`);
+
+    const newVersion = await PromptTemplateService.saveAsNewVersion(
+      stageType,
+      promptId,
+      promptData,
+      versionNote || '',
+      req.userId || 'system',
+      activateImmediately || false,
+      db
+    );
+
+    // Clear the PromptManager cache
+    PromptManager.clearCache();
+
+    res.json({
+      success: true,
+      message: `Created version ${newVersion}`,
+      stageType,
+      promptId,
+      version: newVersion,
+      activated: activateImmediately || false,
+    });
+  } catch (error) {
+    console.error('[API] Error creating version:', error);
+    res.status(500).json({
+      error: 'Failed to create version',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/prompts/templates/:stageType/:promptId/versions/:version/activate
+ * Activate a specific version
+ */
+router.post('/templates/:stageType/:promptId/versions/:version/activate', async (req, res) => {
+  try {
+    const { stageType, promptId, version } = req.params;
+
+    console.log(`[API] Activating version ${version} for ${stageType}:${promptId}`);
+
+    await PromptTemplateService.activateVersion(
+      stageType,
+      promptId,
+      parseInt(version, 10),
+      req.userId || 'system',
+      db
+    );
+
+    // Clear the PromptManager cache
+    PromptManager.clearCache();
+
+    res.json({
+      success: true,
+      message: `Activated version ${version}`,
+      stageType,
+      promptId,
+      version: parseInt(version, 10),
+    });
+  } catch (error) {
+    console.error('[API] Error activating version:', error);
+    res.status(500).json({
+      error: 'Failed to activate version',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/prompts/templates/:stageType/:promptId/versions/:version
+ * Delete a specific version (cannot delete active version)
+ */
+router.delete('/templates/:stageType/:promptId/versions/:version', async (req, res) => {
+  try {
+    const { stageType, promptId, version } = req.params;
+
+    console.log(`[API] Deleting version ${version} for ${stageType}:${promptId}`);
+
+    await PromptTemplateService.deleteVersion(
+      stageType,
+      promptId,
+      parseInt(version, 10),
+      req.userId || 'system',
+      db
+    );
+
+    res.json({
+      success: true,
+      message: `Deleted version ${version}`,
+      stageType,
+      promptId,
+      version: parseInt(version, 10),
+    });
+  } catch (error) {
+    console.error('[API] Error deleting version:', error);
+    res.status(500).json({
+      error: 'Failed to delete version',
+      message: error.message,
+    });
+  }
+});
+
 export default router;

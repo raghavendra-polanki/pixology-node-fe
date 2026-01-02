@@ -16,7 +16,8 @@ import { Textarea } from '../ui/textarea';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { useAuth } from '@/shared/contexts/AuthContext';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
 
 interface Narrative {
@@ -186,6 +187,9 @@ export function Stage3Narratives({
   advanceToNextStage: propAdvanceToNextStage,
   navigateToStage: propNavigateToStage,
 }: Stage3Props) {
+  // Auth check for prompt editor access
+  const { canEditPrompts } = useAuth();
+
   // All state declarations FIRST
   const [selectedNarrative, setSelectedNarrative] = useState<string>('');
   const [customNarrative, setCustomNarrative] = useState<string>('');
@@ -493,15 +497,17 @@ export function Stage3Narratives({
             <Wand2 className={`w-5 h-5 mr-2 ${isGenerating ? 'animate-spark-intense' : ''}`} />
             {isGenerating ? 'Generating Narratives...' : 'Generate Narratives'}
           </Button>
-          <Button
-            onClick={handleEditPrompts}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-            size="lg"
-          >
-            <SettingsIcon className="w-5 h-5 mr-2" />
-            Edit Prompts
-          </Button>
+          {canEditPrompts && (
+            <Button
+              onClick={handleEditPrompts}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
+            >
+              <SettingsIcon className="w-5 h-5 mr-2" />
+              Edit Prompts
+            </Button>
+          )}
         </div>
 
         {/* Progress Indicator */}

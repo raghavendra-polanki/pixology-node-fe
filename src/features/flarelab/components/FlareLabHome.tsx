@@ -62,7 +62,7 @@ export const FlareLabHome = ({
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex">
       {/* Left Navigation Sidebar */}
-      <aside className="w-60 bg-[#0f0f0f] border-r border-gray-800 flex flex-col">
+      <aside className="w-60 h-screen sticky top-0 bg-[#0f0f0f] border-r border-gray-800 flex flex-col">
         {/* Header */}
         <div className="px-5 py-5">
           <div className="flex items-center gap-3">

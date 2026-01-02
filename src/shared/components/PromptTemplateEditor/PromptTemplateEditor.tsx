@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, AlertCircle, Loader, Play, Maximize2, X } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader, Play, Maximize2, X, History, Save, Check, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Input } from '@/shared/components/ui/input';
@@ -51,6 +51,24 @@ interface AvailableModel {
   isDefault?: boolean;
 }
 
+interface PromptVersion {
+  id: string;
+  promptId: string;
+  version: number;
+  capability: string;
+  name: string;
+  description?: string;
+  systemPrompt: string;
+  userPromptTemplate: string;
+  outputFormat?: string;
+  variables?: Array<{ name: string; description: string; placeholder?: string }>;
+  modelConfig?: ModelConfig;
+  versionNote: string;
+  isChosen: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
 interface PromptConfig {
   id: string;
   capability: string;
@@ -63,6 +81,8 @@ interface PromptConfig {
   isDefault?: boolean;
   isActive?: boolean;
   modelConfig?: ModelConfig;
+  currentVersion?: number;
+  latestVersion?: number;
 }
 
 interface PromptTemplate {
@@ -149,6 +169,20 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
 
   // Image preview modal state
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Version management state
+  const [versions, setVersions] = useState<PromptVersion[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
+  const [versionNote, setVersionNote] = useState('');
+  const [activateAfterSave, setActivateAfterSave] = useState(true);
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+  const [isActivatingVersion, setIsActivatingVersion] = useState(false);
+  const [isDeletingVersion, setIsDeletingVersion] = useState(false);
+  const [viewingVersion, setViewingVersion] = useState<PromptVersion | null>(null);
+  const [showDeleteVersionDialog, setShowDeleteVersionDialog] = useState(false);
+  const [versionToDelete, setVersionToDelete] = useState<number | null>(null);
 
   // Handle theme selection - populate variables with theme data
   const handleThemeSelect = (themeId: string) => {
@@ -269,6 +303,42 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
       loadAvailableModels(activeCapability);
     }
   }, [activeCapability]);
+
+  // Set default model when availableModels are loaded and editedPrompt doesn't have a valid one
+  useEffect(() => {
+    if (availableModels.length === 0 || !editedPrompt) return;
+
+    const currentModelKey = editedPrompt.modelConfig?.adaptorId && editedPrompt.modelConfig?.modelId
+      ? `${editedPrompt.modelConfig.adaptorId}/${editedPrompt.modelConfig.modelId}`
+      : null;
+
+    // Check if current model exists in available models
+    const modelExistsInList = currentModelKey && availableModels.some(
+      m => `${m.adaptorId}/${m.modelId}` === currentModelKey
+    );
+
+    // If no model config OR model doesn't exist in available list, set default
+    if (!currentModelKey || !modelExistsInList) {
+      const defaultModel = availableModels.find(m => m.isDefault) || availableModels[0];
+      if (defaultModel) {
+        setEditedPrompt(prev => {
+          if (!prev) return null;
+          const newModelKey = `${defaultModel.adaptorId}/${defaultModel.modelId}`;
+          const prevModelKey = prev.modelConfig?.adaptorId && prev.modelConfig?.modelId
+            ? `${prev.modelConfig.adaptorId}/${prev.modelConfig.modelId}`
+            : null;
+          if (prevModelKey === newModelKey) return prev;
+          return {
+            ...prev,
+            modelConfig: {
+              adaptorId: defaultModel.adaptorId,
+              modelId: defaultModel.modelId,
+            },
+          };
+        });
+      }
+    }
+  }, [availableModels, editedPrompt]);
 
   const handleTestPrompt = async () => {
     if (!template || !activeCapability || !selectedPromptId) return;
@@ -410,6 +480,216 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
     }
   };
 
+  // Load version history for current prompt
+  const loadVersionHistory = async () => {
+    if (!stageType || !selectedPromptId) return;
+
+    try {
+      setIsLoadingVersions(true);
+      const response = await fetch(`${apiBasePath}/templates/${stageType}/${selectedPromptId}/versions`);
+
+      if (!response.ok) {
+        throw new Error('Failed to load version history');
+      }
+
+      const data = await response.json();
+      setVersions(data.versions || []);
+    } catch (err) {
+      console.error('Error loading version history:', err);
+      setVersions([]);
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  // Load versions when prompt changes
+  useEffect(() => {
+    if (selectedPromptId) {
+      loadVersionHistory();
+    }
+  }, [selectedPromptId, stageType]);
+
+  // Save as new version
+  const handleSaveAsNewVersion = async () => {
+    if (!editedPrompt || !stageType || !selectedPromptId) return;
+
+    try {
+      setIsSavingVersion(true);
+      setError(null);
+
+      const response = await fetch(`${apiBasePath}/templates/${stageType}/${selectedPromptId}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          promptData: {
+            systemPrompt: editedPrompt.systemPrompt,
+            userPromptTemplate: promptText,
+            modelConfig: editedPrompt.modelConfig,
+            outputFormat: editedPrompt.outputFormat,
+            variables: editedPrompt.variables,
+          },
+          versionNote: versionNote,
+          activateImmediately: activateAfterSave,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save version');
+      }
+
+      const data = await response.json();
+      setSuccessMessage(`Saved as version ${data.version}${activateAfterSave ? ' (activated)' : ''}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Reset dialog state
+      setShowSaveVersionDialog(false);
+      setVersionNote('');
+
+      // Refresh template and versions
+      const refreshResponse = await fetch(`${apiBasePath}/templates?stageType=${stageType}`);
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json();
+        if (refreshData.templates && refreshData.templates.length > 0) {
+          setTemplate(refreshData.templates[0]);
+          const updatedPrompt = refreshData.templates[0].prompts.find((p: PromptConfig) => p.id === editedPrompt.id);
+          if (updatedPrompt) {
+            setEditedPrompt({ ...updatedPrompt });
+            setPromptText(updatedPrompt.userPromptTemplate || '');
+          }
+        }
+      }
+
+      await loadVersionHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save version');
+    } finally {
+      setIsSavingVersion(false);
+    }
+  };
+
+  // Activate a specific version
+  const handleActivateVersion = async (version: number) => {
+    if (!stageType || !selectedPromptId) return;
+
+    try {
+      setIsActivatingVersion(true);
+      setError(null);
+
+      const response = await fetch(`${apiBasePath}/templates/${stageType}/${selectedPromptId}/versions/${version}/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to activate version');
+      }
+
+      setSuccessMessage(`Activated version ${version}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Refresh template and versions
+      const refreshResponse = await fetch(`${apiBasePath}/templates?stageType=${stageType}`);
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json();
+        if (refreshData.templates && refreshData.templates.length > 0) {
+          setTemplate(refreshData.templates[0]);
+          const updatedPrompt = refreshData.templates[0].prompts.find((p: PromptConfig) => p.id === selectedPromptId);
+          if (updatedPrompt) {
+            setEditedPrompt({ ...updatedPrompt });
+            setPromptText(updatedPrompt.userPromptTemplate || '');
+          }
+        }
+      }
+
+      await loadVersionHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to activate version');
+    } finally {
+      setIsActivatingVersion(false);
+    }
+  };
+
+  // Open delete confirmation dialog
+  const handleDeleteVersionClick = (version: number) => {
+    setVersionToDelete(version);
+    setShowDeleteVersionDialog(true);
+  };
+
+  // Delete a version (called after confirmation)
+  const handleConfirmDeleteVersion = async () => {
+    if (!stageType || !selectedPromptId || versionToDelete === null) return;
+
+    try {
+      setIsDeletingVersion(true);
+      setError(null);
+
+      const response = await fetch(`${apiBasePath}/templates/${stageType}/${selectedPromptId}/versions/${versionToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete version');
+      }
+
+      setSuccessMessage(`Deleted version ${versionToDelete}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Close dialog and reset
+      setShowDeleteVersionDialog(false);
+      setVersionToDelete(null);
+
+      await loadVersionHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete version');
+    } finally {
+      setIsDeletingVersion(false);
+    }
+  };
+
+  // Load a specific version into the editor (for viewing)
+  const handleViewVersion = async (version: number) => {
+    if (!stageType || !selectedPromptId) return;
+
+    try {
+      const response = await fetch(`${apiBasePath}/templates/${stageType}/${selectedPromptId}/versions/${version}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to load version');
+      }
+
+      const data = await response.json();
+      const versionData = data.version;
+
+      // Set viewing version for UI indicator
+      setViewingVersion(versionData);
+
+      // Update editor with version content
+      setPromptText(versionData.userPromptTemplate || '');
+      setEditedPrompt(prev => prev ? {
+        ...prev,
+        systemPrompt: versionData.systemPrompt,
+        userPromptTemplate: versionData.userPromptTemplate,
+        modelConfig: versionData.modelConfig,
+      } : null);
+
+      setSuccessMessage(`Loaded version ${version} into editor`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load version');
+    }
+  };
+
+  // Clear viewing version and restore current
+  const handleClearViewingVersion = () => {
+    setViewingVersion(null);
+    if (editedPrompt) {
+      setPromptText(editedPrompt.userPromptTemplate || '');
+    }
+  };
+
   const extractVariables = (template: string): string[] => {
     const regex = /\{\{(\w+)\}\}/g;
     const matches: string[] = [];
@@ -435,8 +715,8 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
       }
 
       const data = await response.json();
-      setAvailableModels(data.models || []);
-      console.log(`[PromptTemplateEditor] Loaded ${data.models?.length || 0} models for ${capability}`);
+      const models = data.models || [];
+      setAvailableModels(models);
     } catch (err) {
       console.error('[PromptTemplateEditor] Error loading models:', err);
       setAvailableModels([]);
@@ -966,10 +1246,11 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
 
                       // Switch to new prompt
                       setSelectedPromptId(newPromptId);
+                      setViewingVersion(null); // Clear viewing version when switching prompts
                       const prompt = template?.prompts.find(p => p.id === newPromptId);
                       if (prompt) {
                         setActiveCapability(prompt.capability);
-                        setEditedPrompt({ ...prompt }); // Create isolated copy
+                        setEditedPrompt({ ...prompt }); // Create isolated copy (default model set by useEffect)
                         setPromptText(prompt.userPromptTemplate || ''); // Update prompt text
 
                         // Restore saved state for this prompt (if exists)
@@ -1034,6 +1315,7 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
                     </Label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
                       <Select
+                        key={editedPrompt.modelConfig ? `${editedPrompt.modelConfig.adaptorId}/${editedPrompt.modelConfig.modelId}` : 'no-model'}
                         value={editedPrompt.modelConfig ? `${editedPrompt.modelConfig.adaptorId}/${editedPrompt.modelConfig.modelId}` : ''}
                         onValueChange={(value) => {
                           const [adaptorId, modelId] = value.split('/');
@@ -1087,27 +1369,468 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
                   <div className="prompt-display" style={{ marginTop: '16px' }}>
                     {/* Editable User Prompt Template - Larger */}
                     <div className="prompt-display-section">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <h3 className="prompt-display-title" style={{ margin: 0 }}>User Prompt Template</h3>
-                        <Button
-                          onClick={handleSaveButtonClick}
-                          disabled={isSaving || isTesting}
-                          size="sm"
-                          className="test-button"
-                          style={{
-                            backgroundColor: accentColor,
-                            color: '#ffffff',
-                            fontSize: '11px',
-                            padding: '8px 20px',
-                            height: 'auto',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            fontWeight: '600'
-                          }}
-                        >
-                          {isSaving ? 'Saving...' : 'Save Prompt'}
-                        </Button>
+                      {/* Header row - responsive with wrap */}
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '10px',
+                        marginBottom: '10px'
+                      }}>
+                        {/* Left side: Title + Version badges */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <h3 className="prompt-display-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>User Prompt Template</h3>
+
+                          {/* Active version badge */}
+                          {currentPrompt?.currentVersion && !viewingVersion && (
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              color: '#22c55e',
+                              backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                              border: '1px solid rgba(34, 197, 94, 0.25)',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}>
+                              <Check size={10} />
+                              v{currentPrompt.currentVersion}
+                            </span>
+                          )}
+
+                          {/* Viewing indicator - shows when viewing a version (even if it's the active one) */}
+                          {viewingVersion && (
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              color: accentColor,
+                              backgroundColor: `${accentColor}15`,
+                              border: `1px solid ${accentColor}40`,
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}>
+                              Viewing v{viewingVersion.version}
+                              {viewingVersion.version === currentPrompt?.currentVersion && (
+                                <span style={{ color: '#22c55e', marginLeft: '2px' }}>(active)</span>
+                              )}
+                            </span>
+                          )}
+
+                          {/* Back to active button - only when viewing non-active version */}
+                          {viewingVersion && viewingVersion.version !== currentPrompt?.currentVersion && (
+                            <button
+                              onClick={handleClearViewingVersion}
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: '500',
+                                color: '#888',
+                                backgroundColor: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#fff';
+                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#888';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                              }}
+                            >
+                              ← Back to v{currentPrompt?.currentVersion}
+                            </button>
+                          )}
+
+                          {/* Version history toggle */}
+                          <button
+                            onClick={() => setShowVersionHistory(!showVersionHistory)}
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: '500',
+                              color: showVersionHistory ? accentColor : '#888',
+                              backgroundColor: showVersionHistory ? `${accentColor}15` : 'transparent',
+                              border: `1px solid ${showVersionHistory ? `${accentColor}40` : 'rgba(255,255,255,0.1)'}`,
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!showVersionHistory) {
+                                e.currentTarget.style.color = '#fff';
+                                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!showVersionHistory) {
+                                e.currentTarget.style.color = '#888';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                              }
+                            }}
+                          >
+                            <History size={12} />
+                            {versions.length || 0}
+                          </button>
+                        </div>
+
+                        {/* Right side: Action buttons */}
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {/* Save as New Version button */}
+                          <button
+                            onClick={() => setShowSaveVersionDialog(true)}
+                            disabled={isSavingVersion || isTesting}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              color: accentColor,
+                              backgroundColor: 'transparent',
+                              border: `1px solid ${accentColor}50`,
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              cursor: isSavingVersion || isTesting ? 'not-allowed' : 'pointer',
+                              opacity: isSavingVersion || isTesting ? 0.5 : 1,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSavingVersion && !isTesting) {
+                                e.currentTarget.style.backgroundColor = `${accentColor}15`;
+                                e.currentTarget.style.borderColor = accentColor;
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.borderColor = `${accentColor}50`;
+                              e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                          >
+                            <Save size={12} />
+                            Save Version
+                          </button>
+
+                          {/* Save Prompt button */}
+                          <button
+                            onClick={handleSaveButtonClick}
+                            disabled={isSaving || isTesting}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              color: '#fff',
+                              backgroundColor: accentColor,
+                              border: 'none',
+                              padding: '6px 14px',
+                              borderRadius: '6px',
+                              cursor: isSaving || isTesting ? 'not-allowed' : 'pointer',
+                              opacity: isSaving || isTesting ? 0.5 : 1,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.15s ease',
+                              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSaving && !isTesting) {
+                                e.currentTarget.style.filter = 'brightness(1.15)';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.filter = 'brightness(1)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
+                            }}
+                          >
+                            {isSaving ? 'Saving...' : 'Save Prompt'}
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Version History Panel */}
+                      {showVersionHistory && (
+                        <div style={{
+                          marginBottom: '16px',
+                          padding: '16px',
+                          backgroundColor: '#111',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}>
+                          {/* Header */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '12px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <History size={14} style={{ color: '#f97316' }} />
+                              <span style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+                                Version History
+                              </span>
+                              <span style={{
+                                fontSize: '10px',
+                                color: '#666',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                padding: '2px 6px',
+                                borderRadius: '8px'
+                              }}>
+                                {versions.length}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setShowVersionHistory(false)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#666',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+
+                          {isLoadingVersions ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', gap: '8px' }}>
+                              <Loader className="w-4 h-4 animate-spin" style={{ color: '#f97316' }} />
+                              <span style={{ color: '#666', fontSize: '12px' }}>Loading...</span>
+                            </div>
+                          ) : versions.length === 0 ? (
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '20px',
+                              color: '#666',
+                              fontSize: '12px'
+                            }}>
+                              No versions yet. Click "Save New Version" to start.
+                            </div>
+                          ) : (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              maxHeight: '240px',
+                              overflowY: 'auto'
+                            }}>
+                              {versions.map((v) => {
+                                const isViewing = viewingVersion?.version === v.version;
+                                const isActive = v.isChosen;
+
+                                return (
+                                  <div
+                                    key={v.id}
+                                    onClick={() => handleViewVersion(v.version)}
+                                    style={{
+                                      padding: '10px 12px',
+                                      backgroundColor: isViewing
+                                        ? 'rgba(249, 115, 22, 0.1)'
+                                        : 'rgba(255, 255, 255, 0.02)',
+                                      borderRadius: '8px',
+                                      border: isViewing
+                                        ? '1px solid rgba(249, 115, 22, 0.3)'
+                                        : '1px solid rgba(255, 255, 255, 0.05)',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isViewing) {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!isViewing) {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
+                                      }
+                                    }}
+                                  >
+                                    {/* Top row: version badge, status, timestamp */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {/* Version badge */}
+                                        <span style={{
+                                          fontSize: '12px',
+                                          fontWeight: '700',
+                                          color: '#fff',
+                                          backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                                          padding: '2px 8px',
+                                          borderRadius: '4px',
+                                          fontFamily: 'ui-monospace, monospace'
+                                        }}>
+                                          v{v.version}
+                                        </span>
+
+                                        {/* Active badge */}
+                                        {isActive && (
+                                          <span style={{
+                                            fontSize: '9px',
+                                            fontWeight: '700',
+                                            color: '#22c55e',
+                                            backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px'
+                                          }}>
+                                            Active
+                                          </span>
+                                        )}
+
+                                        {/* Viewing indicator - show when this version is being viewed */}
+                                        {isViewing && (
+                                          <span style={{
+                                            fontSize: '9px',
+                                            fontWeight: '700',
+                                            color: '#f97316',
+                                            backgroundColor: 'rgba(249, 115, 22, 0.15)',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px'
+                                          }}>
+                                            Viewing
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Timestamp */}
+                                      <span style={{ fontSize: '10px', color: '#555' }}>
+                                        {new Date(v.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                      </span>
+                                    </div>
+
+                                    {/* Version note if exists */}
+                                    {v.versionNote && (
+                                      <p style={{
+                                        margin: '6px 0 0 0',
+                                        fontSize: '11px',
+                                        color: '#888',
+                                        lineHeight: '1.4'
+                                      }}>
+                                        {v.versionNote}
+                                      </p>
+                                    )}
+
+                                    {/* Action buttons - only for non-active versions */}
+                                    {!isActive && (
+                                      <div style={{
+                                        display: 'flex',
+                                        gap: '6px',
+                                        marginTop: '8px'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          onClick={() => handleActivateVersion(v.version)}
+                                          disabled={isActivatingVersion}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            padding: '4px 10px',
+                                            fontSize: '11px',
+                                            fontWeight: '500',
+                                            color: '#22c55e',
+                                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                            border: '1px solid rgba(34, 197, 94, 0.2)',
+                                            borderRadius: '4px',
+                                            cursor: isActivatingVersion ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            opacity: isActivatingVersion ? 0.5 : 1,
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            if (!isActivatingVersion) {
+                                              e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.2)';
+                                              e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                                              e.currentTarget.style.transform = 'translateY(-1px)';
+                                            }
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+                                            e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                          }}
+                                        >
+                                          <Check size={12} />
+                                          Activate
+                                        </button>
+
+                                        <button
+                                          onClick={() => handleDeleteVersionClick(v.version)}
+                                          disabled={isDeletingVersion}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            padding: '4px 10px',
+                                            fontSize: '11px',
+                                            fontWeight: '500',
+                                            color: '#666',
+                                            backgroundColor: 'transparent',
+                                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                                            borderRadius: '4px',
+                                            cursor: isDeletingVersion ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            opacity: isDeletingVersion ? 0.5 : 1,
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            if (!isDeletingVersion) {
+                                              e.currentTarget.style.color = '#ef4444';
+                                              e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                                              e.currentTarget.style.transform = 'translateY(-1px)';
+                                            }
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.color = '#666';
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                          }}
+                                        >
+                                          <Trash2 size={12} />
+                                          Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div style={{
                         width: '100%',
                         height: '450px',
@@ -1548,24 +2271,55 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
                     </div>
 
                     {/* Test Button */}
-                    <Button
+                    <button
                       onClick={handleTestPrompt}
                       disabled={isTesting}
-                      className="test-button"
-                      style={{ backgroundColor: accentColor }}
+                      style={{
+                        backgroundColor: accentColor,
+                        color: '#ffffff',
+                        padding: '0.6rem 1.4rem',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: isTesting ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        transition: 'all 0.2s ease',
+                        height: '2.2rem',
+                        flexShrink: 0,
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.3px',
+                        opacity: isTesting ? 0.5 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isTesting) {
+                          e.currentTarget.style.filter = 'brightness(1.15)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.4)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.filter = 'brightness(1)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                      }}
                     >
                       {isTesting ? (
                         <>
-                          <Loader className="w-4 h-4 mr-2 animate-spin" />
+                          <Loader className="w-4 h-4 animate-spin" />
                           Running...
                         </>
                       ) : (
                         <>
-                          <Play className="w-4 h-4 mr-2" />
+                          <Play className="w-4 h-4" />
                           Start
                         </>
                       )}
-                    </Button>
+                    </button>
                   </div>
 
                   {/* Output Section */}
@@ -1611,30 +2365,237 @@ export function PromptTemplateEditor({ stageType, projectId, onBack, stageData, 
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setShowConfirmDialog(false);
-                setConfirmText('');
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid #333333',
-                color: '#d1d5db'
-              }}
-            >
-              Cancel
+            <AlertDialogCancel asChild>
+              <button
+                onClick={() => {
+                  setShowConfirmDialog(false);
+                  setConfirmText('');
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid #333333',
+                  color: '#d1d5db',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                  e.currentTarget.style.borderColor = '#555';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = '#333333';
+                }}
+              >
+                Cancel
+              </button>
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmSave}
-              disabled={confirmText !== 'CONFIRM'}
+            <AlertDialogAction asChild>
+              <button
+                onClick={confirmText === 'CONFIRM' ? handleConfirmSave : undefined}
+                style={{
+                  backgroundColor: confirmText === 'CONFIRM' ? accentColor : '#333333',
+                  color: '#ffffff',
+                  cursor: confirmText === 'CONFIRM' ? 'pointer' : 'not-allowed',
+                  opacity: confirmText === 'CONFIRM' ? 1 : 0.5,
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (confirmText === 'CONFIRM') {
+                    e.currentTarget.style.filter = 'brightness(1.15)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                Save Prompt
+              </button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Save Version Dialog */}
+      <AlertDialog open={showSaveVersionDialog} onOpenChange={setShowSaveVersionDialog}>
+        <AlertDialogContent style={{ backgroundColor: '#0a0a0a', border: '1px solid #333333' }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: '#ffffff' }}>Save as New Version</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: '#a0aec0' }}>
+              Create a new version of this prompt. You can optionally add a note describing what changed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div style={{ margin: '16px 0' }}>
+            <Label style={{ display: 'block', marginBottom: '8px', color: '#e2e8f0' }}>
+              Version Note (optional)
+            </Label>
+            <Textarea
+              value={versionNote}
+              onChange={(e) => setVersionNote(e.target.value)}
+              placeholder="e.g., Improved persona generation detail, Fixed output format..."
               style={{
-                backgroundColor: confirmText === 'CONFIRM' ? accentColor : '#333333',
+                backgroundColor: 'rgba(21, 21, 21, 0.6)',
+                border: '1px solid rgba(51, 51, 51, 0.2)',
                 color: '#ffffff',
-                cursor: confirmText === 'CONFIRM' ? 'pointer' : 'not-allowed',
-                opacity: confirmText === 'CONFIRM' ? 1 : 0.5
+                minHeight: '80px',
               }}
-            >
-              Save Prompt
+            />
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="activateAfterSave"
+                checked={activateAfterSave}
+                onChange={(e) => setActivateAfterSave(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: accentColor }}
+              />
+              <Label htmlFor="activateAfterSave" style={{ color: '#e2e8f0', cursor: 'pointer' }}>
+                Activate this version immediately
+              </Label>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <button
+                onClick={() => {
+                  setShowSaveVersionDialog(false);
+                  setVersionNote('');
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid #333333',
+                  color: '#d1d5db',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                  e.currentTarget.style.borderColor = '#555';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = '#333333';
+                }}
+              >
+                Cancel
+              </button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <button
+                onClick={isSavingVersion ? undefined : handleSaveAsNewVersion}
+                style={{
+                  backgroundColor: accentColor,
+                  color: '#ffffff',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: isSavingVersion ? 'not-allowed' : 'pointer',
+                  opacity: isSavingVersion ? 0.5 : 1,
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSavingVersion) {
+                    e.currentTarget.style.filter = 'brightness(1.15)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                {isSavingVersion ? 'Saving...' : 'Save Version'}
+              </button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Version Confirmation Dialog */}
+      <AlertDialog open={showDeleteVersionDialog} onOpenChange={setShowDeleteVersionDialog}>
+        <AlertDialogContent style={{ backgroundColor: '#0a0a0a', border: '1px solid #333333' }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: '#ffffff' }}>Delete Version</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: '#a0aec0' }}>
+              Are you sure you want to delete <strong style={{ color: '#ef4444' }}>version {versionToDelete}</strong>?
+              <br /><br />
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <button
+                onClick={() => {
+                  setShowDeleteVersionDialog(false);
+                  setVersionToDelete(null);
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid #333333',
+                  color: '#d1d5db',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                  e.currentTarget.style.borderColor = '#555';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = '#333333';
+                }}
+              >
+                Cancel
+              </button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <button
+                onClick={isDeletingVersion ? undefined : handleConfirmDeleteVersion}
+                style={{
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: isDeletingVersion ? 'not-allowed' : 'pointer',
+                  opacity: isDeletingVersion ? 0.5 : 1,
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isDeletingVersion) {
+                    e.currentTarget.style.filter = 'brightness(1.15)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                {isDeletingVersion ? 'Deleting...' : 'Delete Version'}
+              </button>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

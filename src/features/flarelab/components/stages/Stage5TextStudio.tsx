@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ArrowRight, Type, Sparkles, Edit2, Plus, Trash2, Undo, Redo, Square, CheckSquare, ChevronLeft, ChevronRight, Palette, Copy, RefreshCw, ChevronDown, Layers, PenTool, Droplet, Sun, Library, Star, StarOff, AlertCircle, Loader2, X, Save } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import * as fabric from 'fabric';
 
 // Save progress state type
@@ -46,6 +47,7 @@ interface HistoryEntry {
 }
 
 export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage, loadProject, updateTextStudio, onUnsavedChangesChange }: Stage5Props) => {
+  const { canEditPrompts } = useAuth();
   // Images from Stage 4
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -1758,15 +1760,17 @@ export const Stage5TextStudio = ({ project, markStageCompleted, navigateToStage,
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            onClick={() => {/* TODO: Open prompt editor */}}
-            variant="outline"
-            size="sm"
-            className="h-9 px-4 border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Prompts
-          </Button>
+          {canEditPrompts && (
+            <Button
+              onClick={() => {/* TODO: Open prompt editor */}}
+              variant="outline"
+              size="sm"
+              className="h-9 px-4 border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Prompts
+            </Button>
+          )}
           <Button
             onClick={handleContinue}
             disabled={isSaving || (selectedForExport.size === 0 && selectedForAnimation.size === 0)}

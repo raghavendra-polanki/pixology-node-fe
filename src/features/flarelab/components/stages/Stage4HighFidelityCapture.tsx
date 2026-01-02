@@ -3,6 +3,7 @@ import { ArrowRight, Camera, Sparkles, Check, RefreshCw, AlertCircle, Users, Max
 import { Button } from '@/shared/components/ui/button';
 import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { AIImageEditor } from '@/shared/components/AIImageEditor';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -100,6 +101,7 @@ const PlayerHeadshot = ({ player }: { player: { id: string; name: string; number
 };
 
 export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigateToStage, loadProject }: Stage4Props) => {
+  const { canEditPrompts } = useAuth();
   const [themeMappings, setThemeMappings] = useState<ThemeWithPlayers[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -655,15 +657,17 @@ export const Stage4HighFidelityCapture = ({ project, markStageCompleted, navigat
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setShowPromptEditor(true)}
-              variant="outline"
-              size="sm"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Prompts
-            </Button>
+            {canEditPrompts && (
+              <Button
+                onClick={() => setShowPromptEditor(true)}
+                variant="outline"
+                size="sm"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Prompts
+              </Button>
+            )}
             {hasGeneratedImages && (
               <Button
                 onClick={handleContinue}

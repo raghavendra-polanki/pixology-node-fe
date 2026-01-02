@@ -3,6 +3,7 @@ import { ArrowRight, Users as UsersIcon, Check, Sparkles, RefreshCw, Edit2, X, Z
 import { Button } from '@/shared/components/ui/button';
 import TeamsService, { Player as TeamPlayer } from '@/shared/services/teamsService';
 import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import type { FlareLabProject, Player, CreateProjectInput, ThemeCategoryId } from '../../types/project.types';
 import { THEME_CATEGORIES } from '../../types/project.types';
 import { PlayerSelectionModal } from './PlayerSelectionModal';
@@ -56,6 +57,7 @@ const transformPlayersForUI = (
 };
 
 export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage, updateCastingCall }: Stage3Props) => {
+  const { canEditPrompts } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(true);
   const [themePlayerStates, setThemePlayerStates] = useState<Record<string, ThemePlayerState>>({});
@@ -495,15 +497,17 @@ export const Stage3CastingCall = ({ project, markStageCompleted, navigateToStage
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setShowPromptEditor(true)}
-              variant="outline"
-              size="sm"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Prompts
-            </Button>
+            {canEditPrompts && (
+              <Button
+                onClick={() => setShowPromptEditor(true)}
+                variant="outline"
+                size="sm"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Prompts
+              </Button>
+            )}
             {allThemesComplete() && (
               <Button
                 onClick={handleContinue}

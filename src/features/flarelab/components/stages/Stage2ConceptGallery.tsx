@@ -9,6 +9,7 @@ import {
 } from '../ui/dialog';
 import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { AIImageEditor } from '@/shared/components/AIImageEditor';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import type { FlareLabProject, Theme, ThemeCategoryId, CreateProjectInput } from '../../types/project.types';
 import { THEME_CATEGORIES } from '../../types/project.types';
 
@@ -38,6 +39,7 @@ export const Stage2ConceptGallery = ({
   loadProject,
   updateConceptGallery,
 }: Stage2Props) => {
+  const { canEditPrompts } = useAuth();
   // Category states - one state object per category
   const [categoryStates, setCategoryStates] = useState<Record<ThemeCategoryId, CategoryState>>({
     'home-team': { themes: [], isGenerating: false, isCollapsed: false, progress: 0, message: '', error: null },
@@ -534,15 +536,17 @@ export const Stage2ConceptGallery = ({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setShowPromptEditor(true)}
-              variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
-              size="sm"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Prompts
-            </Button>
+            {canEditPrompts && (
+              <Button
+                onClick={() => setShowPromptEditor(true)}
+                variant="outline"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+                size="sm"
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Prompts
+              </Button>
+            )}
             {canContinue && (
               <Button
                 onClick={handleContinue}

@@ -3,6 +3,7 @@ import { ArrowRight, Play, Zap, RefreshCw, Check, AlertCircle, Sparkles, Video, 
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '../ui/textarea';
 import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import FlareLabProjectService from '@/shared/services/flareLabProjectService';
 import type {
   FlareLabProject,
@@ -86,6 +87,7 @@ const scrollbarStyles = `
 `;
 
 export const Stage6KineticActivation = ({ project, markStageCompleted, navigateToStage, loadProject }: Stage6Props) => {
+  const { canEditPrompts } = useAuth();
   const [imagesToAnimate, setImagesToAnimate] = useState<GeneratedImage[]>([]);
   const [animations, setAnimations] = useState<Map<string, AnimationData>>(new Map());
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
@@ -629,15 +631,17 @@ export const Stage6KineticActivation = ({ project, markStageCompleted, navigateT
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                onClick={() => setShowPromptEditor(true)}
-                variant="outline"
-                size="sm"
-                className="border-gray-700 text-gray-300 hover:bg-gray-800"
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit Prompts
-              </Button>
+              {canEditPrompts && (
+                <Button
+                  onClick={() => setShowPromptEditor(true)}
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Edit Prompts
+                </Button>
+              )}
               {successfulAnimations.length > 0 && (
                 <Button
                   onClick={handleContinue}

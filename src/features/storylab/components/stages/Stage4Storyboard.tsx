@@ -23,8 +23,9 @@ import { Input } from '../ui/input';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { useStoryLabProject } from '../../hooks/useStoryLabProject';
-import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { AIImageEditor, STORYLAB_PRESETS } from '@/shared/components/AIImageEditor';
 
 interface Scene {
@@ -57,6 +58,7 @@ export function Stage4Storyboard({
   advanceToNextStage: propAdvanceToNextStage,
   navigateToStage: propNavigateToStage,
 }: Stage4Props) {
+  const { canEditPrompts } = useAuth();
   // Load project using hook, but prefer passed props from WorkflowView
   const hookResult = useStoryLabProject({ autoLoad: true, projectId: propProjectId || propProject?.id || '' });
 
@@ -595,15 +597,17 @@ export function Stage4Storyboard({
               </>
             )}
           </Button>
-          <Button
-            onClick={handleEditPrompts}
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-            size="lg"
-          >
-            <SettingsIcon className="w-5 h-5 mr-2" />
-            Edit Prompts
-          </Button>
+          {canEditPrompts && (
+            <Button
+              onClick={handleEditPrompts}
+              variant="outline"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+              size="lg"
+            >
+              <SettingsIcon className="w-5 h-5 mr-2" />
+              Edit Prompts
+            </Button>
+          )}
         </div>
 
         {/* Progress Indicator */}

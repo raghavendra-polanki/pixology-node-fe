@@ -7,8 +7,9 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { PromptTemplateEditor } from '../shared/PromptTemplateEditor';
+import { PromptTemplateEditor } from '@/shared/components/PromptTemplateEditor';
 import { GenerationProgressIndicator } from '../shared/GenerationProgressIndicator';
+import { useAuth } from '@/shared/contexts/AuthContext';
 import { CreateRealPersona } from '../personas/CreateRealPersona';
 import { RealPersonaSelector } from '../personas/RealPersonaSelector';
 
@@ -37,6 +38,7 @@ interface Stage2Props {
 type PersonaTab = 'ai' | 'real';
 
 export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelection, updateSelectedRealPersona, markStageCompleted, advanceToNextStage, navigateToStage }: Stage2Props) {
+  const { canEditPrompts } = useAuth();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -486,15 +488,17 @@ export function Stage2Personas({ project, updateAIPersonas, updatePersonaSelecti
                   </>
                 )}
               </Button>
-              <Button
-                onClick={handleEditPrompts}
-                variant="outline"
-                className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
-                size="lg"
-              >
-                <Edit2 className="w-5 h-5 mr-2" />
-                Edit Prompts
-              </Button>
+              {canEditPrompts && (
+                <Button
+                  onClick={handleEditPrompts}
+                  variant="outline"
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white rounded-xl"
+                  size="lg"
+                >
+                  <Edit2 className="w-5 h-5 mr-2" />
+                  Edit Prompts
+                </Button>
+              )}
             </div>
 
             {/* Progress Indicator */}

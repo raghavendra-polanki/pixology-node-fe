@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string;
   name: string;
   picture: string;
+  role?: string;
 }
 
 export interface AuthResponse {
@@ -158,6 +159,38 @@ class AuthService {
     } catch (error) {
       console.error('Token verification error:', error);
       return false;
+    }
+  }
+
+  /**
+   * Fetch user profile including role from /api/users/me
+   */
+  async fetchUserProfile(): Promise<AuthUser | null> {
+    try {
+      const token = this.getToken();
+      if (!token) return null;
+
+      const response = await fetch(`${this.apiBaseUrl}/api/users/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+      if (data.success && data.user) {
+        // Update stored user with role
+        const updatedUser: AuthUser = {
+          ...data.user,
+        };
+        sessionStorage.setItem('authUser', JSON.stringify(updatedUser));
+        return updatedUser;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
     }
   }
 

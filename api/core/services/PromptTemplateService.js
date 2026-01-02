@@ -368,6 +368,288 @@ class PromptTemplateService {
       throw error;
     }
   }
+
+  // ============================================
+  // VERSION MANAGEMENT METHODS
+  // ============================================
+
+  /**
+   * Save prompt changes as a new version
+   * This creates a new version and optionally activates it
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {object} promptData - Updated prompt data
+   * @param {string} versionNote - Description of changes
+   * @param {string} userId - User creating the version
+   * @param {boolean} activateImmediately - Whether to activate this version immediately
+   * @param {object} db - Firestore database instance
+   * @returns {Promise<number>} New version number
+   */
+  async saveAsNewVersion(stageType, promptId, promptData, versionNote, userId, activateImmediately, db) {
+    try {
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+      const prompt = stageTemplate.prompts.find(p => p.id === promptId);
+
+      if (!prompt) {
+        throw new Error(`Prompt '${promptId}' not found in stage '${stageType}'`);
+      }
+
+      // Calculate new version number
+      const newVersion = (prompt.latestVersion || 0) + 1;
+      const versionDocId = `${promptId}_v${newVersion}`;
+
+      // Create version document
+      const versionData = {
+        promptId,
+        version: newVersion,
+        capability: prompt.capability,
+        name: promptData.name || prompt.name,
+        description: promptData.description || prompt.description || '',
+        systemPrompt: promptData.systemPrompt || '',
+        userPromptTemplate: promptData.userPromptTemplate || '',
+        outputFormat: promptData.outputFormat || prompt.outputFormat || 'json',
+        variables: promptData.variables || prompt.variables || [],
+        modelConfig: promptData.modelConfig || prompt.modelConfig || null,
+        versionNote: versionNote || '',
+        isChosen: activateImmediately,
+        createdAt: new Date().toISOString(),
+        createdBy: userId,
+      };
+
+      // If activating immediately, deactivate previous version
+      if (activateImmediately && prompt.currentVersion) {
+        const prevVersionDocId = `${promptId}_v${prompt.currentVersion}`;
+        await db
+          .collection('prompt_templates')
+          .doc(stageType)
+          .collection('versions')
+          .doc(prevVersionDocId)
+          .update({ isChosen: false });
+      }
+
+      // Save version document
+      await db
+        .collection('prompt_templates')
+        .doc(stageType)
+        .collection('versions')
+        .doc(versionDocId)
+        .set(versionData);
+
+      // Update prompt in stage template
+      const updatedPrompts = stageTemplate.prompts.map(p => {
+        if (p.id === promptId) {
+          const updates = {
+            ...p,
+            latestVersion: newVersion,
+            updatedAt: new Date().toISOString(),
+            updatedBy: userId,
+          };
+
+          // If activating immediately, update prompt content
+          if (activateImmediately) {
+            updates.currentVersion = newVersion;
+            updates.systemPrompt = promptData.systemPrompt || p.systemPrompt;
+            updates.userPromptTemplate = promptData.userPromptTemplate || p.userPromptTemplate;
+            updates.modelConfig = promptData.modelConfig || p.modelConfig;
+            updates.outputFormat = promptData.outputFormat || p.outputFormat;
+            updates.variables = promptData.variables || p.variables;
+          }
+
+          return updates;
+        }
+        return p;
+      });
+
+      await db.collection('prompt_templates').doc(stageType).update({
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      });
+
+      console.log(`Created version ${newVersion} for ${stageType}:${promptId}${activateImmediately ? ' (activated)' : ''}`);
+      return newVersion;
+    } catch (error) {
+      console.error(`Failed to save as new version: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get version history for a prompt
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {object} db - Firestore database instance
+   * @returns {Promise<Array>} Array of versions sorted by version number (descending)
+   */
+  async getVersionHistory(stageType, promptId, db) {
+    try {
+      // Query without orderBy to avoid requiring a composite index
+      // We sort in JavaScript instead
+      const versionsSnapshot = await db
+        .collection('prompt_templates')
+        .doc(stageType)
+        .collection('versions')
+        .where('promptId', '==', promptId)
+        .get();
+
+      if (versionsSnapshot.empty) {
+        return [];
+      }
+
+      // Map to array and sort by version descending (newest first)
+      const versions = versionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      versions.sort((a, b) => (b.version || 0) - (a.version || 0));
+
+      return versions;
+    } catch (error) {
+      console.error(`Failed to get version history: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific version
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {number} version - Version number
+   * @param {object} db - Firestore database instance
+   * @returns {Promise<object|null>} Version data or null
+   */
+  async getVersion(stageType, promptId, version, db) {
+    try {
+      const versionDocId = `${promptId}_v${version}`;
+      const doc = await db
+        .collection('prompt_templates')
+        .doc(stageType)
+        .collection('versions')
+        .doc(versionDocId)
+        .get();
+
+      if (!doc.exists) {
+        return null;
+      }
+
+      return { id: doc.id, ...doc.data() };
+    } catch (error) {
+      console.error(`Failed to get version: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Activate a specific version
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {number} version - Version to activate
+   * @param {string} userId - User activating
+   * @param {object} db - Firestore database instance
+   */
+  async activateVersion(stageType, promptId, version, userId, db) {
+    try {
+      const versionData = await this.getVersion(stageType, promptId, version, db);
+
+      if (!versionData) {
+        throw new Error(`Version ${version} not found`);
+      }
+
+      const stageTemplate = await this.getStageTemplate(stageType, db);
+      const promptIndex = stageTemplate.prompts.findIndex(p => p.id === promptId);
+
+      if (promptIndex === -1) {
+        throw new Error(`Prompt '${promptId}' not found`);
+      }
+
+      const currentPrompt = stageTemplate.prompts[promptIndex];
+
+      // Deactivate previous version
+      if (currentPrompt.currentVersion) {
+        const prevVersionDocId = `${promptId}_v${currentPrompt.currentVersion}`;
+        await db
+          .collection('prompt_templates')
+          .doc(stageType)
+          .collection('versions')
+          .doc(prevVersionDocId)
+          .update({ isChosen: false });
+      }
+
+      // Activate new version
+      const newVersionDocId = `${promptId}_v${version}`;
+      await db
+        .collection('prompt_templates')
+        .doc(stageType)
+        .collection('versions')
+        .doc(newVersionDocId)
+        .update({ isChosen: true });
+
+      // Update prompt with version content
+      const updatedPrompts = [...stageTemplate.prompts];
+      updatedPrompts[promptIndex] = {
+        ...currentPrompt,
+        systemPrompt: versionData.systemPrompt,
+        userPromptTemplate: versionData.userPromptTemplate,
+        modelConfig: versionData.modelConfig,
+        outputFormat: versionData.outputFormat,
+        variables: versionData.variables,
+        currentVersion: version,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId,
+      };
+
+      await db.collection('prompt_templates').doc(stageType).update({
+        prompts: updatedPrompts,
+        updatedAt: new Date().toISOString(),
+      });
+
+      console.log(`Activated version ${version} for ${stageType}:${promptId}`);
+    } catch (error) {
+      console.error(`Failed to activate version: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a version (cannot delete active version)
+   *
+   * @param {string} stageType - Stage type
+   * @param {string} promptId - Prompt ID
+   * @param {number} version - Version to delete
+   * @param {string} userId - User deleting
+   * @param {object} db - Firestore database instance
+   */
+  async deleteVersion(stageType, promptId, version, userId, db) {
+    try {
+      const versionData = await this.getVersion(stageType, promptId, version, db);
+
+      if (!versionData) {
+        throw new Error(`Version ${version} not found`);
+      }
+
+      if (versionData.isChosen) {
+        throw new Error('Cannot delete the active version');
+      }
+
+      const versionDocId = `${promptId}_v${version}`;
+      await db
+        .collection('prompt_templates')
+        .doc(stageType)
+        .collection('versions')
+        .doc(versionDocId)
+        .delete();
+
+      console.log(`Deleted version ${version} for ${stageType}:${promptId}`);
+    } catch (error) {
+      console.error(`Failed to delete version: ${error.message}`);
+      throw error;
+    }
+  }
 }
 
 // Singleton instance
